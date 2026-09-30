@@ -1,0 +1,36 @@
+
+{% extends "Dashboard/main_nav.html" %}
+
+{% block content %}
+<h3>Navbar</h3>
+
+<a href="">Home</a>
+<a href="">Dashboard</a>
+<a href="">About Us</a>
+<a href={% url "logout" %}>Logout</a>
+<hr>
+
+<h1>Admin Dashboard</h1>
+    <a href="{% url "view_employee" %}">View Employees</a>
+    <a href="{% url "employee" %}">Add Employee</a>
+    
+
+
+
+<hr>
+
+ <h3>Dashboard content</h3>
+
+ <a href="">Today's Sell</a>
+ <a href="">Today's Purchases</a>
+ <a href="">Total Customers</a>
+ <a href="">Revenue</a>
+ <a href="">Profit</a>
+ <a href="">Low Stock Alerts</a>
+ <a href="">Recent Sells</a>
+ <a href="">Total sells</a>
+ <a href="">this month sells</a>
+<p>add calender for watching random month and day sells</p>
+   
+    
+{% endblock content %}

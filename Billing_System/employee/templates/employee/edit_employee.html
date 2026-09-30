@@ -1,0 +1,215 @@
+{% load static %}
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Edit Employee</title>
+</head>
+<body>
+    <form method="post">
+      {% csrf_token %}
+
+        <!-- User Information -->
+
+        <h3>User Information</h3>
+
+        <label>Username</label>
+        <input
+            type="text"
+            name="username"
+            value="{{ employee.user.username }}"
+            required
+        >
+
+        <br><br>
+
+
+        <label>First Name</label>
+        <input
+            type="text"
+            name="first_name"
+            value="{{ employee.user.first_name }}"
+            required
+        >
+
+        <br><br>
+
+
+        <label>Last Name</label>
+        <input
+            type="text"
+            name="last_name"
+            value="{{ employee.user.last_name }}"
+            required
+        >
+
+        <br><br>
+
+
+        <label>Email</label>
+        <input
+            type="email"
+            name="email"
+            value="{{ employee.user.email }}"
+            required
+        >
+
+        <br><br>
+
+
+        <!-- Employee Information -->
+
+        <h3>Employee Information</h3>
+
+        <label>Employee ID</label>
+        <input
+            type="text"
+            name="employee_id"
+            value="{{ employee.employee_id }}"
+            required
+        >
+
+        <br><br>
+
+
+        <label>Phone</label>
+        <input
+            type="text"
+            name="Phone"
+            value="{{ employee.Phone }}"
+        >
+
+        <br><br>
+
+
+        <label>Alternate Phone</label>
+        <input
+            type="text"
+            name="Alternate_phone"
+            value="{{ employee.Alternate_phone }}"
+        >
+
+        <br><br>
+
+
+        <label>Address</label>
+        <textarea
+            name="address"
+            rows="4"
+            cols="30"
+        >{{ employee.address }}</textarea>
+
+        <br><br>
+
+
+        <label>Gender</label>
+
+        <select name="Gender">
+
+            <option value="Male"
+                {% if employee.Gender == "Male" %}selected{% endif %}>
+                Male
+            </option>
+
+            <option value="Female"
+                {% if employee.Gender == "Female" %}selected{% endif %}>
+                Female
+            </option>
+
+            <option value="Other"
+                {% if employee.Gender == "Other" %}selected{% endif %}>
+                Other
+            </option>
+
+        </select>
+
+        <br><br>
+
+
+        <label>Role</label>
+
+        <select name="Role">
+
+            <option value="Manager"
+                {% if employee.Role == "Manager" %}selected{% endif %}>
+                Manager
+            </option>
+
+            <option value="Cashier"
+                {% if employee.Role == "Cashier" %}selected{% endif %}>
+                Cashier
+            </option>
+
+        </select>
+
+        <br><br>
+
+
+        <label>Joining Date</label>
+
+        <input
+            type="date"
+            name="joining_date"
+            value="{{ employee.joining_date|date:'Y-m-d' }}"
+        >
+
+        <br><br>
+
+
+        <label>Monthly Salary</label>
+
+        <input
+            type="number"
+            name="monthaly_salary"
+            value="{{ employee.monthaly_salary }}"
+            step="0.01"
+        >
+
+        <br><br>
+
+
+        <label>Payment</label>
+
+        <select name="payment">
+
+            <option value="Monthly"
+                {% if employee.payment == "Monthly" %}selected{% endif %}>
+                Monthly
+            </option>
+
+            <option value="Weekly"
+                {% if employee.payment == "Weekly" %}selected{% endif %}>
+                Weekly
+            </option>
+
+        </select>
+
+        <br><br>
+
+
+        <label>Status</label>
+
+        <select name="status">
+
+            <option value="Active"
+                {% if employee.status == "Active" %}selected{% endif %}>
+                Active
+            </option>
+
+            <option value="Inactive"
+                {% if employee.status == "Inactive" %}selected{% endif %}>
+                Inactive
+            </option>
+
+        </select>
+
+        <br><br>
+
+
+        <button type="submit">
+            Update Employee
+        </button>
+   </form>
+</body>
+</html>

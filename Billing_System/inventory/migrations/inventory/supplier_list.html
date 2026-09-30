@@ -1,0 +1,71 @@
+{% extends "Dashboard/main_nav.html" %}
+
+{% block content %}
+
+<h2>Suppliers</h2>
+
+<a href="{% url 'add_supplier' %}">Add Supplier</a>
+
+<table border="1">
+
+    <thead>
+        <tr>
+            <th>Name</th>
+            <th>Contact Person</th>
+            <th>Phone</th>
+            <th>Email</th>
+            <th>City</th>
+            <th>GST Number</th>
+            <th>Status</th>
+            <th>Action</th>
+        </tr>
+    </thead>
+
+    <tbody>
+
+        {% for supplier in suppliers %}
+
+        <tr>
+
+            <td>{{ supplier.name }}</td>
+            <td>{{ supplier.contact_person }}</td>
+            <td>{{ supplier.phone }}</td>
+            <td>{{ supplier.email }}</td>
+            <td>{{ supplier.city }}</td>
+            <td>{{ supplier.gst_number }}</td>
+
+            <td>
+                {% if supplier.status %}
+                    Active
+                {% else %}
+                    Inactive
+                {% endif %}
+            </td>
+
+            <td>
+                <a href="{% url 'edit_supplier' supplier.id %}">
+                    Edit
+                </a>
+                  {% if supplier.status %}
+                <a href="{% url 'deactivate_supplier' supplier.id %}">
+                    Deactivate
+                </a>
+                  {% endif %}
+            </td>
+
+        </tr>
+
+        {% empty %}
+
+        <tr>
+            <td colspan="8">No suppliers found.</td>
+        </tr>
+
+
+        {% endfor %}
+
+    </tbody>
+
+</table>
+
+{% endblock %}

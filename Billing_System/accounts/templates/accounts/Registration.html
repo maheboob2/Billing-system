@@ -1,0 +1,81 @@
+{% load static %}
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Document</title>
+</head>
+<body>
+    <h1>Registatrion</h1>
+    <form method="POST">
+        {% csrf_token %}
+        <h1>Admin registration</h1>
+         <label>First Name</label><br>
+         <input type="text" name="admin_first_name" placeholder="Enter First Name" required><br><br>
+
+          <label>Last Name</label><br>
+         <input type="text" name="admin_last_name" required><br><br>
+
+          <label>Username</label><br>
+         <input type="text" name="username" required><br><br>
+
+          <label>Password</label><br>
+          <input type="password" name="password" required><br><br>
+
+          <label>Confirm Password</label><br>
+          <input type="password" name="confirm_pass" required><br><br>
+
+          <label>Email</label><br>
+         <input type="email" name="email" required><br><br>
+
+         <h1>Business Registatrion</h1>
+
+         <label>Business/Company Name</label><br>
+         <input type="text" name="company_name" placeholder="" required><br><br>
+
+         <label>Address</label><br>
+         <input type="text" name="address_line" placeholder="" required><br><br>
+
+         <label>City</label><br>
+         <input type="text" name="city" placeholder="" required><br><br>
+
+         <label>State</label><br>
+         <input type="text" name="state" placeholder="" required><br><br> 
+         
+         <label>Country</label><br>
+         <input type="text" name="country" required><br><br>
+
+         <label>Pincode</label><br>
+         <input type="text" name="pincode" placeholder="" required><br><br>
+
+         <label>Email(Business/Company)</label><br>
+         <input type="email" name="company_email" placeholder="" required><br><br>
+
+         <label>Phone</label><br>
+         <input type="text" name="phone" placeholder="" required><br><br>
+
+         <label>Phone(optional)</label><br>
+         <input type="text" name="alternate_phone" placeholder=""><br><br>
+
+         <label>GST</label><br>
+         <input type="text" name="gst_number" placeholder="" required><br><br>
+
+         <label>Pan</label><br>
+         <input type="text" name="pan_number" placeholder="" required><br><br>
+
+         <label>About (business/Company)</label><br>
+         <input type="text" name="business_info" placeholder="" required><br><br>
+
+
+
+
+         <button type="submit">Submit</button>
+
+        <hr>
+        
+
+        
+    </form>
+</body>
+</html>

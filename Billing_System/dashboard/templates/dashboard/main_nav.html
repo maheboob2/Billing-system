@@ -1,0 +1,33 @@
+{% load static %}
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Nav</title>
+</head>
+<body>
+    <h2>Side Navbar</h2>
+    <h3>Catalog</h3>
+    <a href="{% url "category" %}">Inventory</a>
+    <a href="">Products</a>
+    <a href="">Category</a>
+    <a href="">Suppliers</a>
+    <a href="">Customers</a>
+    <a href="{% url "purchases" %}">Purchases</a>
+    <a href="{% url "sales" %}">Sales</a>
+    <a href="">Invoices</a>
+    <a href="">Imports/Exports</a>
+    <a href="">Users</a>
+    <a href="">Settings</a>
+    <a href="">Help</a>
+    <hr>
+
+    {% block content %}
+    
+    {% endblock content %}
+
+
+
+</body>
+</html>

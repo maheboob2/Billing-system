@@ -1,0 +1,147 @@
+{% load static %}
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Document</title>
+</head>
+<body>
+    {% comment %} <h1>employee list</h1>
+    <h2>{{company.company_name}}</h2>
+
+    {% for employee in employees %}
+    {{ employee.user.username }}
+    {{ employee.company.company_name }}
+    {{ employee.Role }}
+    
+    
+    {% endfor %} {% endcomment %}
+
+    <h1>Employee Management</h1>
+
+    <h2>Company: {{ company.company_name }}</h2>
+    <h2>Admin/owner's Username:{{company.owner.username}}</h2>
+
+    <hr>
+
+    <h2>Employee Summery</h2>
+
+    <p>Total Employees :{{ Total_Employees}}</p>
+
+    <p>Active Employees :{{Active_Employees}}</p>
+
+    <p>Inactive Employee :{{In_active_Employees}}</p>
+
+    <p>Total Monthly Salary:{{Total_monthly_salary}}</p>
+
+    <hr>
+    <form method="GET">
+        <input 
+        type="text"
+        name="search"
+        placeholder="search by name,ID or username"
+        value="{{search}}">
+        <button type="submit">Search</button>
+    </form>
+
+    {% if employees %}
+
+    <table border="1">
+
+        <thead>
+
+            <tr>
+                <th>#</th>
+                <th>Username</th>
+                <th>Employee Name</th>
+                <th>Email</th>
+                <th>Employee ID</th>
+                <th>Phone</th>
+                <th>Role</th>
+                <th>Joining Date</th>
+                <th>Monthly Salary</th>
+                <th>Payment</th>
+                <th>Status</th>
+                <th>Action</th>
+            </tr>
+
+        </thead>
+
+
+        <tbody>
+
+            {% for employee in employees %}
+
+            <tr>
+
+                <td>
+                    {{ forloop.counter }}
+                </td>
+
+                <td>
+                    {{ employee.user.username }}
+                </td>
+
+                <td>
+                    {{ employee.user.first_name }}
+                    {{ employee.user.last_name }}
+                </td>
+
+                <td>
+                    {{ employee.user.email }}
+                </td>
+
+                <td>
+                    {{ employee.employee_id }}
+                </td>
+
+                <td>
+                    {{ employee.Phone }}
+                </td>
+
+                <td>
+                    {{ employee.Role }}
+                </td>
+
+                <td>
+                    {{ employee.joining_date }}
+                </td>
+
+                <td>
+                    ₹{{ employee.monthaly_salary }}
+                </td>
+
+                <td>
+                    {{ employee.payment }}
+                </td>
+
+                <td>
+                    {{ employee.status }}
+                </td>
+                <td>
+                    <a href="{% url "edit_employee" employee.employee_id %}">Edit</a>
+                    <a href="{% url "delete_employee" employee.employee_id %}">Delete</a>
+                </td>
+
+            </tr>
+
+            {% endfor %}
+
+        </tbody>
+
+    </table>
+
+
+    {% else %}
+
+        <p>No employees found.</p>
+
+    {% endif %}
+
+    <a href="{% url "dashboard" %}">Back to dashboard</a>
+
+
+
+</body>
+</html>
