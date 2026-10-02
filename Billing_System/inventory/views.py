@@ -1,6 +1,6 @@
 from django.shortcuts import render,redirect
-from .models import Category,Supplier
-from .forms import CategoryForm,SupplierForm
+from .models import Category,Supplier,Product
+from .forms import CategoryForm,SupplierForm,ProductForm
 
 
 # Create your views here.
@@ -181,4 +181,93 @@ def deactivate_supplier(request, id):
     supplier.save()
 
     return redirect("supplier")
-          
+
+
+def add_product(request):
+    company = request.user.owned_companies
+
+    if request.method == "POST":
+        form = ProductForm(
+            request.POST,
+            company=company
+        )
+
+        if form.is_valid():
+            product = form.save(commit=False)
+            product.company = company
+            product.save()
+
+            return redirect("product")
+    else:
+        form = ProductForm(company=company)
+
+    return render(
+        request,
+        "inventory/add_product.html",
+        {
+            "form": form,
+        }
+    )
+
+
+def product_list(request):
+    company = request.user.owned_companies
+
+    products = Product.objects.filter(
+        company=company
+    ).select_related("category", "supplier")
+
+    return render(
+        request,
+        "inventory/product_list.html",
+        {
+            "products": products,
+        }
+    )
+
+
+def edit_product(request, id):
+    company = request.user.owned_companies
+
+    product = Product.objects.get(
+        id=id,
+        company=company
+    )
+
+    if request.method == "POST":
+        form = ProductForm(
+            request.POST,
+            instance=product,
+            company=company
+        )
+
+        if form.is_valid():
+            form.save()
+            return redirect("product")
+    else:
+        form = ProductForm(
+            instance=product,
+            company=company
+        )
+
+    return render(
+        request,
+        "inventory/edit_product.html",
+        {
+            "form": form,
+            "product": product,
+        }
+    )
+
+def deactivate_product(request, id):
+    company = request.user.owned_companies
+
+    product = Product.objects.get(
+        id=id,
+        company=company
+    )
+
+    product.status = False
+    product.save()
+
+    return redirect("product")

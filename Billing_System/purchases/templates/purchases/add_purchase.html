@@ -1,0 +1,34 @@
+
+{% extends "Dashboard/main_nav.html" %}
+
+{% block content %}
+<div class="container mt-4">
+    {% if is_edit %}
+    <h2>Edit Purchase</h2>
+{% else %}
+    <h2>Add Purchase</h2>
+{% endif %}
+
+    <form method="POST">
+        {% csrf_token %}
+
+        <h4>Purchase Details</h4>
+        {{ purchase_form.as_p }}
+
+        <hr>
+
+        <h4>Purchase Items</h4>
+        {{ item_formset.management_form }}
+
+        {% for form in item_formset %}
+            <div class="border rounded p-3 mb-3">
+                {{ form.as_p }}
+            </div>
+        {% endfor %}
+
+        <button type="submit" class="btn btn-primary">
+            Save Purchase
+        </button>
+    </form>
+</div>
+{% endblock %}

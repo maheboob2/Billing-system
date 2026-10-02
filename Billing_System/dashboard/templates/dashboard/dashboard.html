@@ -1,36 +1,197 @@
 
+
 {% extends "Dashboard/main_nav.html" %}
 
 {% block content %}
-<h3>Navbar</h3>
 
-<a href="">Home</a>
-<a href="">Dashboard</a>
-<a href="">About Us</a>
-<a href={% url "logout" %}>Logout</a>
-<hr>
+<style>
+    .dashboard-container {
+        padding: 20px;
+    }
 
-<h1>Admin Dashboard</h1>
-    <a href="{% url "view_employee" %}">View Employees</a>
-    <a href="{% url "employee" %}">Add Employee</a>
-    
+    .dashboard-header {
+        margin-bottom: 25px;
+    }
 
+    .dashboard-links {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 12px;
+        margin-top: 15px;
+    }
 
+    .dashboard-links a {
+        text-decoration: none;
+        padding: 10px 16px;
+        border-radius: 6px;
+        background: #2563eb;
+        color: white;
+    }
 
-<hr>
+    .dashboard-section {
+        margin-top: 30px;
+    }
 
- <h3>Dashboard content</h3>
+    .dashboard-cards {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+        gap: 18px;
+        margin-top: 18px;
+    }
 
- <a href="">Today's Sell</a>
- <a href="">Today's Purchases</a>
- <a href="">Total Customers</a>
- <a href="">Revenue</a>
- <a href="">Profit</a>
- <a href="">Low Stock Alerts</a>
- <a href="">Recent Sells</a>
- <a href="">Total sells</a>
- <a href="">this month sells</a>
-<p>add calender for watching random month and day sells</p>
-   
-    
+    .dashboard-cards .card {
+        padding: 20px;
+        border-radius: 10px;
+        background: #ffffff;
+        box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+        border-left: 4px solid #2563eb;
+    }
+
+    .dashboard-cards .card h4 {
+        margin: 0 0 12px;
+        font-size: 15px;
+        color: #555;
+    }
+
+    .dashboard-cards .card p {
+        margin: 0;
+        font-size: 26px;
+        font-weight: bold;
+        color: #111827;
+    }
+
+    .placeholder {
+        color: #888;
+        font-size: 14px !important;
+        font-weight: normal !important;
+    }
+</style>
+
+<div class="dashboard-container">
+
+    <div class="dashboard-header">
+        <h3>Navbar</h3>
+
+        <div class="dashboard-links">
+            <a href="">Home</a>
+            <a href="">Dashboard</a>
+            <a href="">About Us</a>
+            <a href="{% url 'logout' %}">Logout</a>
+        </div>
+
+        <hr>
+
+        <h1>Admin Dashboard</h1>
+
+        <div class="dashboard-links">
+            <a href="{% url 'view_employee' %}">View Employees</a>
+            <a href="{% url 'employee' %}">Add Employee</a>
+        </div>
+    </div>
+
+    <hr>
+
+    <!-- Inventory Overview -->
+    <div class="dashboard-section">
+        <h3>Inventory Overview</h3>
+
+        <div class="dashboard-cards">
+
+            <div class="card">
+                <h4>Total Products</h4>
+                <p>{{ total_products }}</p>
+            </div>
+
+            <div class="card">
+                <h4>Low Stock Products</h4>
+                <p>{{ low_stock_products }}</p>
+            </div>
+
+            <div class="card">
+                <h4>Out of Stock</h4>
+                <p>{{ out_of_stock_products }}</p>
+            </div>
+
+            <div class="card">
+                <h4>Total Suppliers</h4>
+                <p>{{ total_suppliers }}</p>
+            </div>
+
+        </div>
+    </div>
+
+    <!-- Sales Overview -->
+    <div class="dashboard-section">
+        <h3>Sales Overview</h3>
+
+        <div class="dashboard-cards">
+
+            <div class="card">
+                <h4>Today's Sales</h4>
+                <p class="placeholder">Coming soon</p>
+            </div>
+
+            <div class="card">
+                <h4>Total Sales</h4>
+                <p class="placeholder">Coming soon</p>
+            </div>
+
+            <div class="card">
+                <h4>This Month's Sales</h4>
+                <p class="placeholder">Coming soon</p>
+            </div>
+
+            <div class="card">
+                <h4>Total Customers</h4>
+                <p class="placeholder">Coming soon</p>
+            </div>
+
+        </div>
+    </div>
+
+    <!-- Financial Overview -->
+    <div class="dashboard-section">
+        <h3>Financial Overview</h3>
+
+        <div class="dashboard-cards">
+
+            <div class="card">
+                <h4>Today's Purchases</h4>
+                <p class="placeholder">Coming soon</p>
+            </div>
+
+            <div class="card">
+                <h4>Revenue</h4>
+                <p class="placeholder">Coming soon</p>
+            </div>
+
+            <div class="card">
+                <h4>Profit</h4>
+                <p class="placeholder">Coming soon</p>
+            </div>
+
+        </div>
+    </div>
+
+    <!-- Recent Activity -->
+    <div class="dashboard-section">
+        <h3>Recent Activity</h3>
+
+        <div class="dashboard-links">
+            <a href="">Recent Sales</a>
+            <a href="">Low Stock Alerts</a>
+        </div>
+    </div>
+
+    <!-- Sales Calendar -->
+    <div class="dashboard-section">
+        <h3>Sales Calendar</h3>
+        <p>
+            A date and month filter will be added here to view sales
+            for a selected day or month.
+        </p>
+    </div>
+
+</div>
+
 {% endblock content %}

@@ -29,6 +29,19 @@ path(
     views.deactivate_supplier,
     name="deactivate_supplier"
 ),
+
+path("product/add/", views.add_product, name="add_product"),
+path("product/", views.product_list, name="product"),
+path(
+    "product/edit/<int:id>/",
+    views.edit_product,
+    name="edit_product"
+),
+path(
+    "product/deactivate/<int:id>/",
+    views.deactivate_product,
+    name="deactivate_product"
+),
 ]
 
 

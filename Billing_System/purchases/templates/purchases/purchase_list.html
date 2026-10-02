@@ -1,0 +1,223 @@
+
+
+{% extends "Dashboard/main_nav.html" %}
+
+{% block content %}
+
+<div class="container mt-4">
+
+    <div class="d-flex justify-content-between align-items-center mb-3">
+        <h2>Purchase List</h2>
+
+
+        <a href="{% url 'add_purchase' %}" class="btn btn-primary">
+            Add Purchase
+        </a>
+    </div>
+
+
+<form method="GET" class="card card-body mb-3">
+    <div class="row g-3 align-items-end">
+
+        <div class="col-md-3">
+            <label for="search" class="form-label">Search</label>
+            <input type="text"
+                   id="search"
+                   name="search"
+                   class="form-control"
+                   placeholder="Invoice or supplier"
+                   value="{{ search }}">
+        </div> <br>
+
+        <div class="col-md-2">
+            <label for="status" class="form-label">Status</label>
+            <select name="status" id="status" class="form-select">
+                <option value="">All Statuses</option>
+                <option value="DRAFT"
+                    {% if selected_status == "DRAFT" %}selected{% endif %}>
+                    Draft
+                </option>
+                <option value="RECEIVED"
+                    {% if selected_status == "RECEIVED" %}selected{% endif %}>
+                    Received
+                </option>
+            </select>
+        </div> <br>
+
+        <div class="col-md-2">
+            <label for="start_date" class="form-label">From Date</label>
+            <input type="date"
+                   id="start_date"
+                   name="start_date"
+                   class="form-control"
+                   value="{{ start_date }}">
+        </div> <br>
+
+        <div class="col-md-2">
+            <label for="end_date" class="form-label">To Date</label>
+            <input type="date"
+                   id="end_date"
+                   name="end_date"
+                   class="form-control"
+                   value="{{ end_date }}">
+        </div> <br>
+
+        <div class="col-md-3 d-flex gap-2">
+            <button type="submit" class="btn btn-primary">
+                Filter
+            </button>
+            <a href="{% url 'purchase_list' %}"
+               class="btn btn-secondary">
+                Reset
+            </a>
+        </div>
+
+    </div> <br> <br>
+
+     
+
+<!-- Purchase Summary Cards -->
+<div class="row g-3 mb-4">
+
+    <!-- Total Purchases -->
+    <div class="col-md-4">
+        <div class="card shadow-sm h-100">
+            <div class="card-body">
+                <div class="d-flex justify-content-between align-items-center">
+                    <div>
+                        <h6 class="text-muted">Total Purchases</h6>
+                        <h3>{{ summary.total_count|default:0 }}</h3>
+                    </div>
+                    <i class="bi bi-cart-check fs-2 text-primary"></i>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Draft Purchases -->
+    <div class="col-md-4">
+        <div class="card shadow-sm h-100">
+            <div class="card-body">
+                <div class="d-flex justify-content-between align-items-center">
+                    <div>
+                        <h6 class="text-muted">Draft Purchases</h6>
+                        <h3>{{ summary.draft_count|default:0 }}</h3>
+                    </div>
+                    <i class="bi bi-file-earmark-text fs-2 text-warning"></i>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Received Purchases -->
+    <div class="col-md-4">
+        <div class="card shadow-sm h-100">
+            <div class="card-body">
+                <div class="d-flex justify-content-between align-items-center">
+                    <div>
+                        <h6 class="text-muted">Received Purchases</h6>
+                        <h3>{{ summary.received_count|default:0 }}</h3>
+                    </div>
+                    <i class="bi bi-box-seam fs-2 text-success"></i>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Total Purchase Value -->
+    <div class="col-md-4">
+        <div class="card shadow-sm h-100">
+            <div class="card-body">
+                <div class="d-flex justify-content-between align-items-center">
+                    <div>
+                        <h6 class="text-muted">Total Purchase Value</h6>
+                        <h3>₹{{ summary.total_value|default:0|floatformat:2 }}</h3>
+                    </div>
+                    <i class="bi bi-currency-rupee fs-2 text-info"></i>
+                </div>
+            </div>
+        </div>
+    </div>
+
+</div>
+</form>
+
+    <div class="table-responsive">
+        <table class="table table-bordered table-striped">
+
+            <thead>
+                <tr>
+                    <th>Invoice No.</th>
+                    <th>Supplier</th>
+                    <th>Purchase Date</th>
+                    <th>Items</th>
+                    <th>Total</th>
+                    <th>Status</th>
+                    <th>Action</th>
+                </tr>
+            </thead>
+
+            <tbody>
+                {% for purchase in purchases %}
+                <tr>
+                    <td>{{ purchase.invoice_number }}</td>
+
+                    <td>{{ purchase.supplier.name }}</td>
+
+                    <td>{{ purchase.purchase_date }}</td>
+
+                    <td>
+                        {% for item in purchase.items.all %}
+                            {{ item.product.name }} ({{ item.quantity }})<br>
+                        {% empty %}
+                            No items
+                        {% endfor %}
+                    </td>
+
+                    <td>₹{{ purchase.total_amount|floatformat:2 }}</td>
+
+                    <td>{{ purchase.get_status_display }}</td>
+
+                    <td>
+                        <div class="d-flex flex-wrap gap-2">
+
+                            <a href="{% url 'purchase_detail' purchase.id %}"
+                               class="btn btn-primary btn-sm">
+                                View Details
+                            </a>
+
+                            {% if purchase.status == "DRAFT" %}
+                                <form method="POST"
+                                      action="{% url 'receive_purchase' purchase.id %}">
+                                    {% csrf_token %}
+
+                                    <button type="submit"
+                                            class="btn btn-success btn-sm">
+                                        Receive
+                                    </button>
+                                </form>
+                            {% else %}
+                                <span class="text-success">
+                                    Received
+                                </span>
+                            {% endif %}
+
+                        </div>
+                    </td>
+                </tr>
+
+                {% empty %}
+                <tr>
+                    <td colspan="7" class="text-center">
+                        No purchases found.
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+
+        </table>
+    </div>
+
+</div>
+
+{% endblock %}
