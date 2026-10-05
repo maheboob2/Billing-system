@@ -1,5 +1,4 @@
-
-{% extends "Dashboard/main_nav.html" %}
+{% extends "dashboard/main_nav.html" %}
 
 {% block content %}
 
@@ -12,7 +11,7 @@
 
     <button type="submit">Save Product</button>
 
-    <a href="{% url 'add_product' %}">Cancel</a>
+    <a href="{% url 'product' %}">Cancel</a>
 </form>
 
 {% endblock %}

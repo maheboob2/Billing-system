@@ -48,16 +48,36 @@ class ProductForm(forms.ModelForm):
         ]
 
     def __init__(self, *args, **kwargs):
-        company = kwargs.pop("company", None)
+        self.company = kwargs.pop("company", None)
         super().__init__(*args, **kwargs)
 
-        if company:
+        if self.company:
             self.fields["category"].queryset = Category.objects.filter(
-                company=company,
+                company=self.company,
                 status=True
             )
 
             self.fields["supplier"].queryset = Supplier.objects.filter(
-                company=company,
+                company=self.company,
                 status=True
-            )            
+            )
+
+    def clean(self):
+        cleaned_data = super().clean()
+        product_code = cleaned_data.get("product_code")
+        if product_code and self.company:
+            qs = Product.objects.filter(company=self.company, product_code=product_code)
+            if self.instance and self.instance.pk:
+                qs = qs.exclude(pk=self.instance.pk)
+            if qs.exists():
+                self.add_error("product_code", f"Product code '{product_code}' is already in use by another product in this company.")
+
+        barcode = (cleaned_data.get("barcode") or "").strip()
+        if barcode and self.company:
+            qs = Product.objects.filter(company=self.company, barcode=barcode)
+            if self.instance and self.instance.pk:
+                qs = qs.exclude(pk=self.instance.pk)
+            if qs.exists():
+                self.add_error("barcode", f"Barcode '{barcode}' is already in use by another product in this company.")
+
+        return cleaned_data

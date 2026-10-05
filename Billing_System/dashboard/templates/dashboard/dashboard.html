@@ -1,6 +1,6 @@
 
 
-{% extends "Dashboard/main_nav.html" %}
+{% extends "dashboard/main_nav.html" %}
 
 {% block content %}
 
@@ -128,22 +128,24 @@
 
             <div class="card">
                 <h4>Today's Sales</h4>
-                <p class="placeholder">Coming soon</p>
+                <p>₹{{ today_sales_amount|floatformat:2 }}</p>
+                <small style="color: #666;">{{ today_sales_count }} transactions</small>
             </div>
 
             <div class="card">
                 <h4>Total Sales</h4>
-                <p class="placeholder">Coming soon</p>
+                <p>₹{{ total_sales_amount|floatformat:2 }}</p>
+                <small style="color: #666;">{{ total_sales_count }} transactions</small>
             </div>
 
             <div class="card">
                 <h4>This Month's Sales</h4>
-                <p class="placeholder">Coming soon</p>
+                <p>₹{{ this_month_sales_amount|floatformat:2 }}</p>
             </div>
 
             <div class="card">
                 <h4>Total Customers</h4>
-                <p class="placeholder">Coming soon</p>
+                <p>{{ total_customers }}</p>
             </div>
 
         </div>
@@ -157,30 +159,53 @@
 
             <div class="card">
                 <h4>Today's Purchases</h4>
-                <p class="placeholder">Coming soon</p>
+                <p>₹{{ today_purchases_amount|floatformat:2 }}</p>
             </div>
 
             <div class="card">
                 <h4>Revenue</h4>
-                <p class="placeholder">Coming soon</p>
+                <p>₹{{ total_revenue|floatformat:2 }}</p>
             </div>
 
             <div class="card">
-                <h4>Profit</h4>
-                <p class="placeholder">Coming soon</p>
+                <h4>Estimated Gross Profit</h4>
+                <p style="color: #16a34a;">₹{{ total_profit|floatformat:2 }}</p>
             </div>
 
         </div>
     </div>
 
-    <!-- Recent Activity -->
+    <!-- Recent Sales -->
     <div class="dashboard-section">
-        <h3>Recent Activity</h3>
-
-        <div class="dashboard-links">
-            <a href="">Recent Sales</a>
-            <a href="">Low Stock Alerts</a>
-        </div>
+        <h3>Recent Transactions</h3>
+        {% if recent_sales %}
+            <table style="width: 100%; border-collapse: collapse; margin-top: 10px; background: white; border-radius: 8px; overflow: hidden; box-shadow: 0 1px 3px rgba(0,0,0,0.1);">
+                <thead>
+                    <tr style="background: #f3f4f6; text-align: left; padding: 10px;">
+                        <th style="padding: 10px 14px;">Sale #</th>
+                        <th style="padding: 10px 14px;">Customer</th>
+                        <th style="padding: 10px 14px;">Cashier</th>
+                        <th style="padding: 10px 14px;">Grand Total</th>
+                        <th style="padding: 10px 14px;">Status</th>
+                        <th style="padding: 10px 14px;">Time</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for s in recent_sales %}
+                    <tr style="border-top: 1px solid #e5e7eb;">
+                        <td style="padding: 10px 14px; font-weight: bold;">{{ s.sale_number }}</td>
+                        <td style="padding: 10px 14px;">{{ s.customer.name|default:"Walk-in Customer" }}</td>
+                        <td style="padding: 10px 14px;">{{ s.cashier.username }}</td>
+                        <td style="padding: 10px 14px; font-weight: bold;">₹{{ s.grand_total|floatformat:2 }}</td>
+                        <td style="padding: 10px 14px;"><span style="background: #dcfce7; color: #166534; padding: 2px 8px; border-radius: 4px; font-size: 12px;">{{ s.payment_status }}</span></td>
+                        <td style="padding: 10px 14px; color: #6b7280;">{{ s.created_at|date:"M d, H:i" }}</td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        {% else %}
+            <p style="color: #666; margin-top: 10px;">No sales transactions recorded yet.</p>
+        {% endif %}
     </div>
 
     <!-- Sales Calendar -->

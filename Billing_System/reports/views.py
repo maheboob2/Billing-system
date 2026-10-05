@@ -1,6 +1,15 @@
 from django.shortcuts import render
+from accounts.tenancy import role_required
 
-# Create your views here.
 
+@role_required(["Admin", "Owner", "Manager"])
 def reports(request):
-    return render(request,"reports/reports.html")
+    return render(
+        request,
+        "reports/reports.html",
+        {
+            "company": request.company,
+            "user_role": request.user_role,
+        },
+    )
+

@@ -141,6 +141,11 @@
                 Cashier
             </option>
 
+            <option value="Worker"
+                {% if employee.Role == "Worker" %}selected{% endif %}>
+                Worker
+            </option>
+
         </select>
 
         <br><br>
@@ -173,14 +178,19 @@
 
         <select name="payment">
 
-            <option value="Monthly"
-                {% if employee.payment == "Monthly" %}selected{% endif %}>
-                Monthly
+            <option value="Paid"
+                {% if employee.payment == "Paid" %}selected{% endif %}>
+                Paid
             </option>
 
-            <option value="Weekly"
-                {% if employee.payment == "Weekly" %}selected{% endif %}>
-                Weekly
+            <option value="Unpaid"
+                {% if employee.payment == "Unpaid" %}selected{% endif %}>
+                Unpaid
+            </option>
+
+            <option value="Due"
+                {% if employee.payment == "Due" %}selected{% endif %}>
+                Due
             </option>
 
         </select>
@@ -192,13 +202,13 @@
 
         <select name="status">
 
-            <option value="Active"
-                {% if employee.status == "Active" %}selected{% endif %}>
+            <option value="active"
+                {% if employee.status == "active" or employee.status == "Active" %}selected{% endif %}>
                 Active
             </option>
 
-            <option value="Inactive"
-                {% if employee.status == "Inactive" %}selected{% endif %}>
+            <option value="inactive"
+                {% if employee.status == "inactive" or employee.status == "Inactive" %}selected{% endif %}>
                 Inactive
             </option>
 
@@ -211,5 +221,6 @@
             Update Employee
         </button>
    </form>
+   {% include "dashboard/form_submit_protection.html" %}
 </body>
 </html>
