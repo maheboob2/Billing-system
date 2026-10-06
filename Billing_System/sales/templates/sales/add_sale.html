@@ -1,0 +1,162 @@
+
+
+{% extends "Dashboard/main_nav.html" %}
+
+{% block content %}
+<h2>Create Sale</h2>
+
+<form method="POST" id="sale-form">
+    {% csrf_token %}
+
+    <h3>Sale Details</h3>
+    {{ sale_form.as_p }}
+
+    <h3>Products</h3>
+
+    {{ item_formset.management_form }}
+
+    <div id="sale-items">
+        {% for item_form in item_formset %}
+            <div class="sale-item" style="border: 1px solid #ccc; padding: 15px; margin-bottom: 15px; border-radius: 8px;">
+                {{ item_form.id }}
+
+                <p>
+                    {{ item_form.product.label_tag }}
+                    {{ item_form.product }}
+                    {{ item_form.product.errors }}
+                </p>
+
+                <p>
+                    {{ item_form.quantity.label_tag }}
+                    {{ item_form.quantity }}
+                    {{ item_form.quantity.errors }}
+                </p>
+
+                <p>
+                    {{ item_form.selling_price.label_tag }}
+                    {{ item_form.selling_price }}
+                    {{ item_form.selling_price.errors }}
+                </p>
+
+                <p>
+                    {{ item_form.gst_percentage.label_tag }}
+                    {{ item_form.gst_percentage }}
+                    {{ item_form.gst_percentage.errors }}
+                </p>
+
+                {% for hidden in item_form.hidden_fields %}
+                    {% if hidden.name != "id" and hidden.name != "DELETE" %}
+                        {{ hidden }}
+                    {% endif %}
+                {% endfor %}
+
+                {% if item_formset.can_delete %}
+                    <div>
+                        {{ item_form.DELETE }}
+                        <label for="{{ item_form.DELETE.id_for_label }}">
+                            Remove this item
+                        </label>
+                    </div>
+                {% endif %}
+            </div>
+        {% endfor %}
+    </div>
+
+    {% for error in item_formset.non_form_errors %}
+        <p style="color: red;">{{ error }}</p>
+    {% endfor %}
+
+    <button type="button" id="add-product">
+        + Add Another Product
+    </button>
+
+    <br><br>
+    <button type="submit">Save Draft</button>
+</form>
+
+<template id="empty-form-template">
+    <div class="sale-item" style="border: 1px solid #ccc; padding: 15px; margin-bottom: 15px; border-radius: 8px;">
+        {{ item_formset.empty_form.id }}
+
+        <p>
+            {{ item_formset.empty_form.product.label_tag }}
+            {{ item_formset.empty_form.product }}
+        </p>
+
+        <p>
+            {{ item_formset.empty_form.quantity.label_tag }}
+            {{ item_formset.empty_form.quantity }}
+        </p>
+
+        <p>
+            {{ item_formset.empty_form.selling_price.label_tag }}
+            {{ item_formset.empty_form.selling_price }}
+        </p>
+
+        <p>
+            {{ item_formset.empty_form.gst_percentage.label_tag }}
+            {{ item_formset.empty_form.gst_percentage }}
+        </p>
+
+        {% for hidden in item_formset.empty_form.hidden_fields %}
+            {% if hidden.name != "id" and hidden.name != "DELETE" %}
+                {{ hidden }}
+            {% endif %}
+        {% endfor %}
+
+        <div>
+            {{ item_formset.empty_form.DELETE }}
+            <label for="{{ item_formset.empty_form.DELETE.id_for_label }}">
+                Remove this item
+            </label>
+        </div>
+    </div>
+</template>
+
+<script>
+document.addEventListener("DOMContentLoaded", function () {
+    const addButton = document.getElementById("add-product");
+    const itemsContainer = document.getElementById("sale-items");
+    const template = document.getElementById("empty-form-template");
+    const totalForms = document.querySelector(
+        'input[name$="-TOTAL_FORMS"]'
+    );
+
+    addButton.addEventListener("click", function () {
+        const formIndex = parseInt(totalForms.value, 10);
+
+        const html = template.innerHTML.replace(
+            /__prefix__/g,
+            formIndex
+        );
+
+        itemsContainer.insertAdjacentHTML("beforeend", html);
+        totalForms.value = formIndex + 1;
+    });
+
+    itemsContainer.addEventListener("change", function (event) {
+        if (event.target.name.endsWith("-DELETE")) {
+            const itemRow = event.target.closest(".sale-item");
+
+            if (event.target.checked) {
+                itemRow.style.display = "none";
+
+                itemRow.querySelectorAll(
+                    "input:not([type='hidden']):not([name$='-DELETE']), select, textarea"
+                ).forEach(function (field) {
+                    field.disabled = true;
+                });
+            } else {
+                itemRow.style.display = "";
+
+                itemRow.querySelectorAll(
+                    "input, select, textarea"
+                ).forEach(function (field) {
+                    field.disabled = false;
+                });
+            }
+        }
+    });
+});
+</script>
+{% endblock %}

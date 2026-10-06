@@ -155,10 +155,11 @@
 
         <div class="dashboard-cards">
 
-            <div class="card">
-                <h4>Today's Purchases</h4>
-                <p class="placeholder">Coming soon</p>
-            </div>
+    <div class="card">
+       <h4>Today's Purchases</h4>
+       <p>{{ today_purchase_count }}</p>
+       <small>Value: ₹{{ today_purchase_value|floatformat:2 }}</small>
+    </div>
 
             <div class="card">
                 <h4>Revenue</h4>
@@ -177,10 +178,93 @@
     <div class="dashboard-section">
         <h3>Recent Activity</h3>
 
-        <div class="dashboard-links">
-            <a href="">Recent Sales</a>
-            <a href="">Low Stock Alerts</a>
+        
+<!-- Low Stock Alerts -->
+<div class="dashboard-section">
+    <h3>Low Stock Alerts</h3>
+
+    {% if low_stock_items %}
+        <div style="overflow-x: auto;">
+            <table style="width: 100%; border-collapse: collapse; background: white;">
+                <thead>
+                    <tr style="background: #f3f4f6;">
+                        <th style="padding: 12px; text-align: left;">Product</th>
+                        <th style="padding: 12px; text-align: left;">Current Stock</th>
+                        <th style="padding: 12px; text-align: left;">Minimum Stock</th>
+                        <th style="padding: 12px; text-align: left;">Status</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for product in low_stock_items %}
+                        <tr style="border-bottom: 1px solid #ddd;">
+                            <td style="padding: 12px;">{{ product.name }}</td>
+                            <td style="padding: 12px;">
+                                {{ product.current_stock }} {{ product.unit }}
+                            </td>
+                            <td style="padding: 12px;">
+                                {{ product.minimum_stock }} {{ product.unit }}
+                            </td>
+                            <td style="padding: 12px; color: #d97706; font-weight: bold;">
+                                Low Stock
+                            </td>
+                        </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
         </div>
+    {% else %}
+        <p>No low-stock products at the moment.</p>
+    {% endif %}
+
+
+<!-- Recent Purchases -->
+<div class="dashboard-section">
+    <h3>Recent Purchases</h3>
+
+    {% if recent_purchases %}
+        <div style="overflow-x: auto;">
+            <table style="width: 100%; border-collapse: collapse; background: white;">
+                <thead>
+                    <tr style="background: #f3f4f6;">
+                        <th style="padding: 12px; text-align: left;">Invoice No.</th>
+                        <th style="padding: 12px; text-align: left;">Supplier</th>
+                        <th style="padding: 12px; text-align: left;">Date</th>
+                        <th style="padding: 12px; text-align: left;">Status</th>
+                        <th style="padding: 12px; text-align: left;">Action</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for purchase in recent_purchases %}
+                        <tr style="border-bottom: 1px solid #ddd;">
+                            <td style="padding: 12px;">
+                                {{ purchase.invoice_number }}
+                            </td>
+                            <td style="padding: 12px;">
+                                {{ purchase.supplier.name }}
+                            </td>
+                            <td style="padding: 12px;">
+                                {{ purchase.purchase_date }}
+                            </td>
+                            <td style="padding: 12px;">
+                                {{ purchase.get_status_display }}
+                            </td>
+                            <td style="padding: 12px;">
+                                <a href="{% url 'purchase_detail' purchase.id %}">
+                                    View Details
+                                </a>
+                            </td>
+                        </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    {% else %}
+        <p>No purchases available yet.</p>
+    {% endif %}
+</div>
+</div>
+
+
     </div>
 
     <!-- Sales Calendar -->

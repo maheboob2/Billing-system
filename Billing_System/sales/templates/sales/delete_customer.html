@@ -1,0 +1,35 @@
+
+{% extends "Dashboard/main_nav.html" %}
+
+{% block content %}
+<div class="container mt-4">
+    <div class="card shadow-sm">
+        <div class="card-header">
+            <h3>Delete Customer</h3>
+        </div>
+
+        <div class="card-body">
+            <p>
+                Are you sure you want to delete
+                <strong>{{ customer.name }}</strong>?
+            </p>
+            <p class="text-danger">
+                This action cannot be undone. Customers with
+                existing sales records cannot be deleted.
+            </p>
+
+            <form method="POST">
+                {% csrf_token %}
+                <button type="submit" class="btn btn-danger">
+                    Confirm Delete
+                </button>
+
+                <a href="{% url 'sales:customer_list' %}"
+                   class="btn btn-secondary">
+                    Cancel
+                </a>
+            </form>
+        </div>
+    </div>
+</div>
+{% endblock %}
