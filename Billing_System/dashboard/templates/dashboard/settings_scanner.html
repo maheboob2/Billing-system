@@ -1,0 +1,374 @@
+{% extends "dashboard/main_nav.html" %}
+{% load static %}
+
+{% block content %}
+<div class="settings-wrap" style="max-width: 900px; margin: 24px auto; padding: 0 16px;">
+    <!-- Page Header -->
+    <div style="margin-bottom: 24px;">
+        <h1 style="font-size: 22px; font-weight: 700; color: var(--text); margin: 0 0 4px 0;">Scanner & POS Devices</h1>
+        <p style="font-size: 13px; color: var(--muted); margin: 0;">Configure primary USB/Bluetooth HID scanners, backup mobile camera companion, and retail checkout scanning behaviors.</p>
+    </div>
+
+    <!-- Navigation Tabs -->
+    <div style="display: flex; gap: 8px; border-bottom: 1px solid var(--border); margin-bottom: 24px; overflow-x: auto;">
+        <a href="{% url 'settings_general' %}" class="settings-tab">
+            <i class="bi bi-gear-fill"></i> General
+        </a>
+        <a href="{% url 'settings_appearance' %}" class="settings-tab">
+            <i class="bi bi-palette-fill"></i> Appearance
+        </a>
+        <a href="{% url 'settings_scanner' %}" class="settings-tab active" aria-current="page">
+            <i class="bi bi-upc-scan"></i> Scanner & POS Devices
+        </a>
+        {% if is_owner %}
+        <a href="{% url 'settings_company' %}" class="settings-tab">
+            <i class="bi bi-building"></i> Company Profile
+        </a>
+        <a href="{% url 'settings_telegram' %}" class="settings-tab">
+            <i class="bi bi-telegram"></i> Telegram Bot & Sync
+        </a>
+        {% endif %}
+    </div>
+
+    {% if saved_msg %}
+    <div style="background: rgba(16, 185, 129, 0.15); border: 1px solid rgba(16, 185, 129, 0.3); color: #34d399; padding: 12px 16px; border-radius: var(--radius-sm); margin-bottom: 20px; font-size: 13px; display: flex; align-items: center; gap: 8px;">
+        <i class="bi bi-check-circle-fill"></i> {{ saved_msg }}
+    </div>
+    {% endif %}
+
+    <!-- 1. PRIMARY SCANNER: USB & BLUETOOTH HID -->
+    <div style="background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius-md); padding: 24px; margin-bottom: 24px; box-shadow: 0 2px 10px rgba(0,0,0,0.15);">
+        <div style="display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 16px;">
+            <div>
+                <h3 style="font-size: 16px; font-weight: 700; color: var(--text); margin: 0 0 4px 0; display: flex; align-items: center; gap: 8px;">
+                    <i class="bi bi-upc-scan" style="color: var(--primary);"></i> Primary Scanner (USB / Wireless 2.4GHz / Bluetooth HID)
+                </h3>
+                <p style="font-size: 12px; color: var(--muted); margin: 0;">Standard retail handheld & omnidirectional barcode scanners emulate standard Human Interface Device (HID) keyboards.</p>
+            </div>
+            <span style="background: rgba(14, 165, 233, 0.15); color: #38bdf8; border: 1px solid rgba(14, 165, 233, 0.3); padding: 4px 12px; border-radius: 20px; font-size: 11px; font-weight: 700; display: inline-flex; align-items: center; gap: 6px;">
+                <span style="width: 7px; height: 7px; border-radius: 50%; background: #38bdf8; display: inline-block;"></span>
+                HID SCANNER SUPPORTED (Driverless)
+            </span>
+        </div>
+
+        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 16px; background: var(--surface-2); padding: 16px; border-radius: var(--radius-sm); border: 1px solid var(--border); margin-bottom: 16px;">
+            <div>
+                <div style="font-size: 11px; font-weight: 700; color: var(--muted); text-transform: uppercase; margin-bottom: 4px;">Device Interface Mode</div>
+                <div style="font-size: 13px; font-weight: 600; color: var(--text);">HID Keyboard Emulation (Standard Driverless)</div>
+                <div style="font-size: 11px; color: var(--muted); margin-top: 4px;">Compatible with Honeywell, Zebra, Datalogic, TVS, Netum & generic 1D/2D scanners.</div>
+            </div>
+            <div>
+                <div style="font-size: 11px; font-weight: 700; color: var(--muted); text-transform: uppercase; margin-bottom: 4px;">Last Scanned Barcode</div>
+                <div id="live-last-scanned" style="font-size: 14px; font-weight: 800; color: var(--primary); font-family: var(--font-mono);">None in this session</div>
+                <div style="font-size: 11px; color: var(--muted); margin-top: 4px;">Live buffer captures scans across POS and settings.</div>
+            </div>
+        </div>
+
+        <!-- Test Scanner Box -->
+        <div style="background: var(--surface-card); border: 1px dashed var(--border); border-radius: var(--radius-sm); padding: 16px;">
+            <div style="font-size: 12px; font-weight: 700; color: var(--text); margin-bottom: 6px; display: flex; align-items: center; gap: 6px;">
+                <i class="bi bi-patch-check"></i> Test Scanner Input
+            </div>
+            <p style="font-size: 11px; color: var(--muted); margin-bottom: 10px;">Click the box below and scan any physical barcode to test scanner latency, buffer termination, and store product resolution.</p>
+            <div style="display: flex; gap: 10px;">
+                <input type="text" id="test-scanner-input" placeholder="Point scanner here and pull trigger..." style="flex: 1; padding: 10px 14px; background: var(--surface-2); border: 1px solid var(--border); border-radius: var(--radius-sm); color: var(--text); font-size: 13px; outline: none;">
+                <button type="button" id="btn-test-scan" class="btn btn-primary" style="padding: 10px 18px; font-size: 13px; display: flex; align-items: center; gap: 6px;">
+                    <i class="bi bi-search"></i> Test Lookup
+                </button>
+            </div>
+            <div id="test-scan-result" style="margin-top: 10px; font-size: 12px; display: none;"></div>
+        </div>
+    </div>
+
+    <!-- 2. BLUETOOTH HID SCANNER EXPLANATION -->
+    <div style="background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius-md); padding: 24px; margin-bottom: 24px; box-shadow: 0 2px 10px rgba(0,0,0,0.15);">
+        <h3 style="font-size: 16px; font-weight: 700; color: var(--text); margin: 0 0 8px 0; display: flex; align-items: center; gap: 8px;">
+            <i class="bi bi-bluetooth" style="color: #38bdf8;"></i> Bluetooth HID Wireless Scanners
+        </h3>
+        <p style="font-size: 12px; color: var(--muted); margin-bottom: 14px;">
+            Bluetooth barcode scanners operate in <strong>HID (Human Interface Device) Keyboard Profile</strong>. Once paired to your terminal computer, tablet, or phone, every scan types directly into the browser buffer followed by an automatic <kbd>Enter</kbd> keystroke.
+        </p>
+        <div style="display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 12px;">
+            <div style="background: var(--surface-2); padding: 12px; border-radius: var(--radius-sm); border: 1px solid var(--border);">
+                <div style="font-size: 12px; font-weight: 700; color: var(--text); margin-bottom: 4px;">1. Enable HID Mode</div>
+                <div style="font-size: 11px; color: var(--muted);">Scan the "Enter Bluetooth HID Mode" barcode in your scanner's printed quick-start manual.</div>
+            </div>
+            <div style="background: var(--surface-2); padding: 12px; border-radius: var(--radius-sm); border: 1px solid var(--border);">
+                <div style="font-size: 12px; font-weight: 700; color: var(--text); margin-bottom: 4px;">2. Pair via OS Bluetooth</div>
+                <div style="font-size: 11px; color: var(--muted);">Open Windows / macOS / Android Bluetooth settings, search for your scanner model, and click Pair.</div>
+            </div>
+            <div style="background: var(--surface-2); padding: 12px; border-radius: var(--radius-sm); border: 1px solid var(--border);">
+                <div style="font-size: 12px; font-weight: 700; color: var(--text); margin-bottom: 4px;">3. Instant POS Ready</div>
+                <div style="font-size: 11px; color: var(--muted);">Open POS Checkout. Barcodes are automatically captured hands-free without clicking any buttons.</div>
+            </div>
+        </div>
+    </div>
+
+    <!-- 3. PHONE CAMERA SCANNER (BACKUP) & LAN CONNECTION PANEL -->
+    <div style="background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius-md); padding: 24px; margin-bottom: 24px; box-shadow: 0 2px 10px rgba(0,0,0,0.15);">
+        <div style="display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 14px;">
+            <div>
+                <h3 style="font-size: 16px; font-weight: 700; color: var(--text); margin: 0 0 4px 0; display: flex; align-items: center; gap: 8px;">
+                    <i class="bi bi-phone" style="color: #f59e0b;"></i> Phone Camera Scanner (Companion Pairing)
+                </h3>
+                <p style="font-size: 12px; color: var(--muted); margin: 0;">Pair any smartphone on the local network as a wireless camera barcode scanner for this terminal.</p>
+            </div>
+            <span style="background: rgba(245, 158, 11, 0.15); color: #fbbf24; border: 1px solid rgba(245, 158, 11, 0.3); padding: 4px 12px; border-radius: 20px; font-size: 11px; font-weight: 700;">
+                TERMINAL {{ terminal_id }}
+            </span>
+        </div>
+
+        <!-- Terminal QR & Pairing Card -->
+        <div style="background: var(--surface-2); border: 1px solid var(--border); border-radius: var(--radius-sm); padding: 20px; margin-bottom: 16px;">
+            <div style="display: flex; gap: 24px; align-items: center; flex-wrap: wrap;">
+                <!-- Real QR Code -->
+                <div style="background: #ffffff; padding: 12px; border-radius: 12px; box-shadow: 0 4px 12px rgba(0,0,0,0.25); text-align: center; min-width: 180px;">
+                    <img src="https://api.qrserver.com/v1/create-qr-code/?size=180x180&data={{ phone_scanner_url|urlencode }}" alt="Scanner Pairing QR Code" width="180" height="180" style="display: block; border-radius: 6px;">
+                    <div style="font-size: 10px; color: #475569; margin-top: 6px; font-weight: 700;">Scan with Phone Camera</div>
+                </div>
+
+                <!-- Pairing Details & Actions -->
+                <div style="flex: 1; min-width: 260px;">
+                    <div style="display: flex; align-items: center; gap: 10px; margin-bottom: 12px;">
+                        <span style="font-size: 12px; font-weight: 700; color: var(--muted); text-transform: uppercase;">Terminal Identity:</span>
+                        <span class="badge" style="background: rgba(56, 189, 248, 0.15); color: #38bdf8; border: 1px solid rgba(56, 189, 248, 0.3); font-family: var(--font-mono); font-size: 13px; font-weight: 800; padding: 3px 10px;">{{ terminal_id }}</span>
+                        {% if is_phone_paired %}
+                        <span style="font-size: 11px; color: #34d399; font-weight: 600; display: inline-flex; align-items: center; gap: 5px;">
+                            <span style="width: 7px; height: 7px; border-radius: 50%; background: #10b981;"></span> Paired ({{ active_session.device_info }})
+                        </span>
+                        {% elif active_session and active_session.is_valid %}
+                        <span style="font-size: 11px; color: #fbbf24; font-weight: 600; display: inline-flex; align-items: center; gap: 5px;">
+                            <span style="width: 7px; height: 7px; border-radius: 50%; background: #f59e0b;"></span> Pairing Available (Awaiting Phone)
+                        </span>
+                        {% else %}
+                        <span style="font-size: 11px; color: #94a3b8; font-weight: 600; display: inline-flex; align-items: center; gap: 5px;">
+                            <span style="width: 7px; height: 7px; border-radius: 50%; background: #64748b;"></span> Not Paired
+                        </span>
+                        {% endif %}
+                    </div>
+
+                    <div style="background: var(--surface-card); border: 1px solid var(--border); border-radius: 8px; padding: 12px 16px; margin-bottom: 14px;">
+                        <div style="font-size: 11px; font-weight: 700; color: var(--muted); text-transform: uppercase; margin-bottom: 2px;">One-Time Pairing Code</div>
+                        <div style="font-size: 22px; font-weight: 800; font-family: var(--font-mono); color: #fbbf24; letter-spacing: 2px;">{{ active_session.pairing_code }}</div>
+                        <div style="font-size: 11px; color: var(--muted); margin-top: 2px;">
+                            Token expires in <strong>{{ expires_in_minutes }} minutes</strong>. Scans deliver strictly to this terminal.
+                        </div>
+                        <div style="font-size: 11px; color: var(--muted); margin-top: 6px; padding-top: 6px; border-top: 1px solid var(--border);">
+                            <strong>Scan Activity:</strong> 
+                            {% if last_scan %}
+                                Last scan at {{ last_scan.created_at|date:"H:i:s" }} (<code>{{ last_scan.barcode }}</code>)
+                            {% else %}
+                                No physical scans received yet in this session
+                            {% endif %}
+                        </div>
+                    </div>
+
+                    <div style="display: flex; gap: 8px; flex-wrap: wrap;">
+                        <a href="{{ phone_scanner_url }}" target="_blank" rel="noopener noreferrer" class="btn btn-primary" style="font-size: 12px; padding: 8px 14px; text-decoration: none; display: inline-flex; align-items: center; gap: 6px;">
+                            <i class="bi bi-box-arrow-up-right"></i> Open Companion Page
+                        </a>
+                        <button type="button" class="btn btn-secondary" onclick="navigator.clipboard.writeText('{{ phone_scanner_url }}'); this.innerHTML='<i class=\'bi bi-check2\'></i> Copied URL!'; setTimeout(() => this.innerHTML='<i class=\'bi bi-clipboard\'></i> Copy Phone URL', 2000);" style="font-size: 12px; padding: 8px 14px; display: inline-flex; align-items: center; gap: 6px;">
+                            <i class="bi bi-clipboard"></i> Copy Phone URL
+                        </button>
+                        <form method="POST" style="display: inline;">
+                            {% csrf_token %}
+                            <input type="hidden" name="action" value="regenerate_pairing">
+                            <button type="submit" class="btn btn-secondary" style="font-size: 12px; padding: 8px 12px; display: inline-flex; align-items: center; gap: 5px;" title="Regenerate Pairing Token">
+                                <i class="bi bi-arrow-clockwise"></i> Refresh Token
+                            </button>
+                        </form>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Network Diagnostic Line -->
+            <div style="margin-top: 16px; padding-top: 14px; border-top: 1px solid var(--border); display: grid; grid-template-columns: 1fr 1fr; gap: 12px;">
+                <div>
+                    <span style="font-size: 11px; color: var(--muted); text-transform: uppercase; font-weight: 700;">Host LAN IP:</span>
+                    <span style="font-size: 12px; font-family: var(--font-mono); color: #38bdf8; font-weight: 600; margin-left: 6px;">{{ network_info.lan_ip }}:{{ network_info.port }}</span>
+                </div>
+                <div>
+                    <span style="font-size: 11px; color: var(--muted); text-transform: uppercase; font-weight: 700;">Origin Scheme:</span>
+                    <span style="font-size: 12px; font-family: var(--font-mono); color: {% if network_info.is_https %}#34d399{% else %}#fbbf24{% endif %}; font-weight: 600; margin-left: 6px;">
+                        {% if network_info.is_https %}HTTPS (Secure Origin){% else %}HTTP (LAN Local){% endif %}
+                    </span>
+                </div>
+            </div>
+        </div>
+
+        <!-- Camera HTTPS Security Notice & Local / Production Guidance -->
+        <div style="background: rgba(59, 130, 246, 0.08); border: 1px solid rgba(59, 130, 246, 0.25); border-radius: var(--radius-sm); padding: 16px; margin-bottom: 16px;">
+            <div style="font-size: 13px; font-weight: 700; color: #60a5fa; margin-bottom: 8px; display: flex; align-items: center; gap: 8px;">
+                <i class="bi bi-shield-lock-fill"></i> Mobile Camera Access: HTTPS & Security Requirements
+            </div>
+            <p style="font-size: 12px; color: #cbd5e1; margin-bottom: 12px; line-height: 1.5;">
+                Modern mobile operating systems and browsers (iOS Safari, Android Chrome) enforce a strict <strong>Secure Context</strong> requirement: camera hardware cannot be accessed over plain HTTP on LAN IP addresses. Over plain HTTP, cashiers can use the fast <strong>Manual Barcode Input</strong> on the companion screen.
+            </p>
+
+            <!-- Production Recommendation -->
+            <div style="background: var(--surface-2); border-left: 3px solid #10b981; padding: 12px 14px; border-radius: 4px; margin-bottom: 12px; font-size: 12px; line-height: 1.6;">
+                <strong style="color: #34d399;"><i class="bi bi-check-circle-fill"></i> Production Recommendation:</strong><br>
+                For live store operations, host the POS behind a standard domain (or local split-DNS) with a publicly trusted SSL certificate (e.g., Let's Encrypt via Nginx, Caddy, or Cloudflare). Mobile devices will access the camera seamlessly without any custom certificate installation.
+            </div>
+
+            <!-- Development mkcert & Root CA Trust Notice -->
+            <div style="background: var(--surface-2); border-left: 3px solid #f59e0b; padding: 12px 14px; border-radius: 4px; margin-bottom: 12px; font-size: 12px; line-height: 1.6;">
+                <strong style="color: #fbbf24;"><i class="bi bi-exclamation-triangle-fill"></i> Local Development TLS & Root CA Security Notice:</strong><br>
+                <span style="color: #94a3b8;">
+                    Trusting a root Certificate Authority (CA) allows that CA to sign certificates for any website. <strong>Never</strong> download or install unknown certificate files from the internet. When testing locally, only trust a CA generated directly on your own development machine using <code style="color: #38bdf8;">mkcert</code>, and <strong>never share private key files (rootCA-key.pem)</strong>.
+                </span>
+                <div style="margin-top: 6px; font-family: 'JetBrains Mono', monospace; font-size: 11px; color: #93c5fd; background: rgba(0,0,0,0.25); padding: 6px 10px; border-radius: 4px;">
+                    1. Install on host: choco install mkcert<br>
+                    2. Generate local cert: mkcert -install && mkcert {{ network_info.lan_ip }} localhost 127.0.0.1<br>
+                    3. Run TLS dev server: python manage.py runserver_plus --cert-file {{ network_info.lan_ip }}+2.pem --key-file {{ network_info.lan_ip }}+2-key.pem 0.0.0.0:8000
+                </div>
+            </div>
+
+            <!-- Native App Alternative -->
+            <div style="font-size: 11px; color: #94a3b8; line-height: 1.5;">
+                <i class="bi bi-phone"></i> <strong>Native Mobile Client Alternative:</strong> A native Android companion app (using CameraX / ML Kit) can communicate directly with the POS REST API over LAN without browser WebRTC/getUserMedia restrictions.
+            </div>
+        </div>
+    </div>
+
+    <!-- 4. SCAN BEHAVIOR PREFERENCES -->
+    <div style="background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius-md); padding: 24px; box-shadow: 0 2px 10px rgba(0,0,0,0.15);">
+        <h3 style="font-size: 16px; font-weight: 700; color: var(--text); margin: 0 0 6px 0; display: flex; align-items: center; gap: 8px;">
+            <i class="bi bi-sliders" style="color: var(--primary);"></i> Scan Behavior & Feedback
+        </h3>
+        <p style="font-size: 12px; color: var(--muted); margin-bottom: 18px;">Customize checkout automation and audio-visual feedback when barcodes are scanned.</p>
+
+        <form method="POST" id="scanner-settings-form">
+            {% csrf_token %}
+            <div style="display: flex; flex-direction: column; gap: 14px; margin-bottom: 24px;">
+                <label style="display: flex; align-items: center; gap: 12px; cursor: pointer; background: var(--surface-2); padding: 12px 16px; border-radius: var(--radius-sm); border: 1px solid var(--border);">
+                    <input type="checkbox" name="auto_add" id="id_auto_add" {% if scanner_settings.auto_add %}checked{% endif %} style="width: 18px; height: 18px; accent-color: var(--primary); cursor: pointer;">
+                    <div>
+                        <div style="font-size: 13px; font-weight: 600; color: var(--text);">Automatically add scanned product to cart</div>
+                        <div style="font-size: 11px; color: var(--muted);">Adds item immediately upon scan without requiring cashier to press enter or click add.</div>
+                    </div>
+                </label>
+
+                <label style="display: flex; align-items: center; gap: 12px; cursor: pointer; background: var(--surface-2); padding: 12px 16px; border-radius: var(--radius-sm); border: 1px solid var(--border);">
+                    <input type="checkbox" name="repeat_increment" id="id_repeat_increment" {% if scanner_settings.repeat_increment %}checked{% endif %} style="width: 18px; height: 18px; accent-color: var(--primary); cursor: pointer;">
+                    <div>
+                        <div style="font-size: 13px; font-weight: 600; color: var(--text);">Repeated scan increases quantity</div>
+                        <div style="font-size: 11px; color: var(--muted);">Scanning the same barcode multiple times automatically increments cart quantity (+1 per scan).</div>
+                    </div>
+                </label>
+
+                <label style="display: flex; align-items: center; gap: 12px; cursor: pointer; background: var(--surface-2); padding: 12px 16px; border-radius: var(--radius-sm); border: 1px solid var(--border);">
+                    <input type="checkbox" name="show_confirmation" id="id_show_confirmation" {% if scanner_settings.show_confirmation %}checked{% endif %} style="width: 18px; height: 18px; accent-color: var(--primary); cursor: pointer;">
+                    <div>
+                        <div style="font-size: 13px; font-weight: 600; color: var(--text);">Show successful scan confirmation</div>
+                        <div style="font-size: 11px; color: var(--muted);">Displays product name, SKU, price, and updated line total in a non-blocking confirmation pill.</div>
+                    </div>
+                </label>
+
+                <label style="display: flex; align-items: center; gap: 12px; cursor: pointer; background: var(--surface-2); padding: 12px 16px; border-radius: var(--radius-sm); border: 1px solid var(--border);">
+                    <input type="checkbox" name="audio_beep" id="id_audio_beep" {% if scanner_settings.audio_beep %}checked{% endif %} style="width: 18px; height: 18px; accent-color: var(--primary); cursor: pointer;">
+                    <div>
+                        <div style="font-size: 13px; font-weight: 600; color: var(--text);">Beep / audio feedback on successful scan</div>
+                        <div style="font-size: 11px; color: var(--muted);">Plays a crisp synthesized audio tone (HTML5 Web Audio API) confirming valid barcode registration.</div>
+                    </div>
+                </label>
+
+                <label style="display: flex; align-items: center; gap: 12px; cursor: pointer; background: var(--surface-2); padding: 12px 16px; border-radius: var(--radius-sm); border: 1px solid var(--border);">
+                    <input type="checkbox" name="ask_quantity" id="id_ask_quantity" {% if scanner_settings.ask_quantity %}checked{% endif %} style="width: 18px; height: 18px; accent-color: var(--primary); cursor: pointer;">
+                    <div>
+                        <div style="font-size: 13px; font-weight: 600; color: var(--text);">Ask quantity after every scan</div>
+                        <div style="font-size: 11px; color: var(--muted);">Pauses for cashier quantity input before adding to cart (recommended for bulk/weighted goods).</div>
+                    </div>
+                </label>
+            </div>
+
+            <div style="display: flex; justify-content: flex-end; gap: 10px;">
+                <button type="submit" class="btn btn-primary" style="padding: 10px 20px; font-size: 13px; font-weight: 600; display: inline-flex; align-items: center; gap: 8px;">
+                    <i class="bi bi-check-lg"></i> Save Scanner Preferences
+                </button>
+            </div>
+        </form>
+    </div>
+</div>
+
+<script>
+document.addEventListener('DOMContentLoaded', () => {
+    // 1. Audio Beep synthesis (Web Audio API)
+    function playBeep() {
+        try {
+            const ctx = new (window.AudioContext || window.webkitAudioContext)();
+            const osc = ctx.createOscillator();
+            const gain = ctx.createGain();
+            osc.type = 'sine';
+            osc.frequency.setValueAtTime(1760, ctx.currentTime);
+            gain.gain.setValueAtTime(0.15, ctx.currentTime);
+            gain.gain.exponentialRampToValueAtTime(0.01, ctx.currentTime + 0.08);
+            osc.connect(gain);
+            gain.connect(ctx.destination);
+            osc.start();
+            osc.stop(ctx.currentTime + 0.08);
+        } catch(e) {}
+    }
+
+    // 2. Synchronize to localStorage for instant POS access
+    const form = document.getElementById('scanner-settings-form');
+    if (form) {
+        form.addEventListener('submit', () => {
+            const settings = {
+                autoAdd: document.getElementById('id_auto_add').checked,
+                repeatIncrement: document.getElementById('id_repeat_increment').checked,
+                showConfirmation: document.getElementById('id_show_confirmation').checked,
+                audioBeep: document.getElementById('id_audio_beep').checked,
+                askQuantity: document.getElementById('id_ask_quantity').checked,
+            };
+            localStorage.setItem('pos_scanner_settings', JSON.stringify(settings));
+        });
+    }
+
+    // 3. Test Scanner Lookup
+    const testInput = document.getElementById('test-scanner-input');
+    const testBtn = document.getElementById('btn-test-scan');
+    const resultBox = document.getElementById('test-scan-result');
+    const lastScannedEl = document.getElementById('live-last-scanned');
+
+    function performTestLookup(code) {
+        if (!code) return;
+        lastScannedEl.textContent = code;
+        resultBox.style.display = 'block';
+        resultBox.innerHTML = '<span style="color:var(--muted);"><i class="bi bi-hourglass-split"></i> Looking up barcode in catalog...</span>';
+
+        fetch(`/api/products/lookup/?code=${encodeURIComponent(code)}`)
+            .then(r => r.json().then(data => ({ ok: r.ok, data })))
+            .then(({ ok, data }) => {
+                if (ok && data.found) {
+                    playBeep();
+                    resultBox.innerHTML = `
+                        <div style="background: rgba(16, 185, 129, 0.15); border: 1px solid rgba(16, 185, 129, 0.3); color: #34d399; padding: 10px 14px; border-radius: 6px;">
+                            <strong>✓ Found:</strong> ${data.product.name} (SKU: ${data.product.product_code}) &mdash; Selling Price: ₹${data.product.selling_price} | Stock: ${data.product.current_stock} ${data.product.unit}
+                        </div>
+                    `;
+                } else {
+                    resultBox.innerHTML = `
+                        <div style="background: rgba(239, 68, 68, 0.15); border: 1px solid rgba(239, 68, 68, 0.3); color: #f87171; padding: 10px 14px; border-radius: 6px;">
+                            <strong>✗ ${data.error || 'Barcode not found in catalog.'}</strong>
+                        </div>
+                    `;
+                }
+            })
+            .catch(() => {
+                resultBox.innerHTML = '<div style="color:var(--danger);">Error testing barcode lookup.</div>';
+            });
+    }
+
+    if (testBtn && testInput) {
+        testBtn.addEventListener('click', () => performTestLookup(testInput.value.trim()));
+        testInput.addEventListener('keydown', (e) => {
+            if (e.key === 'Enter') {
+                e.preventDefault();
+                performTestLookup(testInput.value.trim());
+            }
+        });
+    }
+});
+</script>
+{% endblock content %}

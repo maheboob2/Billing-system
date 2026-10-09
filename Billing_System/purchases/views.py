@@ -1,21 +1,17 @@
-from django.shortcuts import render,redirect,get_object_or_404
+from django.shortcuts import render, redirect, get_object_or_404
 from django.db import transaction
-from django.db.models import F
+from django.db.models import Count, Q, Sum, F, DecimalField, ExpressionWrapper
+from django.views.decorators.http import require_POST
+from accounts.tenancy import company_required, role_required
+from inventory.services import StockService
 from .models import Purchase
 from .forms import PurchaseForm, PurchaseItemFormSet
-from django.views.decorators.http import require_POST
-from django.db.models import Count, Q, Sum, F, DecimalField, ExpressionWrapper
-from django.shortcuts import render
-
-# Create your views here.
 
 
-
-from django.db.models import Count, Q, Sum, F, DecimalField, ExpressionWrapper
-from django.shortcuts import render
-
+@company_required
+@role_required(["Admin", "Manager"])
 def purchase_list(request):
-    company = request.user.owned_companies
+    company = request.company
 
     purchases = (
         Purchase.objects.filter(company=company)
@@ -71,12 +67,16 @@ def purchase_list(request):
             "start_date": start_date,
             "end_date": end_date,
             "summary": summary,
+            "company": company,
+            "user_role": request.user_role,
         }
     )
 
 
+@company_required
+@role_required(["Admin", "Manager"])
 def add_purchase(request):
-    company = request.user.owned_companies
+    company = request.company
 
     if request.method == "POST":
         purchase_form = PurchaseForm(
@@ -108,12 +108,17 @@ def add_purchase(request):
                     item_formset.instance = purchase
                     item_formset.save()
 
+                try:
+                    from dashboard.sync_service import SyncService
+                    SyncService.queue_purchase(purchase)
+                except Exception:
+                    pass
+
                 return redirect("purchase_list")
             else:
-                  item_formset._non_form_errors = item_formset.error_class([
-        "Add at least one product to the purchase."
-    ])
-                
+                item_formset._non_form_errors = item_formset.error_class([
+                    "Add at least one product to the purchase."
+                ])
 
     else:
         purchase_form = PurchaseForm(company=company)
@@ -129,13 +134,16 @@ def add_purchase(request):
         {
             "purchase_form": purchase_form,
             "item_formset": item_formset,
+            "company": company,
         }
     )
 
 
+@company_required
+@role_required(["Admin", "Manager"])
 @require_POST
 def receive_purchase(request, purchase_id):
-    company = request.user.owned_companies
+    company = request.company
 
     with transaction.atomic():
         purchase = get_object_or_404(
@@ -159,23 +167,26 @@ def receive_purchase(request, purchase_id):
             if item.product.company_id != company.id:
                 return redirect("purchase_list")
 
-            updated = item.product.__class__.objects.filter(
-                id=item.product_id,
-                company=company
-            ).update(
-                current_stock=F("current_stock") + item.quantity
+            StockService.adjust_stock(
+                company=company,
+                product=item.product,
+                movement_type="PURCHASE",
+                quantity=item.quantity,
+                user=request.user,
+                reference=f"PO #{purchase.invoice_number}",
+                reason="Purchase order received",
             )
-
-            if updated != 1:
-                return redirect("purchase_list")
 
         purchase.status = "RECEIVED"
         purchase.save(update_fields=["status"])
 
     return redirect("purchase_list")
 
+
+@company_required
+@role_required(["Admin", "Manager"])
 def purchase_detail(request, purchase_id):
-    company = request.user.owned_companies
+    company = request.company
 
     purchase = get_object_or_404(
         Purchase.objects
@@ -188,12 +199,17 @@ def purchase_detail(request, purchase_id):
     return render(
         request,
         "purchases/purchase_detail.html",
-        {"purchase": purchase}
+        {
+            "purchase": purchase,
+            "company": company,
+        }
     )
 
 
+@company_required
+@role_required(["Admin", "Manager"])
 def edit_purchase(request, purchase_id):
-    company = request.user.owned_companies
+    company = request.company
 
     purchase = get_object_or_404(
         Purchase,
@@ -242,7 +258,7 @@ def edit_purchase(request, purchase_id):
             "purchase_form": purchase_form,
             "item_formset": item_formset,
             "is_edit": True,
-            "purchase": purchase
+            "purchase": purchase,
+            "company": company,
         }
     )
-    

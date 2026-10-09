@@ -1,71 +1,168 @@
-{% extends "Dashboard/main_nav.html" %}
+{% extends "dashboard/main_nav.html" %}
+{% load static %}
 
 {% block content %}
+<div class="supplier-page-container" style="max-width: 1400px; margin: 0 auto; padding: 22px 20px;">
+    
+    <!-- Header Toolbar -->
+    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; flex-wrap: wrap; gap: 14px;">
+        <div>
+            <div style="display: flex; align-items: center; gap: 10px; margin-bottom: 4px;">
+                <h1 style="font-size: 22px; font-weight: 700; color: var(--text); margin: 0;">Supplier Directory</h1>
+                <span style="font-size: 12px; background: var(--surface-2); border: 1px solid var(--border); padding: 3px 9px; border-radius: 14px; color: var(--muted); font-weight: 600;">
+                    {{ company.company_name }}
+                </span>
+            </div>
+            <p style="margin: 0; font-size: 13px; color: var(--muted);">Manage vendor contacts, procurement sources, contact numbers, and GSTIN trade details.</p>
+        </div>
 
-<h2>Suppliers</h2>
+        <div style="display: flex; gap: 10px;">
+            <a href="{% url 'add_supplier' %}" class="btn btn-primary" style="font-size: 13px; padding: 8px 16px; text-decoration: none;">
+                <i class="bi bi-plus-circle-fill"></i> Add Supplier
+            </a>
+            <a href="{% url 'purchase_list' %}" class="btn btn-secondary" style="font-size: 13px; padding: 8px 14px; text-decoration: none;">
+                <i class="bi bi-bag-check"></i> Purchases
+            </a>
+        </div>
+    </div>
 
-<a href="{% url 'add_supplier' %}">Add Supplier</a>
+    <!-- Search / Filter Bar -->
+    <div style="background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius-md); padding: 12px 16px; margin-bottom: 16px; display: flex; align-items: center; gap: 12px; flex-wrap: wrap;">
+        <div style="position: relative; flex: 1; min-width: 260px;">
+            <i class="bi bi-search" style="position: absolute; left: 12px; top: 50%; transform: translateY(-50%); color: var(--muted); font-size: 13px;"></i>
+            <input type="text"
+                   id="sup-search"
+                   placeholder="Filter by supplier name, contact person, phone, GSTIN..."
+                   oninput="filterSuppliers()"
+                   style="padding-left: 34px; width: 100%; border-radius: var(--radius-sm); font-size: 13px;">
+        </div>
 
-<table border="1">
+        <span style="font-size: 12px; color: var(--muted); margin-left: auto;">
+            Total: <strong style="color: var(--text);">{{ suppliers.count }}</strong> Suppliers
+        </span>
+    </div>
 
-    <thead>
-        <tr>
-            <th>Name</th>
-            <th>Contact Person</th>
-            <th>Phone</th>
-            <th>Email</th>
-            <th>City</th>
-            <th>GST Number</th>
-            <th>Status</th>
-            <th>Action</th>
-        </tr>
-    </thead>
+    <!-- Suppliers Table -->
+    <div style="background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius-md); overflow: hidden; min-height: 240px;">
+        <div style="overflow-x: auto;">
+            <table class="table-theme" id="suppliers-table" style="width: 100%; border-collapse: collapse;">
+                <thead>
+                    <tr>
+                        <th style="width: 50px; text-align: center;">#</th>
+                        <th>Supplier Name</th>
+                        <th>Contact Person</th>
+                        <th>Phone & Email</th>
+                        <th>City / Location</th>
+                        <th>GST Number</th>
+                        <th>Status</th>
+                        <th style="text-align: right; width: 180px;">Action</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for supplier in suppliers %}
+                    <tr class="sup-row" data-search="{{ supplier.name|lower }} {{ supplier.contact_person|default:''|lower }} {{ supplier.phone|default:''|lower }} {{ supplier.email|default:''|lower }} {{ supplier.city|default:''|lower }} {{ supplier.gst_number|default:''|lower }}">
+                        <td style="text-align: center; color: var(--muted); font-family: var(--font-mono); font-size: 12px;">
+                            {{ forloop.counter }}
+                        </td>
 
-    <tbody>
+                        <td>
+                            <div style="display: flex; align-items: center; gap: 10px;">
+                                <div style="width: 34px; height: 34px; border-radius: 8px; background: var(--surface-2); border: 1px solid var(--border); display: flex; align-items: center; justify-content: center; color: var(--primary);">
+                                    <i class="bi bi-building"></i>
+                                </div>
+                                <div>
+                                    <div style="font-weight: 600; color: var(--text);">{{ supplier.name }}</div>
+                                    {% if supplier.address %}
+                                    <div style="font-size: 11px; color: var(--muted); max-width: 220px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">
+                                        {{ supplier.address }}
+                                    </div>
+                                    {% endif %}
+                                </div>
+                            </div>
+                        </td>
 
-        {% for supplier in suppliers %}
+                        <td style="color: var(--text); font-size: 13px;">
+                            {{ supplier.contact_person|default:"—" }}
+                        </td>
 
-        <tr>
+                        <td>
+                            <div style="font-size: 13px; font-family: var(--font-mono); color: var(--text);">
+                                {{ supplier.phone|default:"—" }}
+                            </div>
+                            {% if supplier.email %}
+                            <div style="font-size: 11px; color: var(--muted);">
+                                {{ supplier.email }}
+                            </div>
+                            {% endif %}
+                        </td>
 
-            <td>{{ supplier.name }}</td>
-            <td>{{ supplier.contact_person }}</td>
-            <td>{{ supplier.phone }}</td>
-            <td>{{ supplier.email }}</td>
-            <td>{{ supplier.city }}</td>
-            <td>{{ supplier.gst_number }}</td>
+                        <td style="color: var(--muted); font-size: 13px;">
+                            {{ supplier.city|default:"—" }}
+                        </td>
 
-            <td>
-                {% if supplier.status %}
-                    Active
-                {% else %}
-                    Inactive
-                {% endif %}
-            </td>
+                        <td>
+                            {% if supplier.gst_number %}
+                                <span style="font-family: var(--font-mono); font-size: 12px; background: var(--surface-2); padding: 2px 6px; border-radius: 4px; border: 1px solid var(--border); color: var(--text);">
+                                    {{ supplier.gst_number }}
+                                </span>
+                            {% else %}
+                                <span style="color: var(--muted); font-size: 12px;">—</span>
+                            {% endif %}
+                        </td>
 
-            <td>
-                <a href="{% url 'edit_supplier' supplier.id %}">
-                    Edit
-                </a>
-                  {% if supplier.status %}
-                <a href="{% url 'deactivate_supplier' supplier.id %}">
-                    Deactivate
-                </a>
-                  {% endif %}
-            </td>
+                        <td>
+                            {% if supplier.status %}
+                                <span class="badge badge-success" style="font-size: 11px;">Active</span>
+                            {% else %}
+                                <span class="badge badge-danger" style="font-size: 11px;">Inactive</span>
+                            {% endif %}
+                        </td>
 
-        </tr>
+                        <td style="text-align: right;">
+                            <div style="display: flex; gap: 6px; justify-content: flex-end;">
+                                <a href="{% url 'edit_supplier' supplier.id %}" class="btn btn-secondary" style="padding: 5px 10px; font-size: 12px; text-decoration: none;" title="Edit Supplier">
+                                    <i class="bi bi-pencil"></i> Edit
+                                </a>
+                                {% if supplier.status %}
+                                    <a href="{% url 'deactivate_supplier' supplier.id %}" class="btn btn-outline" style="padding: 5px 10px; font-size: 12px; text-decoration: none; color: var(--danger); border-color: rgba(220, 38, 38, 0.3);" title="Deactivate Supplier">
+                                        <i class="bi bi-slash-circle"></i> Deactivate
+                                    </a>
+                                {% endif %}
+                            </div>
+                        </td>
+                    </tr>
+                    {% empty %}
+                    <tr id="empty-suppliers-tr">
+                        <td colspan="8" style="text-align: center; padding: 48px 20px;">
+                            <div style="max-width: 320px; margin: 0 auto; color: var(--muted);">
+                                <i class="bi bi-truck" style="font-size: 36px; color: var(--muted); display: block; margin-bottom: 10px;"></i>
+                                <div style="font-size: 15px; font-weight: 600; color: var(--text); margin-bottom: 4px;">No Suppliers Registered</div>
+                                <p style="font-size: 12px; margin-bottom: 16px;">Add suppliers to track purchase orders, wholesale inventory inwards, and GST bills.</p>
+                                <a href="{% url 'add_supplier' %}" class="btn btn-primary" style="font-size: 12px; padding: 6px 14px; text-decoration: none;">
+                                    <i class="bi bi-plus-circle"></i> Add First Supplier
+                                </a>
+                            </div>
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
 
-        {% empty %}
-
-        <tr>
-            <td colspan="8">No suppliers found.</td>
-        </tr>
-
-
-        {% endfor %}
-
-    </tbody>
-
-</table>
-
-{% endblock %}
+<script>
+function filterSuppliers() {
+    const q = (document.getElementById('sup-search').value || '').trim().toLowerCase();
+    const rows = document.querySelectorAll('.sup-row');
+    rows.forEach(row => {
+        const text = row.getAttribute('data-search') || '';
+        if (!q || text.includes(q)) {
+            row.style.display = '';
+        } else {
+            row.style.display = 'none';
+        }
+    });
+}
+</script>
+{% endblock content %}

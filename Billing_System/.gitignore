@@ -1,0 +1,28 @@
+# Byte-compiled / optimized / DLL files
+__pycache__/
+*.py[cod]
+*$py.class
+
+# Database files & local backups
+*.sqlite3
+*.sqlite3*
+*.sqlite3-journal
+*.sqlite3-wal
+*.sqlite3-shm
+*.backup*
+db.sqlite3*
+db.sqlite3.*
+
+# Environment variables & secrets
+.env
+.env.*
+*.env
+
+# Local test scratch & screenshots
+dom_*.html
+*.png
+qa_evidence_v3/
+
+# Logs & temp files
+*.log
+scratch/

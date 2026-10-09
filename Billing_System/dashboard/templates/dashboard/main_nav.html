@@ -4,32 +4,48 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Nav</title>
-    <link rel="stylesheet"
-      href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css">
+    <title>Billing System — {% if company %}{{ company.company_name }}{% else %}Retail Management{% endif %}</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@500;600&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css">
+    
+    <!-- Early Theme Bootstrap (Prevents Theme Flash & Defaults to Light Mode) -->
+    <script>
+    (function() {
+        try {
+            var m = localStorage.getItem('pos_mode');
+            var t = localStorage.getItem('pos_theme') || localStorage.getItem('alpha-theme') || 'forest';
+            if (m !== 'dark') m = 'light';
+            document.documentElement.setAttribute('data-mode', m);
+            document.documentElement.setAttribute('data-theme', t);
+            document.documentElement.dataset.mode = m;
+            document.documentElement.dataset.theme = t;
+        } catch (e) {
+            document.documentElement.setAttribute('data-mode', 'light');
+            document.documentElement.setAttribute('data-theme', 'forest');
+        }
+    })();
+    </script>
+    
+    <!-- Global Theme System -->
+    <link rel="stylesheet" href="{% static 'dashboard/css/theme.css' %}">
+    <script src="{% static 'dashboard/js/theme.js' %}"></script>
 </head>
 <body>
-    <h2>Side Navbar</h2>
-    <h3>Catalog</h3>
-    <a href="{% url "category" %}">Inventory</a>
-    <a href="{% url "product" %}">Products</a>
-    <a href="{% url "category" %}">Category</a>
-    <a href="{% url "supplier" %}">Suppliers</a>
-     <a href="{% url "sales:customer_list" %}">Customers</a> 
-    <a href="{% url "purchase_list" %}">Purchases</a> 
-    <a href="{% url 'sales:sale_list' %}">Sales</a>
-    <a href="">Invoices</a>
-    <a href="">Imports/Exports</a>
-    <a href="">Users</a>
-    <a href="">Settings</a>
-    <a href="">Help</a>
-    <hr>
+    <div class="app-shell" id="app-shell">
+        {% include "dashboard/components/sidebar.html" %}
 
-    {% block content %}
-    
-    {% endblock content %}
+        <div class="app-main-wrapper">
+            {% include "dashboard/components/topbar.html" %}
 
+            <main class="app-content-area" id="app-content-area">
+                {% block content %}
+                {% endblock content %}
+            </main>
+        </div>
+    </div>
 
-
+    {% include "dashboard/form_submit_protection.html" %}
 </body>
 </html>

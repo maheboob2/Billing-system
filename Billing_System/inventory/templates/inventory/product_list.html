@@ -1,92 +1,285 @@
-
-
-{% extends "Dashboard/main_nav.html" %}
+{% extends "dashboard/main_nav.html" %}
+{% load static %}
 
 {% block content %}
+<div class="product-page-container" style="max-width: 1400px; margin: 0 auto; padding: 22px 20px;">
+    
+    <!-- Header Toolbar -->
+    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; flex-wrap: wrap; gap: 14px;">
+        <div>
+            <div style="display: flex; align-items: center; gap: 10px; margin-bottom: 4px;">
+                <h1 style="font-size: 22px; font-weight: 700; color: var(--text); margin: 0;">Product Inventory</h1>
+                <span style="font-size: 12px; background: var(--surface-2); border: 1px solid var(--border); padding: 3px 9px; border-radius: 14px; color: var(--muted); font-weight: 600;">
+                    {{ company.company_name }}
+                </span>
+            </div>
+            <p style="margin: 0; font-size: 13px; color: var(--muted);">Manage product catalog, barcode assignments, selling rates and stock thresholds.</p>
+        </div>
 
-<div class="container mt-4">
-    <div class="d-flex justify-content-between align-items-center mb-3">
-        <h2>Products</h2>
-        <a href="{% url 'add_product' %}" class="btn btn-primary">
-            Add Product
-        </a>
+        <div style="display: flex; gap: 10px;">
+            <a href="{% url 'add_product' %}" class="btn btn-primary" style="font-size: 13px; padding: 8px 16px; text-decoration: none;">
+                <i class="bi bi-plus-circle-fill"></i> Add New Product
+            </a>
+            <a href="{% url 'category' %}" class="btn btn-secondary" style="font-size: 13px; padding: 8px 14px; text-decoration: none;">
+                <i class="bi bi-tags"></i> Categories
+            </a>
+        </div>
     </div>
 
-    <div class="table-responsive">
-        <table class="table table-bordered table-striped">
-            <thead>
-                <tr>
-                    <th>Product Code</th>
-                    <th>Name</th>
-                    <th>Category</th>
-                    <th>Supplier</th>
-                    <th>Purchase Price</th>
-                    <th>Selling Price</th>
-                    <th>Stock</th>
-                    <th>Minimum Stock</th>
-                    <th>GST (%)</th>
-                    <th>Status</th>
-                    <th>Action</th>
-                    <th>Stock Status</th>
-                </tr>
-            </thead>
+    <!-- Search / Filter Bar -->
+    <div style="background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius-md); padding: 12px 16px; margin-bottom: 16px; display: flex; align-items: center; gap: 12px; flex-wrap: wrap;">
+        <div style="position: relative; flex: 1; min-width: 260px;">
+            <i class="bi bi-search" style="position: absolute; left: 12px; top: 50%; transform: translateY(-50%); color: var(--muted); font-size: 13px;"></i>
+            <input type="text"
+                   id="prod-search"
+                   placeholder="Filter by product name, code, barcode..."
+                   oninput="filterProducts()"
+                   style="padding-left: 34px; width: 100%; border-radius: var(--radius-sm); font-size: 13px;">
+        </div>
 
-            <tbody>
-                {% for product in products %}
-                <tr>
-                    <td>{{ product.product_code }}</td>
-                    <td>{{ product.name }}</td>
-                    <td>{{ product.category.name }}</td>
-                    <td>{{ product.supplier.name }}</td>
-                    <td>₹{{ product.purchase_price|floatformat:2 }}</td>
-                    <td>₹{{ product.selling_price|floatformat:2 }}</td>
-                    <td>{{ product.current_stock }} {{ product.unit }}</td>
-                    <td>{{ product.minimum_stock }} {{ product.unit }}</td>
-                    <td>{{ product.gst_percentage }}%</td>
+        <span style="font-size: 12px; color: var(--muted); margin-left: auto;">
+            Total: <strong style="color: var(--text);">{{ products.count }}</strong> Items
+        </span>
+    </div>
 
-                    <td>
-                        {% if product.status %}
-                            Active
-                        {% else %}
-                            Inactive
-                        {% endif %}
-                    </td>
+    <!-- Products Table -->
+    <div style="background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius-md); overflow: hidden;">
+        <div style="overflow-x: auto;">
+            <table class="table-theme" id="products-table" style="width: 100%; border-collapse: collapse;">
+                <thead>
+                    <tr>
+                        <th style="width: 50px; text-align: center;">Item</th>
+                        <th>Product Details</th>
+                        <th>Category</th>
+                        <th>Supplier</th>
+                        <th style="text-align: right;">Cost Price</th>
+                        <th style="text-align: right;">Selling Price</th>
+                        <th>GST</th>
+                        <th>Stock Level</th>
+                        <th>Status</th>
+                        <th style="text-align: right; width: 130px;">Action</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for product in products %}
+                    <tr class="prod-row" data-search="{{ product.name|lower }} {{ product.product_code|lower }} {{ product.barcode|lower }} {{ product.category.name|lower }}">
+                        <td style="text-align: center;">
+                            <div class="product-visual-avatar {% if not product.image %}initials{% endif %}">
+                                {% if product.image %}
+                                    <img src="{{ product.image.url }}" alt="{{ product.name }}">
+                                {% else %}
+                                    <!-- Category-based professional visual fallback -->
+                                    {% with c=product.category.name|lower %}
+                                        {% if "dairy" in c or "milk" in c %}
+                                            <i class="bi bi-droplet-half" style="color: #38bdf8;" title="Dairy & Milk"></i>
+                                        {% elif "egg" in c %}
+                                            <i class="bi bi-egg-fried" style="color: #f59e0b;" title="Eggs"></i>
+                                        {% elif "biscuit" in c or "bakery" in c or "bread" in c or "cookie" in c %}
+                                            <i class="bi bi-cake2" style="color: #d97706;" title="Biscuits / Bakery"></i>
+                                        {% elif "beverage" in c or "drink" in c or "tea" in c or "coffee" in c %}
+                                            <i class="bi bi-cup-straw" style="color: #0284c7;" title="Beverages"></i>
+                                        {% elif "grocer" in c or "grain" in c or "rice" in c or "food" in c %}
+                                            <i class="bi bi-basket2" style="color: #16a34a;" title="Grocery"></i>
+                                        {% elif "care" in c or "pharma" in c or "soap" in c or "beauty" in c %}
+                                            <i class="bi bi-heart-pulse" style="color: #9333ea;" title="Personal Care"></i>
+                                        {% else %}
+                                            <span>{{ product.name|slice:":2"|upper }}</span>
+                                        {% endif %}
+                                    {% endwith %}
+                                {% endif %}
+                            </div>
+                        </td>
 
-                    <td>
-                        <a href="{% url 'edit_product' product.id %}"
-                           class="btn btn-sm btn-warning">
-                            Edit
-                        </a>
+                        <td>
+                            <div style="font-weight: 600; color: var(--text);">{{ product.name }}</div>
+                            <div style="font-size: 11px; color: var(--muted); font-family: var(--font-mono); margin-top: 2px;">
+                                <span style="background: var(--surface-2); padding: 1px 5px; border-radius: 3px; border: 1px solid var(--border);">
+                                    {{ product.product_code }}
+                                </span>
+                                {% if product.barcode %}
+                                &bull; <i class="bi bi-upc"></i> {{ product.barcode }}
+                                {% endif %}
+                            </div>
+                        </td>
 
-                        {% if product.status %}
-                            <a href="{% url 'deactivate_product' product.id %}"
-                               class="btn btn-sm btn-danger">
-                                Deactivate
-                            </a>
-                        {% endif %}
-                    </td>
+                        <td>
+                            <span class="badge badge-primary" style="font-size: 11px;">
+                                {{ product.category.name }}
+                            </span>
+                        </td>
 
-                    <td>
-                        {% if product.current_stock == 0 %}
-                            <strong class="text-danger">Out of Stock</strong>
-                        {% elif product.current_stock <= product.minimum_stock %}
-                            <strong class="text-warning">Low Stock</strong>
-                        {% else %}
-                            <strong class="text-success">In Stock</strong>
-                        {% endif %}
-                    </td>
-                </tr>
+                        <td style="font-size: 12px; color: var(--muted);">
+                            {{ product.supplier.name|default:"—" }}
+                        </td>
 
-                {% empty %}
-                <tr>
-                    <td colspan="12" class="text-center">
-                        No products found.
-                    </td>
-                </tr>
-                {% endfor %}
-            </tbody>
-        </table>
+                        <td style="text-align: right; font-family: var(--font-mono); font-size: 12px; color: var(--muted);">
+                            ₹{{ product.purchase_price|floatformat:2 }}
+                        </td>
+
+                        <td style="text-align: right; font-family: var(--font-mono); font-weight: 700; color: var(--text);">
+                            ₹{{ product.selling_price|floatformat:2 }}
+                        </td>
+
+                        <td style="font-family: var(--font-mono); font-size: 12px; color: var(--muted);">
+                            {{ product.gst_percentage }}%
+                        </td>
+
+                        <td>
+                            {% if product.current_stock == 0 %}
+                                <span class="badge badge-danger">Out of Stock</span>
+                            {% elif product.current_stock <= product.minimum_stock %}
+                                <span class="badge badge-warning">Low: {{ product.current_stock }} {{ product.unit|default:'pcs' }}</span>
+                            {% else %}
+                                <span class="badge badge-success">{{ product.current_stock }} {{ product.unit|default:'pcs' }}</span>
+                            {% endif %}
+                        </td>
+
+                        <td>
+                            {% if product.status %}
+                                <span class="badge badge-success">Active</span>
+                            {% else %}
+                                <span class="badge badge-danger">Inactive</span>
+                            {% endif %}
+                        </td>
+
+                        <td style="text-align: right;">
+                            <div style="display: flex; justify-content: flex-end; gap: 6px;">
+                                <a href="{% url 'edit_product' product.id %}"
+                                   class="btn btn-secondary btn-sm"
+                                   title="Edit Product"
+                                   style="text-decoration: none;">
+                                    <i class="bi bi-pencil-square"></i>
+                                </a>
+
+                                {% if product.barcode %}
+                                <button type="button"
+                                        class="btn btn-secondary btn-sm"
+                                        title="Print Barcode Label"
+                                        onclick="openPrintBarcodeModal('{{ product.name|escapejs }}', '{{ product.product_code|escapejs }}', '{{ product.barcode|escapejs }}', '{{ product.selling_price|floatformat:2 }}')"
+                                        style="color: #38bdf8;">
+                                    <i class="bi bi-printer"></i>
+                                </button>
+                                {% endif %}
+
+                                {% if product.status %}
+                                <a href="{% url 'deactivate_product' product.id %}"
+                                   class="btn btn-danger btn-sm"
+                                   title="Deactivate"
+                                   style="text-decoration: none;">
+                                    <i class="bi bi-slash-circle"></i>
+                                </a>
+                                {% endif %}
+                            </div>
+                        </td>
+                    </tr>
+                    {% empty %}
+                    <tr>
+                        <td colspan="10" style="text-align: center; padding: 40px; color: var(--muted);">
+                            No products found in this company inventory.
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+        <div style="padding: 10px 18px; border-top: 1px solid var(--border); background: var(--surface-2); font-size: 12px; color: var(--muted); display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 8px;">
+            <span>Showing active catalog items &bull; Real-time inventory sync</span>
+            <span><strong style="color: var(--text);">{{ products.count }}</strong> product{{ products.count|pluralize }} listed</span>
+        </div>
     </div>
 </div>
 
-{% endblock %}
+<!-- Barcode Print Sticker Modal -->
+<div id="print-label-modal" style="display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.8); z-index: 9999; align-items: center; justify-content: center; padding: 16px;">
+    <div style="background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius-md); width: 100%; max-width: 440px; padding: 24px; text-align: center; box-shadow: 0 16px 48px rgba(0,0,0,0.6);">
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px;">
+            <h3 style="font-size: 16px; font-weight: 700; color: var(--text); margin: 0; display: flex; align-items: center; gap: 8px;">
+                <i class="bi bi-printer" style="color: #38bdf8;"></i> Printable Barcode Label
+            </h3>
+            <button type="button" onclick="closePrintBarcodeModal()" style="background: none; border: none; font-size: 20px; color: var(--muted); cursor: pointer;">&times;</button>
+        </div>
+
+        <!-- 50mm x 25mm Retail Shelf/Item Sticker Preview -->
+        <div id="printable-sticker" style="background: #ffffff; color: #000000; border: 2px dashed #94a3b8; border-radius: 6px; padding: 14px 10px; margin: 0 auto 16px; max-width: 320px; text-align: center;">
+            <div id="sticker-store" style="font-size: 11px; font-weight: 800; text-transform: uppercase; letter-spacing: 0.5px; color: #1e293b;">{{ company.company_name|default:'RETAIL STORE' }}</div>
+            <div id="sticker-name" style="font-size: 13px; font-weight: 700; color: #0f172a; margin: 3px 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">Product Name</div>
+            <div style="margin: 4px auto;">
+                <svg id="barcode-svg" style="max-width: 100%; height: 52px; display: block; margin: 0 auto;"></svg>
+            </div>
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-top: 4px; padding: 0 8px; font-size: 11px; font-family: monospace; font-weight: 700; color: #0f172a;">
+                <span id="sticker-sku">SKU: PROD-001</span>
+                <span id="sticker-price" style="font-size: 13px; font-weight: 800;">₹0.00</span>
+            </div>
+        </div>
+
+        <div style="display: flex; gap: 10px; justify-content: center;">
+            <button type="button" class="btn btn-primary" onclick="triggerBrowserPrint()" style="padding: 9px 18px;">
+                <i class="bi bi-printer-fill"></i> Print Label
+            </button>
+            <button type="button" class="btn btn-secondary" onclick="closePrintBarcodeModal()" style="padding: 9px 16px;">
+                Close
+            </button>
+        </div>
+    </div>
+</div>
+
+<style>
+@media print {
+    body * { visibility: hidden !important; }
+    #printable-sticker, #printable-sticker * { visibility: visible !important; }
+    #printable-sticker {
+        position: fixed !important;
+        left: 0 !important;
+        top: 0 !important;
+        width: 50mm !important;
+        border: none !important;
+        padding: 4mm !important;
+        box-shadow: none !important;
+        margin: 0 !important;
+    }
+}
+</style>
+
+<script src="https://cdn.jsdelivr.net/npm/jsbarcode@3.11.5/dist/JsBarcode.all.min.js"></script>
+<script>
+function filterProducts() {
+    const q = (document.getElementById('prod-search').value || '').toLowerCase().trim();
+    document.querySelectorAll('.prod-row').forEach(row => {
+        const text = row.dataset.search || '';
+        row.style.display = (!q || text.includes(q)) ? '' : 'none';
+    });
+}
+
+function openPrintBarcodeModal(name, sku, barcode, price) {
+    document.getElementById('sticker-name').textContent = name;
+    document.getElementById('sticker-sku').textContent = 'SKU: ' + sku;
+    document.getElementById('sticker-price').textContent = '₹' + price;
+    
+    try {
+        if (window.JsBarcode) {
+            JsBarcode('#barcode-svg', barcode, {
+                format: "CODE128",
+                width: 2,
+                height: 48,
+                displayValue: true,
+                fontSize: 12,
+                fontOptions: "bold",
+                margin: 4
+            });
+        }
+    } catch (e) {
+        console.warn('JsBarcode render error:', e);
+    }
+    
+    document.getElementById('print-label-modal').style.display = 'flex';
+}
+
+function closePrintBarcodeModal() {
+    document.getElementById('print-label-modal').style.display = 'none';
+}
+
+function triggerBrowserPrint() {
+    window.print();
+}
+</script>
+{% endblock content %}

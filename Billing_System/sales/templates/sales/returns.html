@@ -1,0 +1,414 @@
+{% extends "dashboard/main_nav.html" %}
+{% load static %}
+
+{% block content %}
+<div style="max-width: 1200px; margin: 24px auto; padding: 0 16px;">
+    <!-- Page Header -->
+    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
+        <div>
+            <h1 style="font-size: 22px; font-weight: 700; color: var(--text); margin: 0 0 4px 0;">Returns & Refund Management</h1>
+            <p style="margin: 0; font-size: 13px; color: var(--muted);">Audit-tracked customer returns, inventory restocking, and refund authorization.</p>
+        </div>
+        <div style="display: flex; gap: 10px;">
+            <a href="{% url 'sales' %}" class="btn btn-secondary" style="text-decoration: none; font-size: 13px;">
+                <i class="bi bi-arrow-left"></i> Sales Register
+            </a>
+            <button type="button" class="btn btn-primary" id="btn-open-return-modal" style="display: inline-flex; align-items: center; gap: 8px; font-size: 13px;">
+                <i class="bi bi-arrow-counterclockwise"></i> Create Return Request
+            </button>
+        </div>
+    </div>
+
+    <!-- Filters & Stats Bar -->
+    <div style="background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius-md); padding: 14px 18px; margin-bottom: 20px; display: flex; justify-content: space-between; align-items: center; gap: 16px; flex-wrap: wrap;">
+        <div style="display: flex; gap: 8px; align-items: center;">
+            <a href="{% url 'returns' %}" class="btn {% if not selected_status %}btn-primary{% else %}btn-secondary{% endif %}" style="padding: 6px 14px; font-size: 12px; text-decoration: none;">All</a>
+            <a href="{% url 'returns' %}?status=PENDING" class="btn {% if selected_status == 'PENDING' %}btn-primary{% else %}btn-secondary{% endif %}" style="padding: 6px 14px; font-size: 12px; text-decoration: none;">Pending Approval</a>
+            <a href="{% url 'returns' %}?status=APPROVED" class="btn {% if selected_status == 'APPROVED' %}btn-primary{% else %}btn-secondary{% endif %}" style="padding: 6px 14px; font-size: 12px; text-decoration: none;">Approved</a>
+            <a href="{% url 'returns' %}?status=REJECTED" class="btn {% if selected_status == 'REJECTED' %}btn-primary{% else %}btn-secondary{% endif %}" style="padding: 6px 14px; font-size: 12px; text-decoration: none;">Rejected</a>
+        </div>
+        <form method="GET" style="display: flex; gap: 8px; flex: 1; max-width: 380px;">
+            <input type="text" name="search" value="{{ search }}" placeholder="Search return #, invoice #, customer..." style="flex: 1; padding: 6px 12px; background: var(--surface-2); border: 1px solid var(--border); border-radius: var(--radius-sm); color: var(--text); font-size: 13px; outline: none;">
+            <button type="submit" class="btn btn-secondary" style="padding: 6px 14px; font-size: 12px;">Search</button>
+        </form>
+    </div>
+
+    <!-- Returns Table Card -->
+    <div style="background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius-md); overflow: hidden; box-shadow: 0 1px 3px rgba(0,0,0,0.04);">
+        <table class="table-theme" style="width: 100%; border-collapse: collapse; text-align: left; font-size: 13px;">
+            <thead>
+                <tr style="background: var(--surface-2); border-bottom: 1px solid var(--border); color: var(--muted); font-size: 12px; text-transform: uppercase;">
+                    <th style="padding: 12px 16px;">Return #</th>
+                    <th style="padding: 12px 16px;">Sale / Invoice</th>
+                    <th style="padding: 12px 16px;">Customer</th>
+                    <th style="padding: 12px 16px;">Reason</th>
+                    <th style="padding: 12px 16px;">Items Returned</th>
+                    <th style="padding: 12px 16px; text-align: right;">Refund Amount</th>
+                    <th style="padding: 12px 16px; text-align: center;">Status</th>
+                    <th style="padding: 12px 16px; text-align: right;">Actions</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for ret in returns %}
+                <tr style="border-bottom: 1px solid var(--border);">
+                    <td style="padding: 12px 16px; font-family: var(--font-mono); font-weight: 600; color: var(--text);">
+                        {{ ret.return_number }}
+                        <div style="font-size: 11px; color: var(--muted); font-family: var(--font-sans);">{{ ret.created_at|date:"d M Y, H:i" }}</div>
+                    </td>
+                    <td style="padding: 12px 16px;">
+                        <a href="{% if ret.invoice %}{% url 'invoice_detail' ret.invoice.invoice_number %}{% else %}#{% endif %}" style="color: var(--primary); text-decoration: none; font-weight: 600; font-family: var(--font-mono);">
+                            {{ ret.sale.sale_number }}
+                        </a>
+                    </td>
+                    <td style="padding: 12px 16px; color: var(--text);">
+                        {{ ret.customer.name|default:"Walk-in Customer" }}
+                    </td>
+                    <td style="padding: 12px 16px;">
+                        <span style="font-size: 12px; color: var(--text);">{{ ret.get_reason_display }}</span>
+                        {% if ret.notes %}
+                        <div style="font-size: 11px; color: var(--muted);">{{ ret.notes|truncatechars:40 }}</div>
+                        {% endif %}
+                    </td>
+                    <td style="padding: 12px 16px;">
+                        {% for it in ret.items.all %}
+                        <div style="font-size: 12px; margin-bottom: 2px;">
+                            <strong>{{ it.product.name }}</strong> &times; {{ it.quantity }}
+                            {% if it.restock %}<span style="color: var(--success); font-size: 11px;">(Restocked)</span>{% else %}<span style="color: var(--danger); font-size: 11px;">(Damaged)</span>{% endif %}
+                        </div>
+                        {% endfor %}
+                    </td>
+                    <td style="padding: 12px 16px; text-align: right; font-weight: 700; color: var(--text);">
+                        ₹{{ ret.refund_amount }}
+                        <div style="font-size: 11px; color: var(--muted); font-weight: normal;">via {{ ret.refund_payment_method }}</div>
+                    </td>
+                    <td style="padding: 12px 16px; text-align: center;">
+                        {% if ret.status == 'APPROVED' or ret.status == 'COMPLETED' %}
+                            <span style="background: rgba(22, 163, 74, 0.12); color: var(--success); border: 1px solid rgba(22, 163, 74, 0.3); padding: 4px 10px; border-radius: 20px; font-size: 11px; font-weight: 600;">Approved</span>
+                        {% elif ret.status == 'REJECTED' %}
+                            <span style="background: rgba(220, 38, 38, 0.12); color: var(--danger); border: 1px solid rgba(220, 38, 38, 0.3); padding: 4px 10px; border-radius: 20px; font-size: 11px; font-weight: 600;">Rejected</span>
+                        {% else %}
+                            <span style="background: rgba(245, 158, 11, 0.12); color: var(--warning); border: 1px solid rgba(245, 158, 11, 0.3); padding: 4px 10px; border-radius: 20px; font-size: 11px; font-weight: 600;">Pending</span>
+                        {% endif %}
+                    </td>
+                    <td style="padding: 12px 16px; text-align: right;">
+                        {% if ret.status == 'PENDING' and is_manager %}
+                            <button type="button" class="btn btn-primary" onclick="approveReturn({{ ret.id }})" style="padding: 4px 10px; font-size: 11px; margin-right: 4px;">
+                                <i class="bi bi-check-lg"></i> Approve
+                            </button>
+                            <button type="button" class="btn btn-secondary" onclick="rejectReturn({{ ret.id }})" style="padding: 4px 10px; font-size: 11px; color: var(--danger);">
+                                <i class="bi bi-x-lg"></i> Reject
+                            </button>
+                        {% elif ret.status == 'PENDING' %}
+                            <button type="button" class="btn btn-secondary" onclick="openManagerPinModal({{ ret.id }})" style="padding: 4px 10px; font-size: 11px; border-color: var(--accent); color: var(--accent);">
+                                <i class="bi bi-shield-lock"></i> Manager is here
+                            </button>
+                        {% else %}
+                            <span style="font-size: 11px; color: var(--muted);">
+                                {% if ret.approved_by %}By {{ ret.approved_by.username }}{% else %}&mdash;{% endif %}
+                            </span>
+                        {% endif %}
+                    </td>
+                </tr>
+                {% empty %}
+                <tr>
+                    <td colspan="8" style="padding: 48px; text-align: center; color: var(--muted);">
+                        <i class="bi bi-arrow-counterclockwise" style="font-size: 32px; display: block; margin-bottom: 8px;"></i>
+                        No return requests recorded.
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</div>
+
+<!-- Modal: Create Return Request -->
+<div id="create-return-modal" style="display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.7); z-index: 1000; align-items: center; justify-content: center; padding: 16px;">
+    <div style="background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius-md); width: 100%; max-width: 640px; max-height: 90vh; overflow-y: auto; padding: 24px; box-shadow: 0 12px 32px rgba(0,0,0,0.5);">
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px; border-bottom: 1px solid var(--border); padding-bottom: 12px;">
+            <h3 style="font-size: 18px; font-weight: 700; color: var(--text); margin: 0;">Submit Customer Return Request</h3>
+            <button type="button" onclick="closeReturnModal()" style="background: none; border: none; font-size: 20px; color: var(--muted); cursor: pointer;">&times;</button>
+        </div>
+
+        <div id="return-step-1">
+            <label style="display: block; font-size: 12px; font-weight: 600; color: var(--text); margin-bottom: 6px;">Enter Invoice # or Sale #</label>
+            <div style="display: flex; gap: 8px; margin-bottom: 14px;">
+                <input type="text" id="ret-search-invoice" placeholder="e.g. INV-1001 or SALE-..." style="flex: 1; padding: 10px 12px; background: var(--surface-2); border: 1px solid var(--border); border-radius: var(--radius-sm); color: var(--text); font-size: 14px; outline: none;">
+                <button type="button" class="btn btn-primary" id="btn-fetch-sale">Search Invoice</button>
+            </div>
+            <div id="ret-error" style="display: none; background: rgba(220, 38, 38, 0.12); color: var(--danger); padding: 10px; border-radius: var(--radius-sm); font-size: 12px; margin-bottom: 12px;"></div>
+        </div>
+
+        <div id="return-step-2" style="display: none;">
+            <div style="background: var(--surface-2); padding: 12px; border-radius: var(--radius-sm); margin-bottom: 16px; font-size: 13px;">
+                <div><strong>Sale:</strong> <span id="ret-display-sale"></span></div>
+                <div><strong>Customer:</strong> <span id="ret-display-customer"></span></div>
+                <div><strong>Date:</strong> <span id="ret-display-date"></span></div>
+            </div>
+
+            <h4 style="font-size: 13px; font-weight: 600; color: var(--text); margin-bottom: 10px;">Select Items & Quantities to Return:</h4>
+            <div id="ret-items-list" style="display: flex; flex-direction: column; gap: 10px; margin-bottom: 16px;"></div>
+
+            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-bottom: 14px;">
+                <div>
+                    <label style="display: block; font-size: 12px; font-weight: 600; color: var(--text); margin-bottom: 6px;">Return Reason *</label>
+                    <select id="ret-reason" style="width: 100%; padding: 8px 10px; background: var(--surface-2); border: 1px solid var(--border); border-radius: var(--radius-sm); color: var(--text); font-size: 13px;">
+                        <option value="CUSTOMER_CHANGED_MIND">Customer Changed Mind</option>
+                        <option value="DAMAGED">Damaged / Broken</option>
+                        <option value="WRONG_PRODUCT">Wrong Product Delivered</option>
+                        <option value="EXPIRED">Expired Stock</option>
+                        <option value="QUALITY_ISSUE">Quality Issue</option>
+                        <option value="OTHER">Other Reason</option>
+                    </select>
+                </div>
+                <div>
+                    <label style="display: block; font-size: 12px; font-weight: 600; color: var(--text); margin-bottom: 6px;">Refund Payment Method</label>
+                    <select id="ret-refund-method" style="width: 100%; padding: 8px 10px; background: var(--surface-2); border: 1px solid var(--border); border-radius: var(--radius-sm); color: var(--text); font-size: 13px;">
+                        <option value="CASH">Cash Refund</option>
+                        <option value="UPI">UPI Transfer</option>
+                        <option value="CARD">Card Reversal</option>
+                        <option value="CREDIT">Store Credit</option>
+                    </select>
+                </div>
+            </div>
+
+            <div style="margin-bottom: 18px;">
+                <label style="display: block; font-size: 12px; font-weight: 600; color: var(--text); margin-bottom: 6px;">Notes / Remarks</label>
+                <input type="text" id="ret-notes" placeholder="Explanation or condition note" style="width: 100%; padding: 8px 10px; background: var(--surface-2); border: 1px solid var(--border); border-radius: var(--radius-sm); color: var(--text); font-size: 13px;">
+            </div>
+
+            <div style="display: flex; justify-content: flex-end; gap: 10px; border-top: 1px solid var(--border); padding-top: 14px;">
+                <button type="button" class="btn btn-secondary" onclick="closeReturnModal()">Cancel</button>
+                <button type="button" class="btn btn-primary" id="btn-submit-return">Submit Return Request</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+    const modal = document.getElementById('create-return-modal');
+    const openBtn = document.getElementById('btn-open-return-modal');
+    const fetchBtn = document.getElementById('btn-fetch-sale');
+    const submitBtn = document.getElementById('btn-submit-return');
+    let loadedSale = null;
+
+    if (openBtn) openBtn.addEventListener('click', () => { modal.style.display = 'flex'; });
+    function closeReturnModal() { modal.style.display = 'none'; }
+
+    fetchBtn.addEventListener('click', () => {
+        const query = document.getElementById('ret-search-invoice').value.trim();
+        const err = document.getElementById('ret-error');
+        err.style.display = 'none';
+
+        if (!query) return;
+
+        fetch(`/api/sales/?search=${encodeURIComponent(query)}`)
+            .then(r => r.json())
+            .then(data => {
+                const results = data.results || data;
+                if (!results || results.length === 0) {
+                    err.textContent = `No sales found matching "${query}".`;
+                    err.style.display = 'block';
+                    return;
+                }
+                const sale = results[0];
+                loadedSale = sale;
+                document.getElementById('ret-display-sale').textContent = `${sale.sale_number} (Grand Total: ₹${sale.grand_total})`;
+                document.getElementById('ret-display-customer').textContent = sale.customer_name || 'Walk-in';
+                document.getElementById('ret-display-date').textContent = new Date(sale.created_at).toLocaleString();
+
+                const list = document.getElementById('ret-items-list');
+                list.innerHTML = (sale.items || []).map(it => `
+                    <div style="background: var(--surface-2); border: 1px solid var(--border); border-radius: var(--radius-sm); padding: 10px; display: grid; grid-template-columns: 2fr 1fr 1fr auto; gap: 8px; align-items: center;">
+                        <div>
+                            <div style="font-weight: 600; color: var(--text);">${it.product_name}</div>
+                            <div style="font-size: 11px; color: var(--muted);">Unit: ₹${it.unit_price} | Bought: ${it.quantity}</div>
+                        </div>
+                        <div>
+                            <label style="font-size: 11px; color: var(--muted); display: block;">Return Qty</label>
+                            <input type="number" class="ret-item-qty" data-id="${it.id}" max="${it.quantity}" min="0" step="1" value="0" style="width: 100%; padding: 6px; background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius-sm); color: var(--text); font-size: 13px;">
+                        </div>
+                        <div>
+                            <label style="font-size: 11px; color: var(--muted); display: block;">Restock?</label>
+                            <label style="font-size: 12px; color: var(--text); cursor: pointer; display: flex; align-items: center; gap: 4px;">
+                                <input type="checkbox" class="ret-item-restock" data-id="${it.id}" checked style="accent-color: var(--primary);"> Yes
+                            </label>
+                        </div>
+                    </div>
+                `).join('');
+
+                document.getElementById('return-step-2').style.display = 'block';
+            })
+            .catch(e => {
+                err.textContent = 'Error fetching invoice.';
+                err.style.display = 'block';
+            });
+    });
+
+    submitBtn.addEventListener('click', () => {
+        if (!loadedSale) return;
+        const items = [];
+        document.querySelectorAll('.ret-item-qty').forEach(qInput => {
+            const qty = parseFloat(qInput.value) || 0;
+            if (qty > 0) {
+                const saleItemId = parseInt(qInput.dataset.id);
+                const restockCb = document.querySelector(`.ret-item-restock[data-id="${saleItemId}"]`);
+                items.push({
+                    sale_item_id: saleItemId,
+                    quantity: qty,
+                    restock: restockCb ? restockCb.checked : true
+                });
+            }
+        });
+
+        if (items.length === 0) {
+            alert('Please select at least one item with quantity greater than 0 to return.');
+            return;
+        }
+
+        fetch('/api/sales/returns/', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'X-CSRFToken': '{{ csrf_token }}'
+            },
+            body: JSON.stringify({
+                sale_id: loadedSale.id,
+                reason: document.getElementById('ret-reason').value,
+                refund_payment_method: document.getElementById('ret-refund-method').value,
+                notes: document.getElementById('ret-notes').value,
+                items: items
+            })
+        })
+        .then(r => r.json())
+        .then(data => {
+            if (data.id) {
+                alert(`Return Request ${data.return_number} submitted successfully!`);
+                window.location.reload();
+            } else {
+                alert(data.error || 'Failed to submit return request.');
+            }
+        })
+        .catch(e => {
+            alert('Error submitting return request.');
+        });
+    });
+
+    function approveReturn(id) {
+        if (!confirm('Approve this return? This will restore stock into inventory and record the refund.')) return;
+        fetch(`/api/sales/returns/${id}/approve/`, {
+            method: 'POST',
+            headers: { 'X-CSRFToken': '{{ csrf_token }}' }
+        })
+        .then(r => r.json())
+        .then(data => {
+            if (data.message) {
+                alert(data.message);
+                window.location.reload();
+            } else {
+                alert(data.error || 'Failed to approve return.');
+            }
+        });
+    }
+
+    function rejectReturn(id) {
+        const reason = prompt('Enter rejection reason:');
+        if (reason === null) return;
+        fetch(`/api/sales/returns/${id}/reject/`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'X-CSRFToken': '{{ csrf_token }}'
+            },
+            body: JSON.stringify({ reason: reason })
+        })
+        .then(r => r.json())
+        .then(data => {
+            if (data.message) {
+                alert(data.message);
+                window.location.reload();
+            } else {
+                alert(data.error || 'Failed to reject return.');
+            }
+        });
+    let pinReturnId = null;
+    function openManagerPinModal(id) {
+        pinReturnId = id;
+        document.getElementById('manager-pin-modal').style.display = 'flex';
+        document.getElementById('mgr-pin-input').value = '';
+        document.getElementById('mgr-pin-error').style.display = 'none';
+        document.getElementById('mgr-user-input').focus();
+    }
+    function closeManagerPinModal() {
+        pinReturnId = null;
+        document.getElementById('manager-pin-modal').style.display = 'none';
+    }
+    function submitManagerPinApproval() {
+        const username = document.getElementById('mgr-user-input').value.trim();
+        const pin = document.getElementById('mgr-pin-input').value.trim();
+        const errDiv = document.getElementById('mgr-pin-error');
+        if (!username || !pin) {
+            errDiv.innerText = 'Please enter both manager username and approval PIN.';
+            errDiv.style.display = 'block';
+            return;
+        }
+        errDiv.style.display = 'none';
+        fetch(`/api/sales/returns/${pinReturnId}/approve/`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'X-CSRFToken': '{{ csrf_token }}'
+            },
+            body: JSON.stringify({
+                manager_username: username,
+                manager_pin: pin
+            })
+        })
+        .then(r => r.json().then(data => ({ status: r.status, data: data })))
+        .then(res => {
+            if (res.status === 200) {
+                alert(res.data.message || 'Return approved by manager.');
+                window.location.reload();
+            } else {
+                errDiv.innerText = res.data.error || 'Manager authentication failed.';
+                errDiv.style.display = 'block';
+            }
+        })
+        .catch(e => {
+            errDiv.innerText = 'Network error during manager verification.';
+            errDiv.style.display = 'block';
+        });
+    }
+</script>
+
+<!-- Modal: Manager In-Person Override PIN -->
+<div id="manager-pin-modal" style="display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.75); z-index: 1050; align-items: center; justify-content: center; padding: 16px;">
+    <div style="background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius-md); width: 100%; max-width: 440px; padding: 24px; box-shadow: 0 16px 40px rgba(0,0,0,0.6);">
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px; border-bottom: 1px solid var(--border); padding-bottom: 12px;">
+            <div style="display: flex; align-items: center; gap: 8px;">
+                <i class="bi bi-shield-lock" style="font-size: 20px; color: var(--accent);"></i>
+                <h3 style="font-size: 16px; font-weight: 700; color: var(--text); margin: 0;">Manager On-Site Authorization</h3>
+            </div>
+            <button type="button" onclick="closeManagerPinModal()" style="background: transparent; border: none; color: var(--muted); cursor: pointer; font-size: 18px;">&times;</button>
+        </div>
+        <p style="font-size: 13px; color: var(--muted); margin: 0 0 16px 0;">
+            A store Manager or Owner must authenticate to authorize this return and inventory refund.
+        </p>
+        <div id="mgr-pin-error" style="display: none; background: rgba(220,38,38,0.12); color: var(--danger); border: 1px solid rgba(220,38,38,0.3); padding: 8px 12px; border-radius: 6px; font-size: 12px; margin-bottom: 14px;"></div>
+        <div style="margin-bottom: 14px;">
+            <label style="display: block; font-size: 12px; font-weight: 600; color: var(--text); margin-bottom: 6px;">Manager Username</label>
+            <input type="text" id="mgr-user-input" class="form-control" placeholder="e.g. audit_mgr_a" style="width: 100%;">
+        </div>
+        <div style="margin-bottom: 20px;">
+            <label style="display: block; font-size: 12px; font-weight: 600; color: var(--text); margin-bottom: 6px;">Manager PIN / Password</label>
+            <input type="password" id="mgr-pin-input" class="form-control" placeholder="••••••••" style="width: 100%;">
+        </div>
+        <div style="display: flex; justify-content: flex-end; gap: 10px;">
+            <button type="button" class="btn btn-secondary" onclick="closeManagerPinModal()" style="padding: 8px 16px; font-size: 13px;">Cancel</button>
+            <button type="button" class="btn btn-primary" onclick="submitManagerPinApproval()" style="padding: 8px 18px; font-size: 13px;">
+                <i class="bi bi-check2-circle"></i> Authorize Return
+            </button>
+        </div>
+    </div>
+</div>
+{% endblock content %}

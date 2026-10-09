@@ -1,0 +1,117 @@
+<header class="global-topbar">
+    <div class="topbar-left">
+        <button type="button" class="sidebar-toggle-btn" id="sidebar-toggle-btn" title="Toggle Navigation Sidebar (Esc to close)" aria-label="Toggle Navigation">
+            <i class="bi bi-list"></i>
+        </button>
+        <div class="topbar-brand-title">
+            {% if '/cart' in request.path %}
+                <i class="bi bi-shop-window" style="color: var(--primary); font-size: 16px;"></i>
+                <span>POS Terminal</span>
+                <span class="sep">/</span>
+                <span class="store-name">{{ company.company_name|default:"Store" }}</span>
+            {% elif '/manager_dashboard' in request.path or '/dashboard' in request.path or request.path == '/' %}
+                <i class="bi bi-speedometer2" style="color: var(--primary); font-size: 16px;"></i>
+                <span>Dashboard</span>
+                <span class="sep">/</span>
+                <span class="store-name">{{ company.company_name|default:"Store" }}</span>
+            {% elif '/product' in request.path or '/category' in request.path %}
+                <i class="bi bi-box-seam" style="color: var(--primary); font-size: 16px;"></i>
+                <span>Inventory</span>
+                <span class="sep">/</span>
+                <span class="store-name">{{ company.company_name|default:"Store" }}</span>
+            {% elif '/purchase' in request.path %}
+                <i class="bi bi-bag-check" style="color: var(--primary); font-size: 16px;"></i>
+                <span>Purchases</span>
+                <span class="sep">/</span>
+                <span class="store-name">{{ company.company_name|default:"Store" }}</span>
+            {% elif '/sales' in request.path or '/invoice' in request.path %}
+                <i class="bi bi-receipt" style="color: var(--primary); font-size: 16px;"></i>
+                <span>Sales Records</span>
+                <span class="sep">/</span>
+                <span class="store-name">{{ company.company_name|default:"Store" }}</span>
+            {% elif '/returns' in request.path %}
+                <i class="bi bi-arrow-counterclockwise" style="color: var(--primary); font-size: 16px;"></i>
+                <span>Returns & Refunds</span>
+                <span class="sep">/</span>
+                <span class="store-name">{{ company.company_name|default:"Store" }}</span>
+            {% elif '/reports' in request.path %}
+                <i class="bi bi-bar-chart-line" style="color: var(--primary); font-size: 16px;"></i>
+                <span>Reports & Analytics</span>
+                <span class="sep">/</span>
+                <span class="store-name">{{ company.company_name|default:"Store" }}</span>
+            {% elif '/employee' in request.path or '/view_employee' in request.path %}
+                <i class="bi bi-people" style="color: var(--primary); font-size: 16px;"></i>
+                <span>Employees & Team</span>
+                <span class="sep">/</span>
+                <span class="store-name">{{ company.company_name|default:"Store" }}</span>
+            {% elif '/settings' in request.path %}
+                <i class="bi bi-sliders" style="color: var(--primary); font-size: 16px;"></i>
+                <span>Settings</span>
+                <span class="sep">/</span>
+                <span class="store-name">{{ company.company_name|default:"Store" }}</span>
+            {% else %}
+                <i class="bi bi-receipt-cutoff" style="color: var(--primary); font-size: 16px;"></i>
+                <span>Retail POS</span>
+                <span class="sep">/</span>
+                <span class="store-name">{{ company.company_name|default:"Store" }}</span>
+            {% endif %}
+        </div>
+    </div>
+
+    <div class="topbar-center">
+        {% if '/cart' in request.path %}
+        <!-- POS SPECIFIC KEYBOARD SHORTCUTS (RENDERED ON POS / CART ONLY!) -->
+        <div class="pos-shortcut-pill pos-f2-pill" id="pos-topbar-f2-btn" onclick="if(window.Cart&&Cart.openProductSearchOverlay){Cart.openProductSearchOverlay();}" title="Open Product / Barcode Search (F2)" style="cursor: pointer; background: var(--primary-soft); border-color: var(--primary); color: var(--primary-strong);">
+            <kbd style="background: var(--surface); color: var(--text); border: 1px solid var(--border);">F2</kbd> Product / Barcode Search
+        </div>
+        <div class="pos-shortcut-pill" title="Press Enter after scanning or typing barcode">
+            <kbd>↵</kbd> Scan / Enter
+        </div>
+        <div class="pos-shortcut-pill" title="Press Ctrl+Enter to open Tender & Settle payment">
+            <kbd>Ctrl+↵</kbd> Tender
+        </div>
+        <div class="pos-shortcut-pill" title="Press Esc to clear scanner or close modals">
+            <kbd>Esc</kbd> Clear
+        </div>
+        {% else %}
+        <!-- Global Search Controller (F2 on non-POS routes) -->
+        {% include "dashboard/components/global_search.html" %}
+        {% endif %}
+    </div>
+
+    <div class="topbar-right">
+        <!-- Cloud Sync Status Indicator -->
+        <a href="{% url 'settings_telegram' %}" id="cloud-sync-nav-pill"
+           style="display: inline-flex; align-items: center; gap: 6px; font-size: 11px; padding: 4px 10px; border-radius: 20px; text-decoration: none;
+           {% if cloud_sync_info and cloud_sync_info.pending_count > 0 %}
+             background: rgba(245, 158, 11, 0.12); color: #f59e0b; border: 1px solid rgba(245, 158, 11, 0.25);
+           {% elif cloud_sync_info and not cloud_sync_info.is_online %}
+             background: rgba(239, 68, 68, 0.12); color: #ef4444; border: 1px solid rgba(239, 68, 68, 0.25);
+           {% elif cloud_sync_info and cloud_sync_info.total_synced_count > 0 %}
+             background: rgba(16, 185, 129, 0.12); color: #10b981; border: 1px solid rgba(16, 185, 129, 0.25);
+           {% else %}
+             background: rgba(148, 163, 184, 0.12); color: #94a3b8; border: 1px solid rgba(148, 163, 184, 0.25);
+           {% endif %}"
+           title="Store Cloud Synchronization (Last: {{ cloud_sync_info.last_sync_timestamp_display|default:'Never' }})">
+            <span class="sync-dot" style="width: 6px; height: 6px; border-radius: 50%; display: inline-block;
+                background: {% if cloud_sync_info and cloud_sync_info.pending_count > 0 %}#f59e0b{% elif cloud_sync_info and not cloud_sync_info.is_online %}#ef4444{% elif cloud_sync_info and cloud_sync_info.total_synced_count > 0 %}#10b981{% else %}#94a3b8{% endif %};"></span>
+            <span id="cloud-sync-nav-text">
+                {% if cloud_sync_info and cloud_sync_info.pending_count > 0 %}
+                    {{ cloud_sync_info.pending_count }} Pending Sync
+                {% elif cloud_sync_info and not cloud_sync_info.is_online %}
+                    Sync Offline
+                {% elif cloud_sync_info and cloud_sync_info.total_synced_count > 0 %}
+                    Cloud Synced
+                {% else %}
+                    Local DB
+                {% endif %}
+            </span>
+        </a>
+
+        <!-- Minimal Scanner Status Indicator -->
+        <div class="scanner-status-pill" id="global-scanner-status-pill" onclick="if(window.Cart&&Cart.openScannerStatusModal){Cart.openScannerStatusModal();}else{window.location.href='{% url 'settings_scanner' %}';}" title="Hardware Scanner: Driverless HID input supported. Click for Diagnostics." style="cursor: pointer;">
+            <span class="status-dot"></span>
+            <span class="scanner-status-text" id="global-scanner-status-text">HID Supported</span>
+        </div>
+    </div>
+</header>

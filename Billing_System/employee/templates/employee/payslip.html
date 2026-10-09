@@ -1,0 +1,467 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Payslip — {{ employee.employee_id }} — {{ period_display }}</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@500;600;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css">
+    <style>
+        *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+        body {
+            font-family: 'Inter', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+            background: #f1f5f9;
+            color: #0f172a;
+            padding: 30px 16px;
+            min-height: 100vh;
+        }
+        .payslip-container {
+            max-width: 800px;
+            margin: 0 auto;
+            background: #ffffff;
+            border: 1px solid #cbd5e1;
+            border-radius: 12px;
+            padding: 36px 40px;
+            box-shadow: 0 4px 20px rgba(0, 0, 0, 0.08);
+            position: relative;
+        }
+        .toolbar {
+            max-width: 800px;
+            margin: 0 auto 16px auto;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        .btn {
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            padding: 8px 16px;
+            font-size: 13px;
+            font-weight: 600;
+            border-radius: 6px;
+            text-decoration: none;
+            cursor: pointer;
+            border: 1px solid transparent;
+        }
+        .btn-primary { background: #0f172a; color: #fff; }
+        .btn-primary:hover { background: #1e293b; }
+        .btn-secondary { background: #e2e8f0; color: #334155; }
+        .btn-secondary:hover { background: #cbd5e1; }
+
+        .header-section {
+            border-bottom: 2px solid #0f172a;
+            padding-bottom: 20px;
+            margin-bottom: 24px;
+            display: flex;
+            justify-content: space-between;
+            align-items: flex-start;
+        }
+        .company-title {
+            font-size: 24px;
+            font-weight: 800;
+            color: #0f172a;
+            letter-spacing: -0.5px;
+        }
+        .company-sub {
+            font-size: 12px;
+            color: #64748b;
+            margin-top: 3px;
+            line-height: 1.4;
+        }
+        .doc-title-badge {
+            text-align: right;
+        }
+        .doc-badge {
+            display: inline-block;
+            background: #0f172a;
+            color: #ffffff;
+            font-size: 11px;
+            font-weight: 700;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+            padding: 4px 10px;
+            border-radius: 4px;
+            margin-bottom: 4px;
+        }
+        .period-text {
+            font-size: 15px;
+            font-weight: 700;
+            color: #1e293b;
+        }
+        .info-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 16px 24px;
+            background: #f8fafc;
+            border: 1px solid #e2e8f0;
+            border-radius: 8px;
+            padding: 18px 20px;
+            margin-bottom: 24px;
+            font-size: 13px;
+        }
+        .info-row {
+            display: flex;
+            justify-content: space-between;
+        }
+        .info-lbl { color: #64748b; font-weight: 500; }
+        .info-val { color: #0f172a; font-weight: 600; }
+
+        .breakdown-table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-bottom: 24px;
+            font-size: 13px;
+        }
+        .breakdown-table th {
+            background: #f1f5f9;
+            color: #475569;
+            font-size: 11px;
+            font-weight: 700;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            padding: 10px 14px;
+            border: 1px solid #cbd5e1;
+        }
+        .breakdown-table td {
+            padding: 10px 14px;
+            border: 1px solid #e2e8f0;
+        }
+        .val-col { text-align: right; font-family: 'JetBrains Mono', monospace; font-weight: 600; }
+
+        .net-pay-banner {
+            background: #0f172a;
+            color: #ffffff;
+            border-radius: 8px;
+            padding: 16px 20px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 24px;
+        }
+        .net-pay-val {
+            font-size: 24px;
+            font-weight: 800;
+            font-family: 'JetBrains Mono', monospace;
+            color: #4ade80;
+        }
+
+        .disbursement-meta {
+            background: #f8fafc;
+            border: 1px solid #e2e8f0;
+            border-radius: 8px;
+            padding: 16px 20px;
+            font-size: 12px;
+            margin-bottom: 30px;
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 12px 20px;
+        }
+
+        .status-stamp {
+            display: inline-block;
+            padding: 6px 14px;
+            font-weight: 800;
+            font-size: 13px;
+            text-transform: uppercase;
+            letter-spacing: 1.5px;
+            border-radius: 6px;
+            border: 2px solid;
+        }
+        .stamp-paid { color: #16a34a; border-color: #16a34a; background: rgba(22, 163, 74, 0.08); }
+        .stamp-partial { color: #d97706; border-color: #d97706; background: rgba(217, 119, 6, 0.08); }
+        .stamp-unpaid { color: #dc2626; border-color: #dc2626; background: rgba(220, 38, 38, 0.08); }
+
+        .signature-section {
+            margin-top: 48px;
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 40px;
+            padding-top: 24px;
+            border-top: 1px dashed #cbd5e1;
+        }
+        .signature-box {
+            text-align: center;
+        }
+        .signature-line {
+            width: 80%;
+            margin: 40px auto 8px auto;
+            border-bottom: 1px solid #475569;
+        }
+        .signature-label {
+            font-size: 11px;
+            color: #64748b;
+            text-transform: uppercase;
+            font-weight: 600;
+        }
+
+        @media print {
+            body { background: #ffffff !important; padding: 0 !important; color: #000000 !important; }
+            .toolbar, .no-print, .history-card { display: none !important; }
+            .payslip-container {
+                box-shadow: none !important;
+                border: 1px solid #cbd5e1 !important;
+                margin: 0 !important;
+                padding: 24px 30px !important;
+                max-width: 100% !important;
+            }
+            * { -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important; }
+        }
+    </style>
+</head>
+<body>
+
+    <div class="toolbar no-print" style="flex-wrap: wrap; gap: 12px; margin-bottom: 20px;">
+        <div style="display: flex; gap: 10px; align-items: center;">
+            {% if is_owner_or_admin %}
+            <a href="{% url 'payroll_history' %}?year={{ year }}&month={{ month }}" class="btn btn-secondary">
+                <i class="bi bi-arrow-left"></i> Back to Payroll Overview
+            </a>
+            {% else %}
+            <a href="{% url 'cart' %}" class="btn btn-secondary">
+                <i class="bi bi-arrow-left"></i> Back to POS
+            </a>
+            {% endif %}
+            
+            <!-- Period Selector Form -->
+            <form method="GET" style="display: flex; gap: 8px; align-items: center;">
+                <select name="year" id="payslip-year-select" style="padding: 6px 10px; border-radius: 6px; border: 1px solid #cbd5e1; font-size: 13px; font-weight: 600; background: #fff; color: #0f172a;">
+                    {% for y in available_years %}
+                    <option value="{{ y }}" {% if y == year %}selected{% endif %}>{{ y }}</option>
+                    {% endfor %}
+                </select>
+                <select name="month" id="payslip-month-select" style="padding: 6px 10px; border-radius: 6px; border: 1px solid #cbd5e1; font-size: 13px; font-weight: 600; background: #fff; color: #0f172a;">
+                    {% for m_num, m_name in months_list %}
+                    <option value="{{ m_num }}" {% if m_num == month %}selected{% endif %}>{{ m_name }}</option>
+                    {% endfor %}
+                </select>
+                <button type="submit" class="btn btn-secondary" style="padding: 6px 12px; font-size: 12px;">
+                    <i class="bi bi-filter"></i> Switch Period
+                </button>
+            </form>
+        </div>
+
+        <button onclick="window.print()" class="btn btn-primary" id="btn-print-payslip">
+            <i class="bi bi-printer-fill"></i> Print / Download Payslip
+        </button>
+    </div>
+
+    <div class="payslip-container">
+        <!-- Header -->
+        <div class="header-section">
+            <div>
+                <div class="company-title">{{ company.company_name }}</div>
+                <div class="company-sub">
+                    {% if company.address_line %}{{ company.address_line }}, {% endif %}
+                    {% if company.city %}{{ company.city }}, {% endif %}
+                    {{ company.state|default:"India" }} &bull; {{ company.phone|default:"" }}
+                </div>
+            </div>
+            <div class="doc-title-badge">
+                <span class="doc-badge">Salary Payslip</span>
+                <div class="period-text">{{ period_display }}</div>
+                <div style="font-size: 11px; color: #64748b; margin-top: 2px;">Generated: {{ generated_on|date:"d M Y" }}</div>
+            </div>
+        </div>
+
+        <!-- Employee Metadata Grid -->
+        <div class="info-grid">
+            <div class="info-row">
+                <span class="info-lbl">Employee ID:</span>
+                <span class="info-val" style="font-family: 'JetBrains Mono', monospace;">{{ employee.employee_id }}</span>
+            </div>
+            <div class="info-row">
+                <span class="info-lbl">Employee Name:</span>
+                <span class="info-val">{{ employee.user.get_full_name|default:employee.user.username }}</span>
+            </div>
+            <div class="info-row">
+                <span class="info-lbl">Designation / Role:</span>
+                <span class="info-val">{{ employee.Role }}</span>
+            </div>
+            <div class="info-row">
+                <span class="info-lbl">Department:</span>
+                <span class="info-val">{{ employee.department }}</span>
+            </div>
+            <div class="info-row">
+                <span class="info-lbl">Joining Date:</span>
+                <span class="info-val">{{ employee.joining_date|date:"d M Y" }}</span>
+            </div>
+            <div class="info-row">
+                <span class="info-lbl">Payment Status:</span>
+                <span>
+                    {% if status == "Paid" %}
+                    <span class="status-stamp stamp-paid">PAID</span>
+                    {% elif status == "Partial" %}
+                    <span class="status-stamp stamp-partial">PARTIALLY PAID</span>
+                    {% else %}
+                    <span class="status-stamp stamp-unpaid">UNPAID / DUE</span>
+                    {% endif %}
+                </span>
+            </div>
+        </div>
+
+        <!-- Earnings & Deductions Table -->
+        <table class="breakdown-table">
+            <thead>
+                <tr>
+                    <th style="width: 50%;">Earnings Component</th>
+                    <th style="width: 50%;" class="val-col">Amount (INR)</th>
+                </tr>
+            </thead>
+            <tbody>
+                <tr>
+                    <td>Basic Monthly Salary</td>
+                    <td class="val-col">₹{{ basic_salary|floatformat:2 }}</td>
+                </tr>
+                <tr>
+                    <td>Allowances / Incentives</td>
+                    <td class="val-col">₹{{ allowances|floatformat:2 }}</td>
+                </tr>
+                <tr style="background: #f8fafc; font-weight: 700;">
+                    <td>Gross Earnings</td>
+                    <td class="val-col">₹{{ gross_salary|floatformat:2 }}</td>
+                </tr>
+                <tr>
+                    <td>Deductions (Tax, Advances, Absences)</td>
+                    <td class="val-col" style="color: #dc2626;">- ₹{{ deductions|floatformat:2 }}</td>
+                </tr>
+            </tbody>
+        </table>
+
+        <!-- Net Payable Highlight Banner -->
+        <div class="net-pay-banner">
+            <div>
+                <div style="font-size: 11px; text-transform: uppercase; letter-spacing: 0.5px; opacity: 0.85;">Net Salary Payable</div>
+                <div style="font-size: 12px; margin-top: 2px;">Gross Earnings less deductions for {{ period_display }}</div>
+            </div>
+            <div class="net-pay-val">₹{{ net_payable|floatformat:2 }}</div>
+        </div>
+
+        <!-- Disbursement Metadata -->
+        <div class="disbursement-meta">
+            <div class="info-row">
+                <span class="info-lbl">Amount Disbursed:</span>
+                <span class="info-val" style="color: #16a34a; font-family: 'JetBrains Mono', monospace;">₹{{ paid_amount|floatformat:2 }}</span>
+            </div>
+            <div class="info-row">
+                <span class="info-lbl">Balance Outstanding:</span>
+                <span class="info-val" style="color: {% if pending_amount > 0 %}#d97706{% else %}#64748b{% endif %}; font-family: 'JetBrains Mono', monospace;">₹{{ pending_amount|floatformat:2 }}</span>
+            </div>
+            <div class="info-row">
+                <span class="info-lbl">Payment Mode:</span>
+                <span class="info-val">{{ payment_method }}</span>
+            </div>
+            <div class="info-row">
+                <span class="info-lbl">Disbursement Date:</span>
+                <span class="info-val">{{ payment_date|date:"d M Y"|default:"Pending" }}</span>
+            </div>
+            <div class="info-row" style="grid-column: span 2;">
+                <span class="info-lbl">Transaction Reference:</span>
+                <span class="info-val" style="font-family: 'JetBrains Mono', monospace;">{{ payment_ref|default:"None recorded" }}</span>
+            </div>
+            {% if notes %}
+            <div class="info-row" style="grid-column: span 2;">
+                <span class="info-lbl">Notes:</span>
+                <span class="info-val">{{ notes }}</span>
+            </div>
+            {% endif %}
+        </div>
+
+        <!-- Signatures -->
+        <div class="signature-section">
+            <div class="signature-box">
+                <div class="signature-line"></div>
+                <div class="signature-label">Employee Signature</div>
+            </div>
+            <div class="signature-box">
+                <div class="signature-line"></div>
+                <div class="signature-label">Authorized Signatory &bull; {{ company.company_name }}</div>
+            </div>
+        </div>
+    </div>
+
+    <!-- ── EMPLOYEE-SPECIFIC MONTH-BY-MONTH SALARY HISTORY (April 2025 – Present) ── -->
+    <div class="history-card no-print" style="max-width: 800px; margin: 30px auto 40px auto; background: #ffffff; border: 1px solid #cbd5e1; border-radius: 12px; padding: 24px 28px; box-shadow: 0 4px 16px rgba(0,0,0,0.06);">
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px; padding-bottom: 12px; border-bottom: 1px solid #e2e8f0;">
+            <div>
+                <h3 style="font-size: 16px; font-weight: 700; color: #0f172a; margin: 0; display: flex; align-items: center; gap: 8px;">
+                    <i class="bi bi-clock-history" style="color: #0284c7;"></i> Salary History for {{ employee.user.get_full_name|default:employee.user.username }}
+                </h3>
+                <p style="font-size: 12px; color: #64748b; margin: 4px 0 0 0;">
+                    Month-by-month reconciled ledger from April 2025 onwards (ID: {{ employee.employee_id }})
+                </p>
+            </div>
+            <span style="font-size: 11px; background: #f1f5f9; padding: 4px 10px; border-radius: 20px; color: #475569; font-weight: 600;">
+                {{ employee_monthly_history|length }} Periods
+            </span>
+        </div>
+
+        <div style="overflow-x: auto;">
+            <table id="emp-salary-ledger" style="width: 100%; border-collapse: collapse; font-size: 12px; text-align: left;">
+                <thead>
+                    <tr style="background: #f8fafc; border-bottom: 2px solid #e2e8f0; color: #475569; font-weight: 700; text-transform: uppercase; font-size: 11px;">
+                        <th style="padding: 10px 12px;">Period</th>
+                        <th style="padding: 10px 12px; text-align: right;">Payable</th>
+                        <th style="padding: 10px 12px; text-align: right;">Paid</th>
+                        <th style="padding: 10px 12px; text-align: right;">Outstanding</th>
+                        <th style="padding: 10px 12px; text-align: center;">Status</th>
+                        <th style="padding: 10px 12px;">Paid Date</th>
+                        <th style="padding: 10px 12px;">Reference</th>
+                        <th style="padding: 10px 12px; text-align: right;">Action</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for item in employee_monthly_history %}
+                    <tr style="border-bottom: 1px solid #f1f5f9; {% if item.is_selected %}background: #e0f2fe; font-weight: 600;{% endif %}">
+                        <td style="padding: 10px 12px; color: #0f172a;">
+                            {{ item.period_display }}
+                            {% if item.is_selected %}
+                            <span style="font-size: 10px; background: #0284c7; color: #fff; padding: 1px 6px; border-radius: 4px; margin-left: 4px;">Active</span>
+                            {% endif %}
+                        </td>
+                        <td style="padding: 10px 12px; text-align: right; font-family: 'JetBrains Mono', monospace;">
+                            {% if item.is_active_row %}₹{{ item.payable|floatformat:2 }}{% else %}—{% endif %}
+                        </td>
+                        <td style="padding: 10px 12px; text-align: right; font-family: 'JetBrains Mono', monospace; color: #16a34a;">
+                            {% if item.is_active_row %}₹{{ item.paid|floatformat:2 }}{% else %}—{% endif %}
+                        </td>
+                        <td style="padding: 10px 12px; text-align: right; font-family: 'JetBrains Mono', monospace; color: {% if item.outstanding > 0 %}#d97706{% else %}#64748b{% endif %};">
+                            {% if item.is_active_row %}₹{{ item.outstanding|floatformat:2 }}{% else %}—{% endif %}
+                        </td>
+                        <td style="padding: 10px 12px; text-align: center;">
+                            {% if item.status == "Paid" %}
+                            <span style="display: inline-block; padding: 2px 8px; border-radius: 4px; font-size: 10px; font-weight: 700; background: #dcfce7; color: #16a34a;">PAID</span>
+                            {% elif item.status == "Partial" %}
+                            <span style="display: inline-block; padding: 2px 8px; border-radius: 4px; font-size: 10px; font-weight: 700; background: #fef3c7; color: #d97706;">PARTIAL</span>
+                            {% elif item.status == "Unpaid" %}
+                            <span style="display: inline-block; padding: 2px 8px; border-radius: 4px; font-size: 10px; font-weight: 700; background: #fee2e2; color: #dc2626;">DUE</span>
+                            {% else %}
+                            <span style="display: inline-block; padding: 2px 8px; border-radius: 4px; font-size: 10px; color: #94a3b8;">Not Employed</span>
+                            {% endif %}
+                        </td>
+                        <td style="padding: 10px 12px; color: #64748b;">
+                            {{ item.payment_date|date:"d M Y"|default:"—" }}
+                        </td>
+                        <td style="padding: 10px 12px; color: #64748b; font-family: 'JetBrains Mono', monospace; font-size: 11px;">
+                            {{ item.reference|default:"—" }}
+                        </td>
+                        <td style="padding: 10px 12px; text-align: right;">
+                            {% if item.is_active_row %}
+                            <a href="?year={{ item.year }}&month={{ item.month }}" style="font-size: 11px; color: #2563eb; text-decoration: none; font-weight: 600;">
+                                View Voucher →
+                            </a>
+                            {% else %}
+                            <span style="color: #cbd5e1;">—</span>
+                            {% endif %}
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+
+</body>
+</html>

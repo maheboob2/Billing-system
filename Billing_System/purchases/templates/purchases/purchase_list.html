@@ -1,223 +1,237 @@
-
-
-{% extends "Dashboard/main_nav.html" %}
+{% extends "dashboard/main_nav.html" %}
+{% load static %}
 
 {% block content %}
+<div class="purchase-page-container" style="max-width: 1400px; margin: 0 auto; padding: 22px 20px;">
+    
+    <!-- Header Toolbar -->
+    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; flex-wrap: wrap; gap: 14px;">
+        <div>
+            <div style="display: flex; align-items: center; gap: 10px; margin-bottom: 4px;">
+                <h1 style="font-size: 22px; font-weight: 700; color: var(--text); margin: 0;">Purchases & Inwards</h1>
+                <span style="font-size: 12px; background: var(--surface-2); border: 1px solid var(--border); padding: 3px 9px; border-radius: 14px; color: var(--muted); font-weight: 600;">
+                    {{ company.company_name }}
+                </span>
+            </div>
+            <p style="margin: 0; font-size: 13px; color: var(--muted);">Track procurement orders, supplier invoices, received shipments, and GST input tax.</p>
+        </div>
 
-<div class="container mt-4">
-
-    <div class="d-flex justify-content-between align-items-center mb-3">
-        <h2>Purchase List</h2>
-
-
-        <a href="{% url 'add_purchase' %}" class="btn btn-primary">
-            Add Purchase
-        </a>
+        <div style="display: flex; gap: 10px;">
+            <a href="{% url 'add_purchase' %}" class="btn btn-primary" style="font-size: 13px; padding: 8px 16px; text-decoration: none;">
+                <i class="bi bi-plus-circle-fill"></i> Add Purchase
+            </a>
+            <a href="{% url 'supplier' %}" class="btn btn-secondary" style="font-size: 13px; padding: 8px 14px; text-decoration: none;">
+                <i class="bi bi-truck"></i> Suppliers
+            </a>
+        </div>
     </div>
 
+    <!-- Filter Bar (Proper Horizontal Responsive Form) -->
+    <form method="GET" style="background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius-md); padding: 14px 16px; margin-bottom: 16px; display: flex; align-items: flex-end; gap: 12px; flex-wrap: wrap;">
+        <div style="flex: 1; min-width: 200px;">
+            <label for="search" style="display: block; font-size: 11px; font-weight: 600; text-transform: uppercase; color: var(--muted); margin-bottom: 4px;">Search</label>
+            <div style="position: relative;">
+                <i class="bi bi-search" style="position: absolute; left: 10px; top: 50%; transform: translateY(-50%); color: var(--muted); font-size: 12px;"></i>
+                <input type="text"
+                       id="search"
+                       name="search"
+                       placeholder="Invoice or supplier..."
+                       value="{{ search }}"
+                       style="padding-left: 30px; width: 100%; border-radius: var(--radius-sm); font-size: 13px;">
+            </div>
+        </div>
 
-<form method="GET" class="card card-body mb-3">
-    <div class="row g-3 align-items-end">
-
-        <div class="col-md-3">
-            <label for="search" class="form-label">Search</label>
-            <input type="text"
-                   id="search"
-                   name="search"
-                   class="form-control"
-                   placeholder="Invoice or supplier"
-                   value="{{ search }}">
-        </div> <br>
-
-        <div class="col-md-2">
-            <label for="status" class="form-label">Status</label>
-            <select name="status" id="status" class="form-select">
+        <div style="width: 140px;">
+            <label for="status" style="display: block; font-size: 11px; font-weight: 600; text-transform: uppercase; color: var(--muted); margin-bottom: 4px;">Status</label>
+            <select name="status" id="status" style="width: 100%; border-radius: var(--radius-sm); font-size: 13px; padding: 7px 10px; background: var(--surface-2); border: 1px solid var(--border); color: var(--text);">
                 <option value="">All Statuses</option>
-                <option value="DRAFT"
-                    {% if selected_status == "DRAFT" %}selected{% endif %}>
-                    Draft
-                </option>
-                <option value="RECEIVED"
-                    {% if selected_status == "RECEIVED" %}selected{% endif %}>
-                    Received
-                </option>
+                <option value="DRAFT" {% if selected_status == "DRAFT" %}selected{% endif %}>Draft</option>
+                <option value="RECEIVED" {% if selected_status == "RECEIVED" %}selected{% endif %}>Received</option>
             </select>
-        </div> <br>
+        </div>
 
-        <div class="col-md-2">
-            <label for="start_date" class="form-label">From Date</label>
+        <div style="width: 140px;">
+            <label for="start_date" style="display: block; font-size: 11px; font-weight: 600; text-transform: uppercase; color: var(--muted); margin-bottom: 4px;">From Date</label>
             <input type="date"
                    id="start_date"
                    name="start_date"
-                   class="form-control"
-                   value="{{ start_date }}">
-        </div> <br>
+                   value="{{ start_date }}"
+                   style="width: 100%; border-radius: var(--radius-sm); font-size: 13px; padding: 6px 8px; background: var(--surface-2); border: 1px solid var(--border); color: var(--text);">
+        </div>
 
-        <div class="col-md-2">
-            <label for="end_date" class="form-label">To Date</label>
+        <div style="width: 140px;">
+            <label for="end_date" style="display: block; font-size: 11px; font-weight: 600; text-transform: uppercase; color: var(--muted); margin-bottom: 4px;">To Date</label>
             <input type="date"
                    id="end_date"
                    name="end_date"
-                   class="form-control"
-                   value="{{ end_date }}">
-        </div> <br>
+                   value="{{ end_date }}"
+                   style="width: 100%; border-radius: var(--radius-sm); font-size: 13px; padding: 6px 8px; background: var(--surface-2); border: 1px solid var(--border); color: var(--text);">
+        </div>
 
-        <div class="col-md-3 d-flex gap-2">
-            <button type="submit" class="btn btn-primary">
-                Filter
+        <div style="display: flex; gap: 8px;">
+            <button type="submit" class="btn btn-primary" style="padding: 7px 16px; font-size: 13px;">
+                <i class="bi bi-funnel"></i> Filter
             </button>
-            <a href="{% url 'purchase_list' %}"
-               class="btn btn-secondary">
+            <a href="{% url 'purchase_list' %}" class="btn btn-secondary" style="padding: 7px 14px; font-size: 13px; text-decoration: none;">
                 Reset
             </a>
         </div>
+    </form>
 
-    </div> <br> <br>
-
-     
-
-<!-- Purchase Summary Cards -->
-<div class="row g-3 mb-4">
-
-    <!-- Total Purchases -->
-    <div class="col-md-4">
-        <div class="card shadow-sm h-100">
-            <div class="card-body">
-                <div class="d-flex justify-content-between align-items-center">
-                    <div>
-                        <h6 class="text-muted">Total Purchases</h6>
-                        <h3>{{ summary.total_count|default:0 }}</h3>
+    <!-- Purchase Summary KPI Cards (Outside of Form) -->
+    <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 14px; margin-bottom: 16px;">
+        <div style="background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius-md); padding: 14px 18px;">
+            <div style="display: flex; justify-content: space-between; align-items: flex-start;">
+                <div>
+                    <div style="font-size: 11px; font-weight: 700; color: var(--muted); text-transform: uppercase; letter-spacing: 0.5px;">Total Purchases</div>
+                    <div style="font-size: 22px; font-weight: 700; color: var(--text); font-family: var(--font-mono); margin-top: 4px;">
+                        {{ summary.total_count|default:0 }}
                     </div>
-                    <i class="bi bi-cart-check fs-2 text-primary"></i>
+                </div>
+                <div style="width: 36px; height: 36px; border-radius: 8px; background: var(--primary-soft); color: var(--primary); display: flex; align-items: center; justify-content: center; font-size: 18px;">
+                    <i class="bi bi-cart-check"></i>
+                </div>
+            </div>
+        </div>
+
+        <div style="background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius-md); padding: 14px 18px;">
+            <div style="display: flex; justify-content: space-between; align-items: flex-start;">
+                <div>
+                    <div style="font-size: 11px; font-weight: 700; color: var(--muted); text-transform: uppercase; letter-spacing: 0.5px;">Draft Orders</div>
+                    <div style="font-size: 22px; font-weight: 700; color: #d97706; font-family: var(--font-mono); margin-top: 4px;">
+                        {{ summary.draft_count|default:0 }}
+                    </div>
+                </div>
+                <div style="width: 36px; height: 36px; border-radius: 8px; background: rgba(217, 119, 6, 0.15); color: #d97706; display: flex; align-items: center; justify-content: center; font-size: 18px;">
+                    <i class="bi bi-file-earmark-text"></i>
+                </div>
+            </div>
+        </div>
+
+        <div style="background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius-md); padding: 14px 18px;">
+            <div style="display: flex; justify-content: space-between; align-items: flex-start;">
+                <div>
+                    <div style="font-size: 11px; font-weight: 700; color: var(--muted); text-transform: uppercase; letter-spacing: 0.5px;">Received Inwards</div>
+                    <div style="font-size: 22px; font-weight: 700; color: var(--success); font-family: var(--font-mono); margin-top: 4px;">
+                        {{ summary.received_count|default:0 }}
+                    </div>
+                </div>
+                <div style="width: 36px; height: 36px; border-radius: 8px; background: rgba(22, 163, 74, 0.15); color: var(--success); display: flex; align-items: center; justify-content: center; font-size: 18px;">
+                    <i class="bi bi-box-seam"></i>
+                </div>
+            </div>
+        </div>
+
+        <div style="background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius-md); padding: 14px 18px;">
+            <div style="display: flex; justify-content: space-between; align-items: flex-start;">
+                <div>
+                    <div style="font-size: 11px; font-weight: 700; color: var(--muted); text-transform: uppercase; letter-spacing: 0.5px;">Total Procurement Value</div>
+                    <div style="font-size: 22px; font-weight: 700; color: var(--text); font-family: var(--font-mono); margin-top: 4px;">
+                        ₹{{ summary.total_value|default:0|floatformat:2 }}
+                    </div>
+                </div>
+                <div style="width: 36px; height: 36px; border-radius: 8px; background: rgba(2, 132, 199, 0.15); color: #0284c7; display: flex; align-items: center; justify-content: center; font-size: 18px;">
+                    <i class="bi bi-currency-rupee"></i>
                 </div>
             </div>
         </div>
     </div>
 
-    <!-- Draft Purchases -->
-    <div class="col-md-4">
-        <div class="card shadow-sm h-100">
-            <div class="card-body">
-                <div class="d-flex justify-content-between align-items-center">
-                    <div>
-                        <h6 class="text-muted">Draft Purchases</h6>
-                        <h3>{{ summary.draft_count|default:0 }}</h3>
-                    </div>
-                    <i class="bi bi-file-earmark-text fs-2 text-warning"></i>
-                </div>
-            </div>
-        </div>
-    </div>
+    <!-- Purchases Table -->
+    <div style="background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius-md); overflow: hidden; min-height: 240px;">
+        <div style="overflow-x: auto;">
+            <table class="table-theme" style="width: 100%; border-collapse: collapse;">
+                <thead>
+                    <tr>
+                        <th>Invoice No.</th>
+                        <th>Supplier</th>
+                        <th>Purchase Date</th>
+                        <th>Items Overview</th>
+                        <th style="text-align: right;">Total Amount</th>
+                        <th>Status</th>
+                        <th style="text-align: right; width: 200px;">Action</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for purchase in purchases %}
+                    <tr>
+                        <td style="font-family: var(--font-mono); font-weight: 600; color: var(--text); font-size: 13px;">
+                            {{ purchase.invoice_number }}
+                        </td>
 
-    <!-- Received Purchases -->
-    <div class="col-md-4">
-        <div class="card shadow-sm h-100">
-            <div class="card-body">
-                <div class="d-flex justify-content-between align-items-center">
-                    <div>
-                        <h6 class="text-muted">Received Purchases</h6>
-                        <h3>{{ summary.received_count|default:0 }}</h3>
-                    </div>
-                    <i class="bi bi-box-seam fs-2 text-success"></i>
-                </div>
-            </div>
-        </div>
-    </div>
-
-    <!-- Total Purchase Value -->
-    <div class="col-md-4">
-        <div class="card shadow-sm h-100">
-            <div class="card-body">
-                <div class="d-flex justify-content-between align-items-center">
-                    <div>
-                        <h6 class="text-muted">Total Purchase Value</h6>
-                        <h3>₹{{ summary.total_value|default:0|floatformat:2 }}</h3>
-                    </div>
-                    <i class="bi bi-currency-rupee fs-2 text-info"></i>
-                </div>
-            </div>
-        </div>
-    </div>
-
-</div>
-</form>
-
-    <div class="table-responsive">
-        <table class="table table-bordered table-striped">
-
-            <thead>
-                <tr>
-                    <th>Invoice No.</th>
-                    <th>Supplier</th>
-                    <th>Purchase Date</th>
-                    <th>Items</th>
-                    <th>Total</th>
-                    <th>Status</th>
-                    <th>Action</th>
-                </tr>
-            </thead>
-
-            <tbody>
-                {% for purchase in purchases %}
-                <tr>
-                    <td>{{ purchase.invoice_number }}</td>
-
-                    <td>{{ purchase.supplier.name }}</td>
-
-                    <td>{{ purchase.purchase_date }}</td>
-
-                    <td>
-                        {% for item in purchase.items.all %}
-                            {{ item.product.name }} ({{ item.quantity }})<br>
-                        {% empty %}
-                            No items
-                        {% endfor %}
-                    </td>
-
-                    <td>₹{{ purchase.total_amount|floatformat:2 }}</td>
-
-                    <td>{{ purchase.get_status_display }}</td>
-
-                    <td>
-                        <div class="d-flex flex-wrap gap-2">
-
-                            <a href="{% url 'purchase_detail' purchase.id %}"
-                               class="btn btn-primary btn-sm">
-                                View Details
-                            </a>
-
-                            {% if purchase.status == "DRAFT" %}
-                                <form method="POST"
-                                      action="{% url 'receive_purchase' purchase.id %}">
-                                    {% csrf_token %}
-
-                                    <button type="submit"
-                                            class="btn btn-success btn-sm">
-                                        Receive
-                                    </button>
-                                </form>
-                            {% else %}
-                                <span class="text-success">
-                                    Received
-                                </span>
+                        <td>
+                            <div style="font-weight: 600; color: var(--text);">
+                                {{ purchase.supplier.name }}
+                            </div>
+                            {% if purchase.supplier.city %}
+                            <div style="font-size: 11px; color: var(--muted);">
+                                {{ purchase.supplier.city }}
+                            </div>
                             {% endif %}
+                        </td>
 
-                        </div>
-                    </td>
-                </tr>
+                        <td style="color: var(--muted); font-size: 13px;">
+                            {{ purchase.purchase_date|date:"M d, Y"|default:purchase.purchase_date }}
+                        </td>
 
-                {% empty %}
-                <tr>
-                    <td colspan="7" class="text-center">
-                        No purchases found.
-                    </td>
-                </tr>
-                {% endfor %}
-            </tbody>
+                        <td>
+                            <div style="font-size: 12px; color: var(--text); max-width: 280px;">
+                                {% for item in purchase.items.all %}
+                                    <span style="display: inline-block; background: var(--surface-2); padding: 1px 6px; border-radius: 4px; border: 1px solid var(--border); margin: 1px 2px 1px 0; font-size: 11px;">
+                                        {{ item.product.name }} &times; {{ item.quantity }}
+                                    </span>
+                                {% empty %}
+                                    <span style="color: var(--muted);">No items</span>
+                                {% endfor %}
+                            </div>
+                        </td>
 
-        </table>
+                        <td style="text-align: right; font-family: var(--font-mono); font-weight: 700; color: var(--success); font-size: 13px;">
+                            ₹{{ purchase.total_amount|floatformat:2 }}
+                        </td>
+
+                        <td>
+                            {% if purchase.status == "RECEIVED" %}
+                                <span class="badge badge-success" style="font-size: 11px;">Received</span>
+                            {% else %}
+                                <span class="badge badge-warning" style="font-size: 11px;">Draft</span>
+                            {% endif %}
+                        </td>
+
+                        <td style="text-align: right;">
+                            <div style="display: flex; gap: 6px; justify-content: flex-end; align-items: center;">
+                                <a href="{% url 'purchase_detail' purchase.id %}" class="btn btn-secondary" style="padding: 5px 10px; font-size: 12px; text-decoration: none;">
+                                    <i class="bi bi-eye"></i> Details
+                                </a>
+
+                                {% if purchase.status == "DRAFT" %}
+                                    <form method="POST" action="{% url 'receive_purchase' purchase.id %}" style="display: inline; margin: 0;">
+                                        {% csrf_token %}
+                                        <button type="submit" class="btn btn-primary" style="padding: 5px 10px; font-size: 12px;">
+                                            <i class="bi bi-check-lg"></i> Receive
+                                        </button>
+                                    </form>
+                                {% endif %}
+                            </div>
+                        </td>
+                    </tr>
+                    {% empty %}
+                    <tr>
+                        <td colspan="7" style="text-align: center; padding: 48px 20px;">
+                            <div style="max-width: 320px; margin: 0 auto; color: var(--muted);">
+                                <i class="bi bi-bag-x" style="font-size: 36px; color: var(--muted); display: block; margin-bottom: 10px;"></i>
+                                <div style="font-size: 15px; font-weight: 600; color: var(--text); margin-bottom: 4px;">No Purchase Orders Found</div>
+                                <p style="font-size: 12px; margin-bottom: 16px;">Create a new purchase order to inward stock from registered suppliers.</p>
+                                <a href="{% url 'add_purchase' %}" class="btn btn-primary" style="font-size: 12px; padding: 6px 14px; text-decoration: none;">
+                                    <i class="bi bi-plus-circle"></i> Create Purchase Order
+                                </a>
+                            </div>
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
     </div>
-
 </div>
-
-{% endblock %}
+{% endblock content %}

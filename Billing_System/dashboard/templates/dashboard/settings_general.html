@@ -1,0 +1,115 @@
+{% extends "dashboard/main_nav.html" %}
+{% load static %}
+
+{% block content %}
+<div class="settings-wrap" style="max-width: 900px; margin: 24px auto; padding: 0 16px;">
+    
+    <!-- Header -->
+    <div style="margin-bottom: 20px;">
+        <h1 style="font-size: 22px; font-weight: 700; color: var(--text); margin: 0 0 4px 0;">Settings</h1>
+        <p style="margin: 0; font-size: 13px; color: var(--muted);">Configure store preferences, theme customization and operational defaults.</p>
+    </div>
+
+    <!-- Navigation Tabs -->
+    <div style="display: flex; gap: 8px; border-bottom: 1px solid var(--border); margin-bottom: 24px; overflow-x: auto;">
+        <a href="{% url 'settings_general' %}" class="settings-tab active" aria-current="page">
+            <i class="bi bi-gear-fill"></i> General
+        </a>
+        <a href="{% url 'settings_appearance' %}" class="settings-tab">
+            <i class="bi bi-palette-fill"></i> Appearance
+        </a>
+        <a href="{% url 'settings_scanner' %}" class="settings-tab">
+            <i class="bi bi-upc-scan"></i> Scanner & POS Devices
+        </a>
+        {% if is_owner %}
+        <a href="{% url 'settings_company' %}" class="settings-tab">
+            <i class="bi bi-building"></i> Company Profile
+        </a>
+        <a href="{% url 'settings_telegram' %}" class="settings-tab">
+            <i class="bi bi-telegram"></i> Telegram Bot & Sync
+        </a>
+        {% endif %}
+    </div>
+
+    {% if saved_msg %}
+    <div style="background: rgba(22, 163, 74, 0.12); border: 1px solid rgba(22, 163, 74, 0.3); color: var(--success); padding: 12px 16px; border-radius: var(--radius-sm); margin-bottom: 20px; font-size: 13px; display: flex; align-items: center; gap: 8px;">
+        <i class="bi bi-check-circle-fill"></i>
+        <span>{{ saved_msg }}</span>
+    </div>
+    {% endif %}
+
+    <!-- General Settings Form -->
+    <div style="background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius-md); padding: 24px;">
+        <form method="POST" id="week-start-form">
+            {% csrf_token %}
+
+            <div style="margin-bottom: 28px;">
+                <h3 style="font-size: 15px; font-weight: 700; color: var(--text); margin: 0 0 6px 0;">Calendar & Analytics Schedule</h3>
+                <p style="margin: 0 0 16px 0; font-size: 13px; color: var(--muted); line-height: 1.5;">
+                    Specify which day defines the start of a retail week. Reports, sales analytics, and weekly date filters adapt to this preference.
+                </p>
+
+                <div style="background: var(--surface-2); border: 1px solid var(--border); border-radius: var(--radius-sm); padding: 18px;">
+                    <label style="display: block; font-size: 12px; font-weight: 700; color: var(--text); text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 10px;">
+                        Week Starts On:
+                    </label>
+
+                    <div class="segmented-toggle" id="week-toggle" style="margin-bottom: 12px;">
+                        <button type="button" data-val="sunday" class="{% if current_week_start == 'sunday' %}active{% endif %}">
+                            <i class="bi bi-calendar-event"></i> Sunday
+                        </button>
+                        <button type="button" data-val="monday" class="{% if current_week_start == 'monday' %}active{% endif %}">
+                            <i class="bi bi-calendar-check"></i> Monday
+                        </button>
+                    </div>
+
+                    <input type="hidden" name="week_start" id="week-start-input" value="{{ current_week_start }}">
+
+                    <div style="font-size: 12px; color: var(--muted);">
+                        Currently active: <strong id="current-week-display" style="color: var(--primary);">{{ current_week_start|title }}</strong>
+                    </div>
+                </div>
+            </div>
+
+            <div style="display: flex; justify-content: flex-end; gap: 12px; border-top: 1px solid var(--border); padding-top: 16px;">
+                <button type="submit" class="btn btn-primary" style="padding: 9px 20px;">
+                    <i class="bi bi-check2"></i> Save Preferences
+                </button>
+            </div>
+        </form>
+    </div>
+</div>
+
+<script>
+document.addEventListener("DOMContentLoaded", () => {
+    const toggle = document.getElementById("week-toggle");
+    const input = document.getElementById("week-start-input");
+    const display = document.getElementById("current-week-display");
+
+    // Sync with localStorage if present
+    const localSaved = localStorage.getItem("pos_week_start");
+    if (localSaved && (localSaved === "sunday" || localSaved === "monday")) {
+        input.value = localSaved;
+        if (display) display.textContent = localSaved.charAt(0).toUpperCase() + localSaved.slice(1);
+    }
+
+    if (toggle) {
+        toggle.querySelectorAll("button").forEach(btn => {
+            btn.addEventListener("click", () => {
+                const val = btn.dataset.val;
+                input.value = val;
+                if (display) display.textContent = val.charAt(0).toUpperCase() + val.slice(1);
+                localStorage.setItem("pos_week_start", val);
+                if (typeof setWeekStart === "function") {
+                    setWeekStart(val);
+                }
+            });
+        });
+    }
+
+    document.getElementById("week-start-form").addEventListener("submit", () => {
+        localStorage.setItem("pos_week_start", input.value);
+    });
+});
+</script>
+{% endblock content %}

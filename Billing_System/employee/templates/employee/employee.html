@@ -1,96 +1,171 @@
+{% extends "dashboard/main_nav.html" %}
 {% load static %}
-<!DOCTYPE html>
-<html lang="en">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Document</title>
-</head>
-<body>
-    <h1>employee management system</h1>
-    <form method="POST" enctype="multipart/form-data">
-    {% csrf_token %}
-     
 
-     <label>Username</label>
-     <input type="text" name="username" required> <br><br>
-
-     <label>First Name</label>
-     <input type="text" name="first_name" required><br><br>
-
-     <label>Last Name</label>
-     <input type="text" name="last_name" required><br> <br>
-
-     <label>Password</label>
-     <input type="password" name="password" required> <br> <br> 
-
-     <label>Confirm Password</label>
-     <input type="password" name="confirm_pass" required> <br> <br>
-
-
-
-     
-
-      <label>profile Pic</label>
-     <input type="file" name="profile_pic" required><br> <br>
-
-      <label>Gender</label>
-    <select name="Gender">
-    <option value="Male">Male</option>
-    <option value="Female">Female</option>
-    <option value="Other">Other</option>
-</select>
-
-      <label>Phone</label>
-     <input type="text" name="Phone" required><br> <br>
-
-      <label>Alternate Number</label>
-     <input type="text" name="Alternate_phone" required><br> <br>
-
-      <label> Address</label>
-     <input type="text" name="address" required><br> <br>
-
-      <label>Employee Id</label>
-     <input type="text" name="employee_id" required><br> <br>
-
-      <label>Role</label>
-      <select name="Role">
-    <option value="Manager">Manager</option>
-    <option value="Cashier">Cashier</option>
-    <option value="Worker">Worker</option>
-</select> <br><br>
-
-      <label>Joining Date</label>
-     <input type="date" name="joining_date" required><br> <br>
-
-      <label> Monthaly_salary</label>
-     <input type="text" name="monthaly_salary" required><br> <br>
-
-     <label>Payment</label>
-     <select name="payment">
-    <option value="Paid">Paid</option>
-    <option value="Unpaid">Unpaid</option>
-    <option value="Due">Due</option> <br> <br>
-</select> <br> <br>
-
-    <label>Status</label>
-     <select name="status">
-    <option value="active">Active</option>
-    <option value="inactive">Inactive</option>
-</select> <br> <br>
-
-
-
-
-
-
-
-     
-
+{% block content %}
+<div class="employee-form-container" style="max-width: 860px; margin: 24px auto; padding: 0 16px;">
     
+    <div style="margin-bottom: 20px; display: flex; align-items: center; justify-content: space-between;">
+        <div>
+            <div style="display: flex; align-items: center; gap: 8px; margin-bottom: 4px;">
+                <a href="{% url 'view_employee' %}" style="color: var(--muted); text-decoration: none; font-size: 13px;">
+                    <i class="bi bi-arrow-left"></i> Team
+                </a>
+                <span style="color: var(--muted);">&bull;</span>
+                <h2 style="font-size: 20px; font-weight: 700; color: var(--text); margin: 0;">Add Team Member</h2>
+            </div>
+            <p style="margin: 0; font-size: 13px; color: var(--muted);">Register a new operational staff member or cashier for {{ company.company_name }}.</p>
+        </div>
+    </div>
 
-     <button type="submit">Add Employee</button>
+    {% if error %}
+    <div style="background: rgba(220, 38, 38, 0.1); border: 1px solid rgba(220, 38, 38, 0.25); color: var(--danger); padding: 12px 16px; border-radius: var(--radius-sm); margin-bottom: 20px; font-size: 13px; display: flex; align-items: center; gap: 8px;">
+        <i class="bi bi-exclamation-triangle-fill"></i>
+        <span>{{ error }}</span>
+    </div>
+    {% endif %}
 
-    </form>
-</body>
-</html>
+    <div style="background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius-md); padding: 24px; box-shadow: 0 1px 3px rgba(0,0,0,0.04);">
+        <form method="POST" enctype="multipart/form-data">
+            {% csrf_token %}
+
+            <!-- Section 1: Account Login Credentials -->
+            <div style="margin-bottom: 24px;">
+                <h4 style="font-size: 12px; font-weight: 700; color: var(--muted); text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 14px; border-bottom: 1px solid var(--border); padding-bottom: 6px;">
+                    <i class="bi bi-shield-lock"></i> Account Credentials
+                </h4>
+                
+                <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 14px; margin-bottom: 12px;">
+                    <div>
+                        <label style="display: block; font-size: 12px; font-weight: 600; color: var(--text); margin-bottom: 6px;">First Name *</label>
+                        <input type="text" name="first_name" required placeholder="e.g. John" style="width: 100%;">
+                    </div>
+                    <div>
+                        <label style="display: block; font-size: 12px; font-weight: 600; color: var(--text); margin-bottom: 6px;">Last Name *</label>
+                        <input type="text" name="last_name" required placeholder="e.g. Doe" style="width: 100%;">
+                    </div>
+                </div>
+
+                <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 14px; margin-bottom: 12px;">
+                    <div>
+                        <label style="display: block; font-size: 12px; font-weight: 600; color: var(--text); margin-bottom: 6px;">Username *</label>
+                        <input type="text" name="username" required placeholder="e.g. jdoe_pos" style="width: 100%;">
+                    </div>
+                    <div>
+                        <label style="display: block; font-size: 12px; font-weight: 600; color: var(--text); margin-bottom: 6px;">Email</label>
+                        <input type="email" name="email" placeholder="e.g. staff@retailstore.com" style="width: 100%;">
+                    </div>
+                </div>
+
+                <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 14px;">
+                    <div>
+                        <label style="display: block; font-size: 12px; font-weight: 600; color: var(--text); margin-bottom: 6px;">Password *</label>
+                        <input type="password" name="password" required placeholder="Min. 6 characters" style="width: 100%;">
+                    </div>
+                    <div>
+                        <label style="display: block; font-size: 12px; font-weight: 600; color: var(--text); margin-bottom: 6px;">Confirm Password *</label>
+                        <input type="password" name="confirm_pass" required placeholder="Repeat password" style="width: 100%;">
+                    </div>
+                </div>
+            </div>
+
+            <!-- Section 2: Store Operational Information -->
+            <div style="margin-bottom: 24px;">
+                <h4 style="font-size: 12px; font-weight: 700; color: var(--muted); text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 14px; border-bottom: 1px solid var(--border); padding-bottom: 6px;">
+                    <i class="bi bi-briefcase"></i> Role & Store Information
+                </h4>
+
+                <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 14px; margin-bottom: 12px;">
+                    <div>
+                        <label style="display: block; font-size: 12px; font-weight: 600; color: var(--text); margin-bottom: 6px;">Employee ID *</label>
+                        <input type="text" name="employee_id" required placeholder="e.g. EMP-101" style="width: 100%;">
+                    </div>
+                    <div>
+                        <label style="display: block; font-size: 12px; font-weight: 600; color: var(--text); margin-bottom: 6px;">Role *</label>
+                        <select name="Role" required style="width: 100%;">
+                            <option value="Cashier">Cashier (Front Billing & Barcode Terminal)</option>
+                            <option value="Stock Manager">Stock Manager (Inventory & Purchases)</option>
+                            <option value="Manager">Manager (Operational Management)</option>
+                            <option value="Worker">Worker (General Floor)</option>
+                        </select>
+                    </div>
+                </div>
+
+                <div style="display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 14px; margin-bottom: 12px;">
+                    <div>
+                        <label style="display: block; font-size: 12px; font-weight: 600; color: var(--text); margin-bottom: 6px;">Joining Date *</label>
+                        <input type="date" name="joining_date" required style="width: 100%;">
+                    </div>
+                    <div>
+                        <label style="display: block; font-size: 12px; font-weight: 600; color: var(--text); margin-bottom: 6px;">Status</label>
+                        <select name="status" style="width: 100%;">
+                            <option value="active">Active</option>
+                            <option value="inactive">Inactive</option>
+                        </select>
+                    </div>
+                    <div>
+                        <label style="display: block; font-size: 12px; font-weight: 600; color: var(--text); margin-bottom: 6px;">Gender</label>
+                        <select name="Gender" style="width: 100%;">
+                            <option value="Male">Male</option>
+                            <option value="Female">Female</option>
+                            <option value="Other">Other</option>
+                        </select>
+                    </div>
+                </div>
+
+                <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 14px; margin-bottom: 12px;">
+                    <div>
+                        <label style="display: block; font-size: 12px; font-weight: 600; color: var(--text); margin-bottom: 6px;">Phone Number *</label>
+                        <input type="text" name="Phone" required placeholder="e.g. +91 98765 43210" style="width: 100%;">
+                    </div>
+                    <div>
+                        <label style="display: block; font-size: 12px; font-weight: 600; color: var(--text); margin-bottom: 6px;">Alternate Phone</label>
+                        <input type="text" name="Alternate_phone" placeholder="Emergency contact" style="width: 100%;">
+                    </div>
+                </div>
+
+                <div style="margin-bottom: 12px;">
+                    <label style="display: block; font-size: 12px; font-weight: 600; color: var(--text); margin-bottom: 6px;">Address *</label>
+                    <textarea name="address" required rows="2" placeholder="Full residential address..." style="width: 100%;"></textarea>
+                </div>
+
+                <div>
+                    <label style="display: block; font-size: 12px; font-weight: 600; color: var(--text); margin-bottom: 6px;">Profile Picture (Optional)</label>
+                    <input type="file" name="profile_pic" accept="image/*" style="width: 100%;">
+                </div>
+            </div>
+
+            {% if is_owner %}
+            <!-- Section 3: OWNER ONLY Compensation & Payroll -->
+            <div style="margin-bottom: 24px; background: var(--surface-2); border: 1px solid var(--border); border-radius: var(--radius-sm); padding: 16px;">
+                <h4 style="font-size: 12px; font-weight: 700; color: var(--primary); text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 12px;">
+                    <i class="bi bi-cash-coin"></i> Compensation & Payroll (Owner Only)
+                </h4>
+
+                <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 14px;">
+                    <div>
+                        <label style="display: block; font-size: 12px; font-weight: 600; color: var(--text); margin-bottom: 6px;">Monthly Salary (₹) *</label>
+                        <input type="number" step="0.01" name="monthaly_salary" value="0.00" placeholder="0.00" style="width: 100%;">
+                    </div>
+                    <div>
+                        <label style="display: block; font-size: 12px; font-weight: 600; color: var(--text); margin-bottom: 6px;">Payroll Status</label>
+                        <select name="payment" style="width: 100%;">
+                            <option value="Paid">Paid</option>
+                            <option value="Unpaid" selected>Unpaid</option>
+                            <option value="Due">Due</option>
+                        </select>
+                    </div>
+                </div>
+            </div>
+            {% endif %}
+
+            <!-- Action Buttons -->
+            <div style="display: flex; justify-content: flex-end; gap: 12px; margin-top: 20px; border-top: 1px solid var(--border); padding-top: 16px;">
+                <a href="{% url 'view_employee' %}" class="btn btn-secondary" style="text-decoration: none;">Cancel</a>
+                <button type="submit" class="btn btn-primary" style="padding: 9px 22px;">
+                    <i class="bi bi-check2-circle"></i> Save Member
+                </button>
+            </div>
+        </form>
+    </div>
+</div>
+{% endblock content %}

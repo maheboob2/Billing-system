@@ -1,0 +1,2279 @@
+{% load static %}
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>POS Checkout — {{ company.company_name }}</title>
+    <meta name="description" content="Retail Point of Sale checkout terminal for {{ company.company_name }}">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@500;600;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css">
+    <!-- Early Theme Bootstrap (Prevents Theme Flash & Defaults to Light Mode) -->
+    <script>
+    (function() {
+        try {
+            var m = localStorage.getItem('pos_mode');
+            var t = localStorage.getItem('pos_theme') || localStorage.getItem('alpha-theme') || 'forest';
+            if (m !== 'dark') m = 'light';
+            document.documentElement.setAttribute('data-mode', m);
+            document.documentElement.setAttribute('data-theme', t);
+            document.documentElement.dataset.mode = m;
+            document.documentElement.dataset.theme = t;
+        } catch (e) {
+            document.documentElement.setAttribute('data-mode', 'light');
+            document.documentElement.setAttribute('data-theme', 'forest');
+        }
+    })();
+    </script>
+    <!-- Global Theme System -->
+    <link rel="stylesheet" href="{% static 'dashboard/css/theme.css' %}">
+    <script src="{% static 'dashboard/js/theme.js' %}"></script>
+    <style>
+        *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+        :root {
+            /* Inherit & Map to Global Theme System */
+            --surface-elevated: var(--surface-2);
+            --surface-card: var(--surface-2);
+            --border-subtle: var(--border);
+            --border-focus: var(--primary);
+            --primary-hover: var(--primary-strong);
+            --primary-light: var(--primary-soft);
+            --success-dark: var(--primary-strong);
+            --success-light: var(--primary-soft);
+            --text-main: var(--text);
+            --text-muted: var(--muted);
+            --text-dim: var(--muted);
+        }
+
+        html, body {
+            margin: 0;
+            padding: 0;
+            width: 100%;
+            height: 100vh;
+            overflow: hidden;
+            font-family: 'Inter', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+            background: var(--bg);
+            color: var(--text-main);
+            display: flex;
+            flex-direction: column;
+            user-select: none;
+        }
+
+        /* ── Top Header / Status Bar ─────────────────────────────────────────── */
+        .pos-header {
+            height: 48px;
+            background: var(--surface);
+            border-bottom: 1px solid var(--border);
+            padding: 0 16px;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            flex-shrink: 0;
+            z-index: 10;
+        }
+
+        .header-left {
+            display: flex;
+            align-items: center;
+            gap: 16px;
+        }
+
+        .brand-badge {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            font-weight: 700;
+            font-size: 14px;
+            color: #fff;
+            letter-spacing: -0.2px;
+        }
+
+        .brand-badge i {
+            color: var(--success);
+            font-size: 17px;
+        }
+
+        .store-pill {
+            font-size: 12px;
+            color: var(--text-muted);
+            background: var(--surface-elevated);
+            padding: 3px 10px;
+            border-radius: 20px;
+            border: 1px solid var(--border);
+            display: flex;
+            align-items: center;
+            gap: 6px;
+        }
+
+        .status-dot {
+            width: 7px;
+            height: 7px;
+            border-radius: 50%;
+            background: var(--success);
+            box-shadow: 0 0 6px rgba(16, 185, 129, 0.6);
+        }
+
+        .header-center {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .shortcut-pill {
+            font-size: 11px;
+            color: var(--text-muted);
+            background: var(--surface-elevated);
+            padding: 2px 8px;
+            border-radius: var(--radius-sm);
+            border: 1px solid var(--border-subtle);
+            display: flex;
+            align-items: center;
+            gap: 4px;
+        }
+
+        .shortcut-pill kbd {
+            font-family: var(--font-mono);
+            font-size: 10px;
+            font-weight: 600;
+            color: var(--text-main);
+            background: var(--surface-card);
+            padding: 1px 4px;
+            border-radius: 3px;
+            border: 1px solid var(--border);
+        }
+
+        .header-right {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+        }
+
+        .nav-links {
+            display: flex;
+            align-items: center;
+            gap: 4px;
+        }
+
+        .nav-link-btn {
+            color: var(--text-muted);
+            text-decoration: none;
+            font-size: 12px;
+            font-weight: 500;
+            padding: 5px 10px;
+            border-radius: var(--radius-sm);
+            transition: all 0.15s ease;
+            display: flex;
+            align-items: center;
+            gap: 5px;
+        }
+
+        .nav-link-btn:hover {
+            color: var(--text-main);
+            background: var(--surface-elevated);
+        }
+
+        .nav-link-btn.active {
+            color: #fff;
+            background: var(--primary);
+        }
+
+        .role-badge {
+            font-size: 11px;
+            font-weight: 700;
+            padding: 3px 10px;
+            border-radius: 20px;
+            display: flex;
+            align-items: center;
+            gap: 5px;
+            text-transform: uppercase;
+            letter-spacing: 0.4px;
+        }
+
+        .role-badge.cashier {
+            color: #6ee7b7;
+            background: var(--success-light);
+            border: 1px solid rgba(16, 185, 129, 0.3);
+        }
+
+        .role-badge.manager {
+            color: #93c5fd;
+            background: var(--primary-light);
+            border: 1px solid rgba(59, 130, 246, 0.3);
+        }
+
+        .btn-logout {
+            color: var(--danger);
+            text-decoration: none;
+            padding: 4px 8px;
+            border-radius: var(--radius-sm);
+            font-size: 14px;
+            transition: background 0.15s;
+        }
+
+        .btn-logout:hover {
+            background: var(--danger-light);
+        }
+
+        /* ── 3-Zone POS Grid ─────────────────────────────────────────────────── */
+        .pos-workspace {
+            flex: 1;
+            height: calc(100vh - 48px);
+            width: 100%;
+            display: grid;
+            grid-template-columns: 340px 1fr 380px;
+            overflow: hidden;
+            background: var(--bg);
+        }
+
+        /* ══════════════════════════════════════════════════════════════════════
+           ZONE 1 (A): CASHIER BARCODE TERMINAL (Strictly Cashier Role)
+           ══════════════════════════════════════════════════════════════════════ */
+        .cashier-zone {
+            background: var(--surface);
+            border-right: 1px solid var(--border);
+            display: flex;
+            flex-direction: column;
+            padding: 14px;
+            gap: 12px;
+            overflow-y: auto;
+            overflow-x: hidden;
+        }
+
+        .cashier-scan-header {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding-bottom: 10px;
+            border-bottom: 1px solid var(--border);
+            flex-shrink: 0;
+        }
+
+        .cashier-scan-title {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            font-size: 12px;
+            font-weight: 700;
+            color: #fff;
+            letter-spacing: 0.6px;
+            text-transform: uppercase;
+        }
+
+        .cashier-scan-title i {
+            color: var(--success);
+            font-size: 16px;
+        }
+
+        .scan-status-badge {
+            font-size: 10px;
+            font-weight: 700;
+            color: var(--success);
+            background: var(--success-light);
+            border: 1px solid rgba(16, 185, 129, 0.3);
+            padding: 2px 8px;
+            border-radius: 12px;
+            display: flex;
+            align-items: center;
+            gap: 5px;
+        }
+
+        .pulse-dot {
+            width: 6px;
+            height: 6px;
+            border-radius: 50%;
+            background: var(--success);
+            box-shadow: 0 0 6px rgba(16, 185, 129, 0.8);
+            animation: pulse-ring 1.8s infinite;
+        }
+
+        @keyframes pulse-ring {
+            0% { transform: scale(0.9); opacity: 0.7; }
+            50% { transform: scale(1.3); opacity: 1; }
+            100% { transform: scale(0.9); opacity: 0.7; }
+        }
+
+        /* Large but compact Barcode Scan Input Box */
+        .scan-card {
+            background: var(--surface-card);
+            border: 1px solid var(--border);
+            border-radius: var(--radius-md);
+            padding: 12px;
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+            flex-shrink: 0;
+        }
+
+        .scan-label-row {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            font-size: 11px;
+            font-weight: 700;
+            color: var(--text-muted);
+            text-transform: uppercase;
+            letter-spacing: 0.4px;
+        }
+
+        .scan-label-row kbd {
+            font-family: var(--font-mono);
+            font-size: 10px;
+            background: var(--surface-elevated);
+            padding: 1px 5px;
+            border-radius: 3px;
+            border: 1px solid var(--border);
+            color: var(--text-main);
+        }
+
+        .barcode-field-wrap {
+            display: flex;
+            align-items: center;
+            background: var(--bg);
+            border: 1px solid var(--border);
+            border-radius: var(--radius-sm);
+            padding: 0 10px;
+            height: 44px;
+            transition: all 0.15s ease;
+        }
+
+        .barcode-field-wrap:focus-within {
+            border-color: var(--success);
+            box-shadow: 0 0 0 2px rgba(16, 185, 129, 0.2);
+        }
+
+        .barcode-field-wrap i.scan-icon {
+            color: var(--success);
+            font-size: 18px;
+            margin-right: 10px;
+        }
+
+        .barcode-field-wrap input {
+            flex: 1;
+            background: transparent;
+            border: none;
+            outline: none;
+            color: #fff;
+            font-size: 14px;
+            font-weight: 600;
+            font-family: var(--font-mono);
+            letter-spacing: 0.5px;
+        }
+
+        .barcode-field-wrap input::placeholder {
+            color: var(--text-dim);
+            font-family: 'Inter', sans-serif;
+            font-weight: 400;
+            font-size: 12px;
+            letter-spacing: normal;
+        }
+
+        .btn-scan-submit {
+            background: var(--surface-card);
+            border: 1px solid var(--border);
+            color: var(--text-muted);
+            width: 28px;
+            height: 28px;
+            border-radius: 4px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            cursor: pointer;
+            font-size: 12px;
+            transition: all 0.12s;
+        }
+
+        .btn-scan-submit:hover {
+            background: var(--success);
+            color: #fff;
+            border-color: var(--success);
+        }
+
+        .scan-feedback-banner {
+            font-size: 11px;
+            padding: 8px 10px;
+            border-radius: var(--radius-sm);
+            display: none;
+            line-height: 1.4;
+        }
+
+        .scan-feedback-banner.err {
+            background: var(--danger-light);
+            color: #fca5a5;
+            border: 1px solid rgba(239, 68, 68, 0.3);
+            display: block;
+        }
+
+        /* Product Preview Container */
+        .preview-wrapper {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+        }
+
+        /* Preview Idle Placeholder */
+        .preview-idle-box {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            padding: 30px 16px;
+            text-align: center;
+            background: rgba(22, 32, 50, 0.4);
+            border: 1px dashed var(--border);
+            border-radius: var(--radius-md);
+            min-height: 230px;
+        }
+
+        .idle-scan-icon {
+            width: 52px;
+            height: 52px;
+            border-radius: 50%;
+            background: var(--surface-card);
+            border: 1px solid var(--border);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 22px;
+            color: var(--text-dim);
+            margin-bottom: 12px;
+        }
+
+        .preview-idle-box h4 {
+            font-size: 13px;
+            font-weight: 600;
+            color: var(--text-muted);
+            margin-bottom: 6px;
+        }
+
+        .preview-idle-box p {
+            font-size: 11px;
+            color: var(--text-dim);
+            line-height: 1.5;
+            max-width: 220px;
+        }
+
+        /* Product Preview Matched Card */
+        .product-preview-card {
+            background: var(--surface-card);
+            border: 1px solid var(--border);
+            border-radius: var(--radius-md);
+            padding: 14px;
+            display: flex;
+            flex-direction: column;
+            gap: 12px;
+            animation: fadeIn 0.15s ease-out;
+        }
+
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(4px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+
+        .preview-media-header {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+        }
+
+        .preview-visual-avatar {
+            width: 54px;
+            height: 54px;
+            border-radius: var(--radius-md);
+            background: var(--surface-elevated);
+            border: 1px solid var(--border);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            flex-shrink: 0;
+            font-size: 24px;
+            color: var(--success);
+        }
+
+        .preview-visual-avatar.initials {
+            font-family: var(--font-mono);
+            font-weight: 700;
+            font-size: 18px;
+            color: #fff;
+            background: linear-gradient(135deg, #1e293b, #0f172a);
+        }
+
+        .preview-info-block {
+            flex: 1;
+            min-width: 0;
+        }
+
+        .preview-cat-badge {
+            font-size: 10px;
+            font-weight: 600;
+            color: #93c5fd;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            margin-bottom: 2px;
+            display: inline-block;
+        }
+
+        .preview-title {
+            font-size: 14px;
+            font-weight: 700;
+            color: #fff;
+            line-height: 1.3;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+
+        .preview-code-row {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            margin-top: 4px;
+        }
+
+        .preview-code-tag {
+            font-family: var(--font-mono);
+            font-size: 10px;
+            color: var(--text-dim);
+            background: var(--surface-elevated);
+            padding: 1px 5px;
+            border-radius: 3px;
+            border: 1px solid var(--border-subtle);
+        }
+
+        /* 4-Stat Grid */
+        .preview-stats-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 8px;
+            background: var(--bg);
+            border: 1px solid var(--border-subtle);
+            border-radius: var(--radius-sm);
+            padding: 10px;
+        }
+
+        .pstat-item {
+            display: flex;
+            flex-direction: column;
+        }
+
+        .pstat-lbl {
+            font-size: 9px;
+            font-weight: 700;
+            color: var(--text-dim);
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+
+        .pstat-val {
+            font-family: var(--font-mono);
+            font-size: 13px;
+            font-weight: 600;
+            color: var(--text-main);
+            margin-top: 1px;
+        }
+
+        .pstat-val.price {
+            font-size: 16px;
+            font-weight: 700;
+            color: var(--success);
+        }
+
+        .pstat-val.stock {
+            color: #38bdf8;
+        }
+
+        /* Preview Action Row */
+        .preview-action-row {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .preview-qty-stepper {
+            display: inline-flex;
+            align-items: center;
+            background: var(--surface-elevated);
+            border: 1px solid var(--border);
+            border-radius: var(--radius-sm);
+            height: 38px;
+        }
+
+        .preview-qty-stepper button {
+            background: transparent;
+            border: none;
+            color: var(--text-muted);
+            width: 28px;
+            height: 100%;
+            cursor: pointer;
+            font-size: 15px;
+            font-weight: 700;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            transition: all 0.12s;
+        }
+
+        .preview-qty-stepper button:hover:not(:disabled) {
+            background: var(--surface-card);
+            color: #fff;
+        }
+
+        .preview-qty-stepper button:disabled {
+            opacity: 0.3 !important;
+            cursor: not-allowed !important;
+            background: transparent !important;
+            color: var(--text-dim) !important;
+        }
+
+        .preview-qty-stepper input {
+            width: 38px;
+            background: transparent;
+            border: none;
+            outline: none;
+            color: #fff;
+            font-family: var(--font-mono);
+            font-size: 13px;
+            font-weight: 700;
+            text-align: center;
+        }
+
+        .btn-add-preview {
+            flex: 1;
+            height: 38px;
+            background: var(--success);
+            border: none;
+            border-radius: var(--radius-sm);
+            color: #fff;
+            font-size: 13px;
+            font-weight: 700;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 8px;
+            transition: all 0.15s ease;
+            box-shadow: 0 2px 8px rgba(16, 185, 129, 0.25);
+            font-family: inherit;
+        }
+
+        .btn-add-preview:hover:not(:disabled) {
+            background: var(--success-dark);
+            transform: translateY(-1px);
+        }
+
+        .btn-add-preview:disabled {
+            opacity: 0.45 !important;
+            cursor: not-allowed !important;
+            background: #475569 !important;
+            color: #94a3b8 !important;
+            transform: none !important;
+            box-shadow: none !important;
+        }
+
+        .btn-add-preview kbd {
+            font-family: var(--font-mono);
+            font-size: 10px;
+            background: rgba(0, 0, 0, 0.25);
+            padding: 1px 5px;
+            border-radius: 3px;
+        }
+
+        .preview-added-notice {
+            background: var(--success-light);
+            border: 1px solid rgba(16, 185, 129, 0.3);
+            border-radius: var(--radius-sm);
+            padding: 6px 10px;
+            font-size: 11px;
+            font-weight: 600;
+            color: #6ee7b7;
+            display: none;
+            align-items: center;
+            gap: 6px;
+        }
+
+        /* Recent scans in cashier terminal */
+        .cashier-recent-footer {
+            margin-top: auto;
+            padding-top: 10px;
+            border-top: 1px solid var(--border-subtle);
+            display: flex;
+            flex-direction: column;
+            gap: 4px;
+            flex-shrink: 0;
+        }
+
+        .recent-title {
+            font-size: 10px;
+            font-weight: 700;
+            color: var(--text-dim);
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+
+        .recent-item {
+            font-size: 11px;
+            color: var(--text-muted);
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+
+        .recent-item.empty {
+            color: var(--text-dim);
+            font-style: italic;
+        }
+
+        /* ══════════════════════════════════════════════════════════════════════
+           ZONE 1 (B): MANAGER / OWNER CATALOG TERMINAL
+           ══════════════════════════════════════════════════════════════════════ */
+        .manager-zone {
+            background: var(--surface);
+            border-right: 1px solid var(--border);
+            display: flex;
+            flex-direction: column;
+            overflow: hidden;
+        }
+
+        .manager-header {
+            padding: 12px 14px;
+            border-bottom: 1px solid var(--border);
+            background: var(--surface);
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+            flex-shrink: 0;
+        }
+
+        .manager-role-indicator {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            font-size: 11px;
+            font-weight: 700;
+            color: #93c5fd;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+
+        .search-control-wrap {
+            position: relative;
+        }
+
+        .pos-search-input-box {
+            display: flex;
+            align-items: center;
+            background: var(--surface-card);
+            border: 1px solid var(--border);
+            border-radius: var(--radius-md);
+            padding: 0 10px;
+            height: 38px;
+            transition: border-color 0.15s, box-shadow 0.15s;
+        }
+
+        .pos-search-input-box:focus-within {
+            border-color: var(--border-focus);
+            box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.2);
+        }
+
+        .pos-search-input-box i {
+            color: var(--text-dim);
+            font-size: 15px;
+            margin-right: 8px;
+        }
+
+        .pos-search-input-box input {
+            flex: 1;
+            background: transparent;
+            border: none;
+            outline: none;
+            color: var(--text-main);
+            font-size: 13px;
+            font-family: inherit;
+        }
+
+        .pos-search-input-box input::placeholder {
+            color: var(--text-dim);
+        }
+
+        .barcode-badge-btn {
+            background: var(--surface-elevated);
+            border: 1px solid var(--border);
+            color: var(--text-muted);
+            border-radius: 4px;
+            font-size: 11px;
+            font-weight: 600;
+            padding: 3px 7px;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            gap: 4px;
+            transition: all 0.15s;
+        }
+
+        .barcode-badge-btn:hover, .barcode-badge-btn.active {
+            background: var(--primary);
+            border-color: var(--primary);
+            color: #fff;
+        }
+
+        .category-filter-row {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            overflow-x: auto;
+            padding-bottom: 2px;
+            scrollbar-width: none;
+        }
+
+        .category-filter-row::-webkit-scrollbar {
+            display: none;
+        }
+
+        .cat-chip {
+            background: var(--surface-elevated);
+            border: 1px solid var(--border);
+            color: var(--text-muted);
+            font-size: 11px;
+            font-weight: 500;
+            padding: 3px 9px;
+            border-radius: 12px;
+            cursor: pointer;
+            white-space: nowrap;
+            transition: all 0.12s;
+        }
+
+        .cat-chip:hover {
+            color: #fff;
+            border-color: var(--text-dim);
+        }
+
+        .cat-chip.active {
+            background: var(--primary-light);
+            border-color: rgba(59, 130, 246, 0.5);
+            color: #93c5fd;
+            font-weight: 600;
+        }
+
+        .manager-catalog-body {
+            flex: 1;
+            overflow-y: auto;
+            padding: 10px;
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+        }
+
+        .catalog-card {
+            background: var(--surface-card);
+            border: 1px solid var(--border);
+            border-radius: var(--radius-sm);
+            padding: 9px 11px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            cursor: pointer;
+            transition: border-color 0.12s, background 0.12s;
+        }
+
+        .catalog-card:hover {
+            border-color: var(--border-focus);
+            background: var(--surface-elevated);
+        }
+
+        .catalog-card-info .name {
+            font-size: 12px;
+            font-weight: 600;
+            color: #fff;
+            margin-bottom: 2px;
+        }
+
+        .catalog-card-info .meta {
+            font-size: 11px;
+            color: var(--text-dim);
+            font-family: var(--font-mono);
+            display: flex;
+            align-items: center;
+            gap: 6px;
+        }
+
+        .stock-tag {
+            font-size: 10px;
+            padding: 1px 5px;
+            border-radius: 3px;
+        }
+
+        .stock-tag.ok {
+            background: rgba(16, 185, 129, 0.12);
+            color: #34d399;
+        }
+
+        .stock-tag.low {
+            background: rgba(245, 158, 11, 0.15);
+            color: #fbbf24;
+        }
+
+        .catalog-card-pricing {
+            text-align: right;
+            display: flex;
+            flex-direction: column;
+            align-items: flex-end;
+            gap: 3px;
+        }
+
+        .catalog-card-pricing .price {
+            font-size: 13px;
+            font-weight: 700;
+            color: var(--success);
+            font-family: var(--font-mono);
+        }
+
+        .btn-quick-add {
+            background: var(--surface-elevated);
+            border: 1px solid var(--border);
+            color: var(--text-muted);
+            border-radius: var(--radius-sm);
+            font-size: 11px;
+            font-weight: 600;
+            padding: 2px 7px;
+            display: flex;
+            align-items: center;
+            gap: 4px;
+            transition: all 0.12s;
+        }
+
+        .btn-quick-add:hover {
+            background: var(--primary);
+            border-color: var(--primary);
+            color: #fff;
+        }
+
+        .search-results {
+            display: none;
+            flex-direction: column;
+            gap: 6px;
+            margin-bottom: 8px;
+        }
+
+        /* ══════════════════════════════════════════════════════════════════════
+           ZONE 2: ACTIVE CART TERMINAL (CENTER)
+           ══════════════════════════════════════════════════════════════════════ */
+        .cart-zone {
+            background: var(--bg);
+            border-right: 1px solid var(--border);
+            display: flex;
+            flex-direction: column;
+            overflow: hidden;
+        }
+
+        .cart-topbar {
+            height: 48px;
+            padding: 0 18px;
+            background: var(--surface);
+            border-bottom: 1px solid var(--border);
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            flex-shrink: 0;
+        }
+
+        .cart-title-wrap {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .cart-title {
+            font-size: 14px;
+            font-weight: 700;
+            color: #fff;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .cart-count-badge {
+            font-size: 11px;
+            font-weight: 600;
+            background: var(--surface-card);
+            border: 1px solid var(--border);
+            color: var(--text-muted);
+            padding: 2px 8px;
+            border-radius: 12px;
+        }
+
+        .btn-clear-cart {
+            background: transparent;
+            border: 1px solid var(--border);
+            color: var(--text-muted);
+            border-radius: var(--radius-sm);
+            padding: 5px 10px;
+            font-size: 12px;
+            font-weight: 500;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            gap: 5px;
+            transition: all 0.15s;
+        }
+
+        .btn-clear-cart:hover {
+            color: var(--danger);
+            border-color: rgba(239, 68, 68, 0.4);
+            background: var(--danger-light);
+        }
+
+        .cart-table-wrap {
+            flex: 1;
+            overflow-y: auto;
+            overflow-x: hidden;
+            background: var(--bg);
+        }
+
+        .cart-table {
+            width: 100%;
+            border-collapse: collapse;
+            text-align: left;
+        }
+
+        .cart-table thead th {
+            position: sticky;
+            top: 0;
+            background: var(--surface-elevated);
+            color: var(--text-muted);
+            font-size: 11px;
+            font-weight: 600;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            padding: 10px 14px;
+            border-bottom: 1px solid var(--border);
+            z-index: 5;
+        }
+
+        .cart-table tbody tr {
+            border-bottom: 1px solid var(--border-subtle);
+            transition: background 0.1s;
+        }
+
+        .cart-table tbody tr:hover {
+            background: rgba(30, 41, 59, 0.5);
+        }
+
+        .cart-table td {
+            padding: 10px 14px;
+            font-size: 13px;
+            vertical-align: middle;
+        }
+
+        .col-index {
+            width: 32px;
+            color: var(--text-dim);
+            font-size: 11px;
+            font-family: var(--font-mono);
+        }
+
+        .col-prod {
+            min-width: 180px;
+        }
+
+        .pname {
+            font-weight: 600;
+            color: #fff;
+            margin-bottom: 2px;
+        }
+
+        .pcode-sub {
+            font-size: 11px;
+            color: var(--text-dim);
+            font-family: var(--font-mono);
+        }
+
+        .col-price {
+            font-family: var(--font-mono);
+            font-weight: 500;
+            color: var(--text-main);
+            white-space: nowrap;
+        }
+
+        .col-qty {
+            width: 110px;
+        }
+
+        .qty-ctrl {
+            display: inline-flex;
+            align-items: center;
+            background: var(--surface-card);
+            border: 1px solid var(--border);
+            border-radius: var(--radius-sm);
+            overflow: hidden;
+        }
+
+        .qty-ctrl button {
+            background: transparent;
+            border: none;
+            color: var(--text-muted);
+            width: 26px;
+            height: 26px;
+            cursor: pointer;
+            font-size: 14px;
+            font-weight: 600;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            transition: background 0.1s, color 0.1s;
+        }
+
+        .qty-ctrl button:hover:not(:disabled) {
+            background: var(--primary);
+            color: #fff;
+        }
+
+        .qty-ctrl button:disabled {
+            opacity: 0.35 !important;
+            cursor: not-allowed !important;
+            background: transparent !important;
+            color: var(--text-dim) !important;
+        }
+
+        .qty-stock-hint {
+            font-size: 10px;
+            font-family: var(--font-mono);
+            color: var(--text-dim);
+            margin-top: 3px;
+            white-space: nowrap;
+        }
+
+        .qty-stock-hint.maxed {
+            color: #f87171;
+            font-weight: 700;
+        }
+
+        .qty-ctrl input {
+            width: 44px;
+            background: transparent;
+            border: none;
+            outline: none;
+            color: #fff;
+            font-family: var(--font-mono);
+            font-size: 12px;
+            font-weight: 600;
+            text-align: center;
+            padding: 2px 0;
+            -moz-appearance: textfield;
+        }
+
+        .qty-ctrl input::-webkit-outer-spin-button,
+        .qty-ctrl input::-webkit-inner-spin-button {
+            -webkit-appearance: none;
+            margin: 0;
+        }
+
+        .col-tax {
+            font-size: 12px;
+            color: var(--text-dim);
+            font-family: var(--font-mono);
+            white-space: nowrap;
+        }
+
+        .col-total {
+            font-family: var(--font-mono);
+            font-weight: 700;
+            color: #fff;
+            white-space: nowrap;
+            text-align: right;
+        }
+
+        .col-action {
+            width: 40px;
+            text-align: center;
+        }
+
+        .btn-remove {
+            background: transparent;
+            border: none;
+            color: var(--text-dim);
+            width: 28px;
+            height: 28px;
+            border-radius: var(--radius-sm);
+            cursor: pointer;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 13px;
+            transition: all 0.15s;
+        }
+
+        .btn-remove:hover {
+            color: var(--danger);
+            background: var(--danger-light);
+        }
+
+        /* Empty Cart State */
+        .empty-cart-view {
+            padding: 80px 20px;
+            text-align: center;
+            color: var(--text-dim);
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .empty-cart-icon {
+            width: 56px;
+            height: 56px;
+            border-radius: 50%;
+            background: var(--surface-elevated);
+            border: 1px dashed var(--border);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 24px;
+            color: var(--text-dim);
+            margin-bottom: 14px;
+        }
+
+        .empty-cart-title {
+            font-size: 15px;
+            font-weight: 600;
+            color: var(--text-muted);
+            margin-bottom: 4px;
+        }
+
+        .empty-cart-sub {
+            font-size: 12px;
+            max-width: 260px;
+            line-height: 1.5;
+        }
+
+        /* ══════════════════════════════════════════════════════════════════════
+           ZONE 3: CUSTOMER, TOTALS & SETTLEMENT (RIGHT)
+           ══════════════════════════════════════════════════════════════════════ */
+        .settlement-zone {
+            background: var(--surface);
+            display: flex;
+            flex-direction: column;
+            overflow-y: auto;
+            overflow-x: hidden;
+            border-left: 1px solid var(--border-subtle);
+        }
+
+        .settlement-card {
+            padding: 12px 16px;
+            border-bottom: 1px solid var(--border);
+        }
+
+        .section-label {
+            font-size: 11px;
+            font-weight: 700;
+            color: var(--text-dim);
+            text-transform: uppercase;
+            letter-spacing: 0.6px;
+            margin-bottom: 8px;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+        }
+
+        .customer-search-box {
+            position: relative;
+        }
+
+        .customer-input-row {
+            display: flex;
+            align-items: center;
+            background: var(--surface-card);
+            border: 1px solid var(--border);
+            border-radius: var(--radius-sm);
+            padding: 0 10px;
+            height: 34px;
+        }
+
+        .customer-input-row i {
+            color: var(--text-dim);
+            font-size: 13px;
+            margin-right: 8px;
+        }
+
+        .customer-input-row input {
+            flex: 1;
+            background: transparent;
+            border: none;
+            outline: none;
+            color: var(--text-main);
+            font-size: 12px;
+            font-family: inherit;
+        }
+
+        .customer-dropdown {
+            position: absolute;
+            top: calc(100% + 4px);
+            left: 0;
+            right: 0;
+            background: var(--surface-card);
+            border: 1px solid var(--border);
+            border-radius: var(--radius-md);
+            overflow: hidden;
+            display: none;
+            z-index: 100;
+            box-shadow: 0 12px 30px rgba(0,0,0,0.5);
+            max-height: 180px;
+            overflow-y: auto;
+        }
+
+        .customer-item {
+            padding: 8px 12px;
+            cursor: pointer;
+            border-bottom: 1px solid var(--border-subtle);
+            transition: background 0.1s;
+        }
+
+        .customer-item:last-child {
+            border-bottom: none;
+        }
+
+        .customer-item:hover {
+            background: var(--surface-elevated);
+        }
+
+        .customer-item .cname {
+            font-size: 12px;
+            font-weight: 600;
+            color: #fff;
+        }
+
+        .customer-item .cphone {
+            font-size: 11px;
+            color: var(--text-dim);
+            font-family: var(--font-mono);
+        }
+
+        .selected-customer-pill {
+            background: var(--surface-card);
+            border: 1px solid var(--border);
+            border-radius: var(--radius-sm);
+            padding: 8px 12px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .sc-info-block .name {
+            font-size: 12px;
+            font-weight: 600;
+            color: #fff;
+        }
+
+        .sc-info-block .credit {
+            font-size: 11px;
+            color: var(--warning);
+            margin-top: 1px;
+            font-family: var(--font-mono);
+        }
+
+        .btn-clear-customer {
+            background: transparent;
+            border: none;
+            color: var(--text-dim);
+            cursor: pointer;
+            font-size: 15px;
+            transition: color 0.1s;
+        }
+
+        .btn-clear-customer:hover {
+            color: var(--danger);
+        }
+
+        .discount-inline {
+            display: flex;
+            gap: 8px;
+        }
+
+        .discount-inline select, .discount-inline input {
+            background: var(--surface-card);
+            border: 1px solid var(--border);
+            border-radius: var(--radius-sm);
+            color: var(--text-main);
+            padding: 6px 10px;
+            font-size: 12px;
+            outline: none;
+        }
+
+        .discount-inline select {
+            width: 100px;
+        }
+
+        .discount-inline input {
+            flex: 1;
+            font-family: var(--font-mono);
+        }
+
+        .totals-block {
+            display: flex;
+            flex-direction: column;
+            gap: 5px;
+            margin-bottom: 10px;
+        }
+
+        .total-row {
+            display: flex;
+            justify-content: space-between;
+            font-size: 12px;
+            color: var(--text-muted);
+        }
+
+        .total-row.discount {
+            color: var(--danger);
+        }
+
+        .total-row .val {
+            font-family: var(--font-mono);
+            font-weight: 600;
+            color: var(--text-main);
+        }
+
+        .total-row.discount .val {
+            color: var(--danger);
+        }
+
+        .grand-total-hero {
+            background: var(--surface-card);
+            border: 1px solid var(--border);
+            border-radius: var(--radius-md);
+            padding: 10px 14px;
+            display: flex;
+            justify-content: space-between;
+            align-items: baseline;
+        }
+
+        .grand-lbl {
+            font-size: 12px;
+            font-weight: 700;
+            color: var(--text-muted);
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+
+        .grand-val {
+            font-family: var(--font-mono);
+            font-size: 26px;
+            font-weight: 700;
+            color: var(--success);
+            letter-spacing: -0.5px;
+        }
+
+        .payment-tabs-grid {
+            display: grid;
+            grid-template-columns: repeat(4, 1fr);
+            gap: 6px;
+            margin-bottom: 10px;
+        }
+
+        .pay-tab {
+            background: var(--surface-card);
+            border: 1px solid var(--border);
+            border-radius: var(--radius-sm);
+            padding: 8px 4px;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            gap: 4px;
+            cursor: pointer;
+            transition: all 0.15s;
+        }
+
+        .pay-tab i {
+            font-size: 16px;
+            color: var(--text-dim);
+        }
+
+        .pay-tab span {
+            font-size: 10px;
+            font-weight: 700;
+            letter-spacing: 0.5px;
+            color: var(--text-muted);
+        }
+
+        .pay-tab:hover {
+            border-color: var(--border-focus);
+            background: var(--surface-elevated);
+        }
+
+        .pay-tab.active {
+            background: var(--primary-light);
+            border-color: var(--primary);
+        }
+
+        .pay-tab.active i, .pay-tab.active span {
+            color: #fff;
+        }
+
+        .tender-row {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            margin-bottom: 8px;
+        }
+
+        .tender-row label {
+            font-size: 11px;
+            font-weight: 700;
+            color: var(--text-muted);
+            text-transform: uppercase;
+            width: 70px;
+        }
+
+        .tender-row input {
+            flex: 1;
+            background: var(--surface-card);
+            border: 1px solid var(--border);
+            border-radius: var(--radius-sm);
+            padding: 6px 10px;
+            color: #fff;
+            font-family: var(--font-mono);
+            font-size: 13px;
+            font-weight: 600;
+            outline: none;
+        }
+
+        .quick-cash-row {
+            display: flex;
+            gap: 6px;
+        }
+
+        .btn-qc {
+            flex: 1;
+            background: var(--surface-elevated);
+            border: 1px solid var(--border);
+            color: var(--text-muted);
+            border-radius: var(--radius-sm);
+            padding: 5px 0;
+            font-size: 11px;
+            font-weight: 600;
+            font-family: var(--font-mono);
+            cursor: pointer;
+            transition: all 0.12s;
+        }
+
+        .btn-qc:hover {
+            background: var(--surface-card);
+            color: #fff;
+            border-color: var(--border-focus);
+        }
+
+        .credit-alert-box {
+            background: rgba(245, 158, 11, 0.08);
+            border: 1px solid rgba(245, 158, 11, 0.25);
+            border-radius: var(--radius-sm);
+            padding: 8px 10px;
+            font-size: 11px;
+            color: var(--warning);
+            margin-top: 6px;
+            display: none;
+            line-height: 1.4;
+        }
+
+        .settlement-footer {
+            margin-top: auto;
+            padding: 14px 16px;
+            background: var(--surface);
+            border-top: 1px solid var(--border);
+            flex-shrink: 0;
+        }
+
+        .inline-alert {
+            padding: 8px 12px;
+            border-radius: var(--radius-sm);
+            font-size: 12px;
+            font-weight: 500;
+            margin-bottom: 10px;
+            display: none;
+            line-height: 1.4;
+        }
+
+        .inline-alert.err {
+            background: var(--danger-light);
+            border: 1px solid rgba(239, 68, 68, 0.3);
+            color: #fca5a5;
+        }
+
+        .inline-alert.succ {
+            background: var(--success-light);
+            border: 1px solid rgba(16, 185, 129, 0.3);
+            color: #6ee7b7;
+        }
+
+        .btn-checkout {
+            width: 100%;
+            height: 48px;
+            background: var(--success);
+            border: none;
+            border-radius: var(--radius-md);
+            color: #fff;
+            font-size: 14px;
+            font-weight: 700;
+            letter-spacing: 0.2px;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 8px;
+            transition: all 0.15s ease;
+            box-shadow: 0 4px 14px rgba(16, 185, 129, 0.25);
+            font-family: inherit;
+        }
+
+        .btn-checkout:hover:not(:disabled) {
+            background: var(--success-dark);
+            transform: translateY(-1px);
+            box-shadow: 0 6px 18px rgba(16, 185, 129, 0.35);
+        }
+
+        .btn-checkout:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+            transform: none;
+            box-shadow: none;
+        }
+
+        .toast {
+            position: fixed;
+            top: 58px;
+            right: 18px;
+            z-index: 9999;
+            padding: 10px 16px;
+            border-radius: var(--radius-md);
+            font-size: 13px;
+            font-weight: 600;
+            max-width: 320px;
+            box-shadow: 0 8px 24px rgba(0, 0, 0, 0.5);
+            transform: translateX(120%);
+            transition: transform 0.25s ease;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .toast.show { transform: translateX(0); }
+        .toast.success { background: #064e3b; border: 1px solid var(--success); color: #34d399; }
+        .toast.error { background: #450a0a; border: 1px solid var(--danger); color: #f87171; }
+
+        #csrf-container { display: none; }
+        @keyframes spin { to { transform: rotate(360deg); } }
+
+        @media (max-width: 1100px) {
+            .pos-workspace {
+                grid-template-columns: 280px 1fr 340px;
+            }
+        }
+
+        @media (max-width: 850px) {
+            .pos-workspace {
+                display: flex;
+                flex-direction: column;
+                height: auto;
+                min-height: calc(100vh - 48px);
+                overflow-y: auto;
+            }
+            .cashier-zone, .manager-zone, .checkout-zone {
+                width: 100%;
+                border-right: none;
+                border-bottom: 1px solid var(--border);
+            }
+            .cart-zone {
+                min-height: 380px;
+            }
+        }
+
+        @media (max-width: 480px) {
+            .pos-header {
+                flex-wrap: wrap;
+                height: auto;
+                padding: 8px 12px;
+                gap: 8px;
+            }
+            .shortcut-pill {
+                display: none;
+            }
+            .payment-tabs-grid {
+                grid-template-columns: repeat(2, 1fr);
+            }
+        }
+    </style>
+</head>
+<body style="overflow: hidden; height: 100vh;">
+    <div class="app-shell" id="app-shell" style="height: 100vh; overflow: hidden;">
+        {% include "dashboard/components/sidebar.html" %}
+
+        <div class="app-main-wrapper" style="height: 100vh; overflow: hidden; display: flex; flex-direction: column;">
+            {% include "dashboard/components/topbar.html" %}
+
+    <!-- CSRF Token -->
+    {% csrf_token %}
+    <div id="csrf-container">
+        <input type="hidden" id="csrf-token" value="{{ csrf_token }}">
+    </div>
+
+    <!-- 3-Zone Workspace -->
+    <main class="pos-workspace">
+
+        <!-- ══════════════════════════════════════════════════════════════
+             ZONE 1: CASHIER SCAN TERMINAL vs MANAGER CATALOG
+             ══════════════════════════════════════════════════════════════ -->
+        <!-- ══════════════════════════════════════════════════════════════
+             ZONE 1: POS SCAN & CATALOG TERMINAL
+             ══════════════════════════════════════════════════════════════ -->
+        <section class="cashier-zone" id="pos-scan-catalog-zone" aria-label="POS Scanner Terminal">
+            <!-- Terminal Header -->
+            <div class="cashier-scan-header">
+                <div class="cashier-scan-title">
+                    <i class="bi bi-upc-scan"></i>
+                    <span>BARCODE SCANNER TERMINAL</span>
+                </div>
+                <span class="scan-status-badge">
+                    <span class="pulse-dot"></span> READY
+                </span>
+            </div>
+
+            <!-- Collapsed Barcode Input Toggle & Elements (Preserves Barcode compatibility without cluttering layout) -->
+            <div id="barcode-input-panel" hidden style="display:none;">
+                <button type="button" id="toggle-barcode-input" aria-expanded="false" style="display:none;"></button>
+                <input type="text" id="barcode-scanner-input" style="display:none;" tabindex="-1">
+            </div>
+
+            <!-- POS Product & Barcode Search Quick Trigger (F2) -->
+            <button type="button"
+                    class="btn-open-f2-search"
+                    id="btn-open-f2-search"
+                    onclick="Cart.openProductSearchOverlay()"
+                    title="Search product name, SKU or barcode (F2)"
+                    style="display: flex; align-items: center; justify-content: space-between; width: 100%; padding: 11px 14px; background: var(--surface-2); border: 1.5px solid var(--border); border-radius: var(--radius-sm); color: var(--text); cursor: pointer; margin-bottom: 12px; font-size: 13px; font-weight: 600; text-align: left; transition: all 140ms ease;">
+                <span style="display: flex; align-items: center; gap: 8px;">
+                    <i class="bi bi-search" style="color: var(--primary); font-size: 14px;"></i>
+                    <span>Search name, SKU, or barcode...</span>
+                </span>
+                <kbd style="background: var(--surface); color: var(--text); padding: 2px 7px; border-radius: 4px; border: 1px solid var(--border); font-size: 11px; font-weight: 700;">F2</kbd>
+            </button>
+
+            <!-- Product Preview Container -->
+            <div class="preview-wrapper" id="preview-wrapper">
+                <!-- Idle State: Waiting for scan -->
+                <div class="preview-idle-box" id="preview-idle-box">
+                    <div class="idle-scan-icon">
+                        <i class="bi bi-upc-scan"></i>
+                    </div>
+                    <h4>Waiting for Barcode Scan</h4>
+                    <p>Barcode scanner is active.<br>Point handheld scanner and pull trigger, or click icon above.</p>
+                </div>
+
+                <!-- Product Preview Card: Shown when barcode matches or search item selected -->
+                <div class="product-preview-card" id="product-preview-card" style="display:none;">
+                    <div class="preview-media-header">
+                        <div class="preview-visual-avatar" id="preview-avatar">
+                            <i class="bi bi-box-seam" id="preview-icon"></i>
+                            <span id="preview-initials" style="display:none;"></span>
+                        </div>
+                        <div class="preview-info-block">
+                            <span class="preview-cat-badge" id="preview-category">Category</span>
+                            <div class="preview-title" id="preview-name">Product Name</div>
+                            <div class="preview-code-row">
+                                <span class="preview-code-tag"><i class="bi bi-tag"></i> <span id="preview-sku">SKU</span></span>
+                                <span class="preview-code-tag"><i class="bi bi-upc"></i> <span id="preview-barcode">Barcode</span></span>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="preview-stats-grid">
+                        <div class="pstat-item">
+                            <span class="pstat-lbl">Selling Price</span>
+                            <span class="pstat-val price" id="preview-price">₹0.00</span>
+                        </div>
+                        <div class="pstat-item">
+                            <span class="pstat-lbl">GST Rate</span>
+                            <span class="pstat-val" id="preview-gst">0.00%</span>
+                        </div>
+                        <div class="pstat-item">
+                            <span class="pstat-lbl">Available Stock</span>
+                            <span class="pstat-val stock" id="preview-stock">0 pcs</span>
+                        </div>
+                        <div class="pstat-item">
+                            <span class="pstat-lbl">In Cart / Rem.</span>
+                            <span class="pstat-val" id="preview-cart-remaining" style="font-size: 11px;">0 in cart · 0 rem</span>
+                        </div>
+                    </div>
+
+                    <div class="preview-action-row">
+                        <div class="preview-qty-stepper">
+                            <button type="button" id="preview-qty-minus">-</button>
+                            <input type="number" id="preview-qty-val" value="1" min="1" step="1">
+                            <button type="button" id="preview-qty-plus">+</button>
+                        </div>
+                        <button type="button" class="btn-add-preview" id="btn-add-preview">
+                            <i class="bi bi-cart-plus-fill"></i>
+                            <span>ADD TO CART</span>
+                            <kbd>↵</kbd>
+                        </button>
+                    </div>
+
+                    <div class="preview-added-notice" id="preview-added-notice">
+                        <i class="bi bi-check-circle-fill"></i> Item added! Scan next barcode.
+                    </div>
+                </div>
+            </div>
+
+            {% if user_role != "Cashier" %}
+            <!-- Manager Catalog Items Grid -->
+            <div id="catalog-items-grid" style="display:none; flex-direction:column; gap:6px; padding: 10px 14px; max-height: 200px; overflow-y: auto;"></div>
+            {% endif %}
+
+            <!-- Recent session scans -->
+            <div class="cashier-recent-footer">
+                <span class="recent-title">LAST SCANNED</span>
+                <span class="recent-item empty" id="last-scanned-display">No items scanned yet</span>
+            </div>
+        </section>
+
+        <!-- ══════════════════════════════════════════════════════════════
+             ZONE 2: ACTIVE CART TERMINAL (CENTER)
+             ══════════════════════════════════════════════════════════════ -->
+        <section class="cart-zone" aria-label="Active Transaction Cart">
+            <div class="cart-topbar">
+                <div class="cart-title-wrap">
+                    <span class="cart-title"><i class="bi bi-cart3" style="color:var(--primary);"></i> Current Register</span>
+                    <span class="cart-count-badge" id="cart-item-count">0 items</span>
+                </div>
+                <button type="button" class="btn-clear-cart" id="btn-clear-cart" onclick="Cart.clear()">
+                    <i class="bi bi-trash3"></i> Clear Cart
+                </button>
+            </div>
+
+            <div class="cart-table-wrap">
+                <table class="cart-table" id="cart-table">
+                    <thead>
+                        <tr>
+                            <th class="col-index">#</th>
+                            <th class="col-prod">Item & SKU</th>
+                            <th class="col-price">Unit Price</th>
+                            <th class="col-qty">Quantity</th>
+                            <th class="col-tax">Tax</th>
+                            <th class="col-total">Total</th>
+                            <th class="col-action"></th>
+                        </tr>
+                    </thead>
+                    <tbody id="cart-tbody">
+                        <tr id="empty-row">
+                            <td colspan="7">
+                                <div class="empty-cart-view">
+                                    <div class="empty-cart-icon">
+                                        <i class="bi bi-upc-scan"></i>
+                                    </div>
+                                    <div class="empty-cart-title">Register is Empty</div>
+                                    <div class="empty-cart-sub">
+                                        {% if user_role == "Cashier" %}
+                                        Scan a barcode or type barcode number on the left to begin sale.
+                                        {% else %}
+                                        Scan barcode, search by SKU, or click items on the left catalog.
+                                        {% endif %}
+                                    </div>
+                                </div>
+                            </td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+        </section>
+
+        <!-- ══════════════════════════════════════════════════════════════
+             ZONE 3: CUSTOMER, TOTALS & SETTLEMENT (RIGHT)
+             ══════════════════════════════════════════════════════════════ -->
+        <section class="settlement-zone" aria-label="Customer, Totals and Payment">
+            <!-- 1. Customer Assignment -->
+            <div class="settlement-card">
+                <div class="section-label">
+                    <span><i class="bi bi-person-fill"></i> Customer</span>
+                </div>
+                <div class="customer-search-box" id="customer-search-wrap">
+                    <div class="customer-input-row">
+                        <i class="bi bi-search"></i>
+                        <input type="text" id="customer-input" placeholder="Search customer by name or phone…" autocomplete="off">
+                    </div>
+                    <div class="customer-dropdown" id="customer-dropdown"></div>
+                </div>
+                <div class="selected-customer-pill" id="selected-customer-card" style="display:none;margin-top:8px;">
+                    <div class="sc-info-block">
+                        <div class="name" id="sc-name"></div>
+                        <div class="credit" id="sc-credit"></div>
+                    </div>
+                    <button type="button" class="btn-clear-customer" onclick="Cart.clearCustomer()" title="Remove customer">
+                        <i class="bi bi-x-circle-fill"></i>
+                    </button>
+                </div>
+            </div>
+
+            <!-- 2. Discount Selection -->
+            <div class="settlement-card">
+                <div class="section-label">
+                    <span><i class="bi bi-tag-fill"></i> Order Discount</span>
+                </div>
+                <div class="discount-inline">
+                    <select id="discount-type" onchange="Cart.refreshQuote()">
+                        <option value="FLAT">Flat (₹)</option>
+                        <option value="PERCENTAGE">Percent (%)</option>
+                    </select>
+                    <input type="number" id="discount-value" value="0" min="0" step="0.01" placeholder="0.00" oninput="Cart.refreshQuote()">
+                </div>
+            </div>
+
+            <!-- 3. Bill Summary & Grand Total -->
+            <div class="settlement-card">
+                <div class="section-label">
+                    <span><i class="bi bi-receipt"></i> Bill Summary</span>
+                </div>
+                <div class="totals-block">
+                    <div class="total-row">
+                        <span class="lbl">Subtotal</span>
+                        <span class="val" id="tot-subtotal">₹0.00</span>
+                    </div>
+                    <div class="total-row discount">
+                        <span class="lbl">Discount</span>
+                        <span class="val" id="tot-discount">-₹0.00</span>
+                    </div>
+                    <div class="total-row">
+                        <span class="lbl">GST Taxes</span>
+                        <span class="val" id="tot-tax">₹0.00</span>
+                    </div>
+                </div>
+
+                <div class="grand-total-hero">
+                    <span class="grand-lbl">Grand Total</span>
+                    <span class="grand-val" id="tot-grand">₹0.00</span>
+                </div>
+            </div>
+
+            <!-- 4. Payment Tender Method -->
+            <div class="settlement-card" style="flex:1;">
+                <div class="section-label">
+                    <span><i class="bi bi-wallet2"></i> Payment Method</span>
+                </div>
+                <div class="payment-tabs-grid">
+                    <div class="pay-tab active" data-method="CASH" onclick="Cart.selectPayMethod('CASH')">
+                        <i class="bi bi-cash-stack"></i>
+                        <span>CASH</span>
+                    </div>
+                    <div class="pay-tab" data-method="UPI" onclick="Cart.selectPayMethod('UPI')">
+                        <i class="bi bi-qr-code-scan"></i>
+                        <span>UPI</span>
+                    </div>
+                    <div class="pay-tab" data-method="CARD" onclick="Cart.selectPayMethod('CARD')">
+                        <i class="bi bi-credit-card-fill"></i>
+                        <span>CARD</span>
+                    </div>
+                    <div class="pay-tab" data-method="CREDIT" onclick="Cart.selectPayMethod('CREDIT')">
+                        <i class="bi bi-person-vcard-fill"></i>
+                        <span>CREDIT</span>
+                    </div>
+                </div>
+
+                <div class="tender-input-wrap">
+                    <div class="tender-row">
+                        <label>Tender (₹)</label>
+                        <input type="number" id="pay-amount" min="0" step="0.01" placeholder="0.00" oninput="Cart.onPayAmountChange()">
+                    </div>
+                    <div class="quick-cash-row" id="quick-cash-chips">
+                        <button type="button" class="btn-qc" onclick="Cart.quickCash('exact')">Exact</button>
+                        <button type="button" class="btn-qc" onclick="Cart.quickCash(100)">₹100</button>
+                        <button type="button" class="btn-qc" onclick="Cart.quickCash(500)">₹500</button>
+                        <button type="button" class="btn-qc" onclick="Cart.quickCash(1000)">₹1,000</button>
+                    </div>
+
+                    <div class="ref-input" id="ref-input-wrap" style="display:none;margin-top:6px;">
+                        <input type="text" id="pay-ref" placeholder="Transaction ref / Auth code" style="width:100%;background:var(--surface-card);border:1px solid var(--border);border-radius:var(--radius-sm);padding:6px 10px;color:#fff;font-size:12px;outline:none;">
+                    </div>
+
+                    <!-- Dedicated UPI Payment Intent Panel -->
+                    <div id="upi-verification-box" style="display: none; background: var(--surface-card); border: 1px solid var(--border); border-radius: var(--radius-sm); padding: 12px; margin-top: 10px;">
+                        <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 8px;">
+                            <span style="font-size: 11px; font-weight: 700; color: #38bdf8; display: flex; align-items: center; gap: 5px;">
+                                <i class="bi bi-qr-code-scan"></i> UPI Payment Intent
+                            </span>
+                            <span id="upi-status-badge" style="background: rgba(245, 158, 11, 0.15); color: #f59e0b; border: 1px solid rgba(245, 158, 11, 0.3); font-size: 10px; font-weight: 700; padding: 2px 8px; border-radius: 12px;">
+                                ⏳ AWAITING PAYMENT
+                            </span>
+                        </div>
+
+                        <div style="display: flex; gap: 12px; align-items: center; margin-bottom: 10px;">
+                            <div style="background: #fff; padding: 5px; border-radius: 6px; flex-shrink: 0;">
+                                <img id="upi-qr-image" src="" alt="UPI QR" style="width: 88px; height: 88px; display: block;">
+                            </div>
+                            <div style="flex: 1; font-size: 11px;">
+                                <div style="color: var(--muted); margin-bottom: 2px;">Payable Amount:</div>
+                                <div id="upi-amount-display" style="font-size: 16px; font-weight: 800; color: #fff; margin-bottom: 4px;">₹0.00</div>
+                                <div style="color: var(--muted); font-size: 10px;">Scan with GPay, PhonePe, Paytm, BHIM.</div>
+                            </div>
+                        </div>
+
+                        <div style="margin-bottom: 8px;">
+                            <input type="text" id="upi-ref-input" placeholder="Enter UTR / UPI Ref (Optional for Demo)" style="width: 100%; padding: 6px 10px; background: var(--surface-2); border: 1px solid var(--border); border-radius: 4px; color: #fff; font-size: 11px; outline: none;">
+                        </div>
+
+                        <button type="button" id="btn-upi-mark-received" onclick="Cart.markUpiReceived()" style="width: 100%; padding: 7px 10px; background: rgba(16, 185, 129, 0.2); border: 1px solid rgba(16, 185, 129, 0.4); color: #34d399; border-radius: 6px; font-size: 11px; font-weight: 600; cursor: pointer; display: flex; align-items: center; justify-content: center; gap: 6px;">
+                            <i class="bi bi-shield-check"></i> Mark Payment Received (Demo / Cashier Verified)
+                        </button>
+                    </div>
+
+                    <div class="credit-alert-box" id="credit-info">
+                        <i class="bi bi-info-circle-fill"></i> Store credit requires a registered customer. Sale amount will be appended to their ledger balance.
+                    </div>
+                    <div class="inline-alert err" id="pay-error"></div>
+                </div>
+            </div>
+
+            <!-- 5. Settlement Action -->
+            <div class="settlement-footer">
+                <div id="global-alert" class="inline-alert err"></div>
+                <div id="global-success" class="inline-alert succ"></div>
+                <button type="button" class="btn-checkout" id="btn-checkout" onclick="Cart.checkout()">
+                    <i class="bi bi-check2-circle" style="font-size:19px;"></i>
+                    <span id="checkout-btn-text">Complete Sale</span>
+                </button>
+            </div>
+        </section>
+    </main>
+        </div>
+    </div>
+
+    <!-- Toast Notification -->
+    <div class="toast" id="toast"></div>
+
+    <!-- Hardware Scanner & POS Devices Diagnostics Modal -->
+    <div id="scanner-status-modal" style="display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.75); z-index: 9998; align-items: center; justify-content: center; padding: 16px;">
+        <div style="background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius-md); width: 100%; max-width: 480px; padding: 24px; box-shadow: 0 16px 40px rgba(0,0,0,0.5);">
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px;">
+                <h3 style="font-size: 16px; font-weight: 700; color: var(--text); margin: 0; display: flex; align-items: center; gap: 8px;">
+                    <i class="bi bi-upc-scan" style="color: #10b981;"></i> Scanner &amp; POS Devices
+                </h3>
+                <button type="button" onclick="Cart.closeScannerStatusModal()" style="background: none; border: none; font-size: 20px; color: var(--muted); cursor: pointer;">&times;</button>
+            </div>
+
+            <!-- Primary Scanner Status Card -->
+            <div style="background: var(--surface-2); border: 1px solid var(--border); border-radius: 8px; padding: 14px; margin-bottom: 14px;">
+                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
+                    <span style="font-size: 13px; font-weight: 700; color: #ffffff;">Primary Hardware Scanner</span>
+                    <span class="badge" style="background: rgba(16, 185, 129, 0.15); color: #34d399; border: 1px solid rgba(16, 185, 129, 0.3); font-size: 11px; padding: 3px 8px; border-radius: 12px; display: inline-flex; align-items: center; gap: 5px;">
+                        <span style="width: 6px; height: 6px; border-radius: 50%; background: #10b981;"></span> Ready / Listening
+                    </span>
+                </div>
+                <p style="font-size: 12px; color: var(--muted); margin-bottom: 10px; line-height: 1.4;">
+                    USB and Bluetooth HID keyboard barcode scanners operate with zero drivers. Keystrokes are buffered globally and automatically queried against inventory.
+                </p>
+
+                <!-- Hardware Scanner Test Input -->
+                <div style="margin-top: 10px;">
+                    <label style="font-size: 11px; font-weight: 600; color: #94a3b8; display: block; margin-bottom: 4px;">Hardware Test Scan</label>
+                    <div style="display: flex; gap: 8px;">
+                        <input type="text" id="modal-test-scanner-input" placeholder="Point scanner & scan test barcode..." style="flex: 1; padding: 8px 10px; background: var(--surface-2); border: 1.5px solid var(--border); border-radius: 6px; color: var(--text); font-size: 13px; font-family: var(--font-mono);">
+                        <button type="button" class="btn btn-secondary" onclick="Cart.testModalScannerInput()" style="padding: 8px 12px; font-size: 12px;">Test</button>
+                    </div>
+                    <div id="modal-test-scan-feedback" style="font-size: 11px; margin-top: 5px; color: var(--muted); display: none;"></div>
+                </div>
+
+                <div style="margin-top: 10px; padding-top: 8px; border-top: 1px dashed var(--border); display: flex; justify-content: space-between; font-size: 11px; color: var(--muted);">
+                    <span>Last Scanned Barcode:</span>
+                    <strong id="modal-last-scanned-val" style="color: var(--primary); font-family: var(--font-mono);">None yet</strong>
+                </div>
+            </div>
+
+            <!-- Backup Scanner Card -->
+            <div style="background: var(--surface-2); border: 1px solid var(--border); border-radius: 8px; padding: 12px; margin-bottom: 16px;">
+                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px;">
+                    <span style="font-size: 12px; font-weight: 700; color: var(--primary);">Backup Scanner: Phone Companion</span>
+                    <span style="font-size: 10px; background: var(--primary-soft); color: var(--primary-strong); padding: 2px 6px; border-radius: 4px;">Optional Fallback</span>
+                </div>
+                <p style="font-size: 11px; color: var(--muted); margin-bottom: 10px; line-height: 1.4;">
+                    If physical USB/BT scanner is not connected, pair a smartphone on the local network. (Note: mobile camera stream requires HTTPS; manual input fallback is provided).
+                </p>
+                <button type="button" class="btn btn-secondary" onclick="Cart.closeScannerStatusModal(); Cart.openPhoneScannerModal();" style="width: 100%; font-size: 12px; padding: 7px; display: flex; align-items: center; justify-content: center; gap: 6px;">
+                    <i class="bi bi-qr-code-scan"></i> Pair Backup Phone Scanner
+                </button>
+            </div>
+
+            <div style="display: flex; justify-content: space-between; align-items: center;">
+                {% if user_role != "Cashier" %}
+                <a href="{% url 'settings_scanner' %}" class="btn btn-secondary" style="font-size: 12px; padding: 6px 12px; text-decoration: none; display: inline-flex; align-items: center; gap: 5px;">
+                    <i class="bi bi-gear"></i> Store Scanner Settings
+                </a>
+                {% else %}
+                <span></span>
+                {% endif %}
+                <button type="button" class="btn btn-secondary" onclick="Cart.closeScannerStatusModal()" style="font-size: 12px; padding: 6px 16px;">Close</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Unknown Barcode / Product Not Found Modal (Supermarket / DMart Style) -->
+    <div id="unknown-barcode-modal" style="display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.8); z-index: 10000; align-items: center; justify-content: center; padding: 16px;">
+        <div style="background: var(--surface); border: 1px solid rgba(239, 68, 68, 0.3); border-radius: var(--radius-md); width: 100%; max-width: 420px; padding: 24px; text-align: center; box-shadow: 0 16px 48px rgba(0,0,0,0.7);">
+            <div style="width: 54px; height: 54px; border-radius: 50%; background: rgba(239, 68, 68, 0.15); border: 1px solid rgba(239, 68, 68, 0.35); display: flex; align-items: center; justify-content: center; color: var(--danger); font-size: 26px; margin: 0 auto 16px;">
+                <i class="bi bi-exclamation-triangle-fill"></i>
+            </div>
+            <h3 style="font-size: 18px; font-weight: 800; color: var(--text); margin-bottom: 6px; letter-spacing: 0.5px;">PRODUCT NOT FOUND</h3>
+            <p style="font-size: 13px; color: var(--muted); margin-bottom: 16px; line-height: 1.4;">
+                This barcode is not registered in the store catalog or has been deactivated.
+            </p>
+            
+            <div style="background: var(--surface-2); border: 1px solid var(--border); border-radius: 8px; padding: 12px; margin-bottom: 20px;">
+                <div style="font-size: 11px; text-transform: uppercase; font-weight: 700; color: var(--muted); margin-bottom: 4px;">Scanned Barcode</div>
+                <div id="unknown-barcode-val" style="font-size: 20px; font-weight: 800; color: #f87171; font-family: var(--font-mono); letter-spacing: 1.5px;">UNKNOWN</div>
+            </div>
+
+            <div style="display: flex; gap: 10px; justify-content: center;">
+                <button type="button" class="btn btn-primary" onclick="Cart.onUnknownBarcodeManualEntry()" style="flex: 1; padding: 10px 14px; font-weight: 600; display: inline-flex; align-items: center; justify-content: center; gap: 6px;">
+                    <i class="bi bi-arrow-repeat"></i> Try Again
+                </button>
+                <button type="button" class="btn btn-secondary" onclick="Cart.openProductSearchFromUnknown()" style="flex: 1; padding: 10px 14px; font-weight: 600; display: inline-flex; align-items: center; justify-content: center; gap: 6px;">
+                    <i class="bi bi-search"></i> Open Product Search
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Dedicated F2 Product & Barcode Search Overlay (POS Terminal Only) -->
+    <div id="pos-search-overlay" style="display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.65); z-index: 9999; align-items: flex-start; justify-content: center; padding: 60px 16px 20px; backdrop-filter: blur(4px);">
+        <div class="pos-search-dialog" style="background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius-md); width: 100%; max-width: 650px; padding: 22px 24px; box-shadow: 0 20px 48px rgba(0,0,0,0.35); max-height: 85vh; display: flex; flex-direction: column;">
+            
+            <!-- Header -->
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 14px;">
+                <div style="display: flex; align-items: center; gap: 8px;">
+                    <i class="bi bi-upc-scan" style="color: var(--primary); font-size: 18px;"></i>
+                    <h3 style="font-size: 16px; font-weight: 700; color: var(--text); margin: 0;">Product &amp; Barcode Search</h3>
+                </div>
+                <div style="display: flex; align-items: center; gap: 8px;">
+                    <span style="font-size: 11px; color: var(--muted); background: var(--surface-2); padding: 2px 7px; border-radius: 4px; border: 1px solid var(--border);"><kbd style="font-family: inherit;">Esc</kbd> to close</span>
+                    <button type="button" onclick="Cart.closeProductSearchOverlay()" aria-label="Close search overlay" style="background: none; border: none; font-size: 20px; color: var(--muted); cursor: pointer; line-height: 1; padding: 0 4px;">&times;</button>
+                </div>
+            </div>
+
+            <!-- Search Input Box -->
+            <div style="margin-bottom: 14px;">
+                <label for="pos-search-overlay-input" style="display: block; font-size: 12px; font-weight: 600; color: var(--text); margin-bottom: 6px;">
+                    Search product name, SKU or barcode
+                </label>
+                <div style="position: relative; display: flex; align-items: center;">
+                    <i class="bi bi-search" style="position: absolute; left: 12px; color: var(--muted); font-size: 14px;"></i>
+                    <input type="text"
+                           id="pos-search-overlay-input"
+                           placeholder="Search product name, SKU or barcode"
+                           autocomplete="off"
+                           style="width: 100%; padding: 10px 80px 10px 36px; background: var(--surface-2); border: 1.5px solid var(--border); border-radius: var(--radius-sm); color: var(--text); font-size: 14px; font-weight: 500; outline: none; transition: border-color var(--transition);">
+                    <button type="button" id="btn-pos-search-submit" onclick="Cart.submitOverlaySearch()" style="position: absolute; right: 8px; padding: 5px 12px; font-size: 11px; font-weight: 700; background: var(--primary); color: #ffffff; border: none; border-radius: 4px; cursor: pointer;">
+                        Search <kbd style="font-family: inherit; font-size: 10px; opacity: 0.9;">↵</kbd>
+                    </button>
+                </div>
+            </div>
+
+            <!-- Manual Barcode Fallback / Quick Actions -->
+            <div style="display: flex; justify-content: space-between; align-items: center; font-size: 11px; color: var(--muted); margin-bottom: 12px; padding-bottom: 10px; border-bottom: 1px solid var(--border);">
+                <span>Tip: Enter exact barcode or SKU and press <kbd style="background: var(--surface-2); padding: 1px 4px; border-radius: 3px; border: 1px solid var(--border);">Enter</kbd> to add directly.</span>
+                <span id="pos-search-count-hint" style="color: var(--primary); font-weight: 600;"></span>
+            </div>
+
+            <!-- Results List / Scrollable -->
+            <div id="pos-search-results-container" style="flex: 1; overflow-y: auto; max-height: 380px; display: flex; flex-direction: column; gap: 6px; padding-right: 4px;">
+                <!-- Populated dynamically via JS -->
+            </div>
+
+            <!-- Empty / Error state -->
+            <div id="pos-search-empty-state" style="display: none; padding: 24px 16px; text-align: center; color: var(--muted); font-size: 13px;">
+                <i class="bi bi-exclamation-circle" style="font-size: 24px; color: var(--warning); display: block; margin-bottom: 6px;"></i>
+                <div id="pos-search-empty-text">No matching products found.</div>
+            </div>
+
+        </div>
+    </div>
+
+    <!-- Phone Camera Scanner Companion Modal (Optional Backup) -->
+    <div id="phone-scanner-modal" style="display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.8); z-index: 9999; align-items: center; justify-content: center; padding: 16px;">
+        <div style="background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius-md); width: 100%; max-width: 480px; padding: 22px; text-align: center; box-shadow: 0 16px 40px rgba(0,0,0,0.6);">
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px;">
+                <div style="text-align: left;">
+                    <h3 style="font-size: 15px; font-weight: 700; color: #ffffff; margin: 0; display: flex; align-items: center; gap: 8px;">
+                        <i class="bi bi-phone" style="color: #38bdf8;"></i> Phone Camera Scanner <span style="font-size: 10px; background: rgba(245, 158, 11, 0.15); color: #fbbf24; border: 1px solid rgba(245, 158, 11, 0.3); padding: 1px 6px; border-radius: 4px;">BACKUP</span>
+                    </h3>
+                    <p style="font-size: 11px; color: var(--muted); margin: 2px 0 0 0;">Scan QR on mobile or open the LAN URL below.</p>
+                </div>
+                <button type="button" onclick="Cart.closePhoneScannerModal()" style="background: none; border: none; font-size: 20px; color: var(--muted); cursor: pointer; padding: 4px;">&times;</button>
+            </div>
+
+            <!-- QR Code Box -->
+            <div style="background: #ffffff; padding: 10px; border-radius: 12px; display: inline-block; margin: 6px auto 12px;">
+                <img id="scanner-qr-img" src="" alt="Pairing QR" style="width: 160px; height: 160px; display: block; border-radius: 4px;">
+            </div>
+
+            <!-- Debuggable Phone Scanner URL Panel -->
+            <div style="background: var(--surface-2); border: 1px solid var(--border); border-radius: 8px; padding: 10px 12px; margin-bottom: 12px; text-align: left;">
+                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 4px;">
+                    <span style="font-size: 10px; font-weight: 700; color: var(--muted); text-transform: uppercase; letter-spacing: 0.5px;">Phone Scanner URL (LAN Reachable)</span>
+                    <span id="scanner-url-source-badge" style="font-size: 9px; background: var(--surface-card); color: #38bdf8; border: 1px solid var(--border); padding: 1px 6px; border-radius: 4px;">LAN IP</span>
+                </div>
+                <div id="scanner-lan-url-display" style="font-size: 12px; font-family: var(--font-mono); color: #34d399; word-break: break-all; margin-bottom: 8px; user-select: all; line-height: 1.4;">
+                    Generating LAN URL...
+                </div>
+                <div style="display: flex; gap: 8px; flex-wrap: wrap;">
+                    <button type="button" id="btn-copy-scanner-url" onclick="Cart.copyScannerUrl()" class="btn btn-secondary" style="font-size: 11px; padding: 5px 10px; display: inline-flex; align-items: center; gap: 5px;">
+                        <i class="bi bi-clipboard"></i> <span>Copy URL</span>
+                    </button>
+                    <button type="button" onclick="Cart.regenerateScannerQR()" class="btn btn-secondary" style="font-size: 11px; padding: 5px 10px; display: inline-flex; align-items: center; gap: 5px;">
+                        <i class="bi bi-arrow-clockwise"></i> <span>Regenerate QR</span>
+                    </button>
+                    <a id="btn-open-scanner-local" href="#" target="_blank" rel="noopener noreferrer" class="btn btn-secondary" style="font-size: 11px; padding: 5px 10px; display: inline-flex; align-items: center; gap: 5px; text-decoration: none;">
+                        <i class="bi bi-box-arrow-up-right"></i> <span>Test on PC</span>
+                    </a>
+                </div>
+            </div>
+
+            <!-- Explicit Session Lifecycle State Box -->
+            <div style="background: var(--surface-2); border: 1px solid var(--border); border-radius: 8px; padding: 12px; margin-bottom: 14px;">
+                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px;">
+                    <span style="font-size: 10px; font-weight: 700; color: var(--muted); text-transform: uppercase;">Pairing Lifecycle State</span>
+                    <span id="scanner-lifecycle-badge" style="font-size: 10px; font-weight: 700; padding: 3px 10px; border-radius: 12px; background: rgba(245, 158, 11, 0.15); color: #fbbf24; border: 1px solid rgba(245, 158, 11, 0.3); display: inline-flex; align-items: center; gap: 6px;">
+                        <span class="pulse-dot" style="width: 6px; height: 6px; border-radius: 50%; background: #f59e0b; display: inline-block;"></span>
+                        WAITING FOR PHONE
+                    </span>
+                </div>
+                <div id="scanner-status-text" style="font-size: 12px; color: var(--text-muted); line-height: 1.4;">
+                    Point your physical phone camera at the QR code above or type the LAN URL into mobile browser.
+                </div>
+                <div id="scanner-device-info-bar" style="font-size: 11px; color: var(--muted); margin-top: 4px; display: none;"></div>
+            </div>
+
+            <div style="background: rgba(59, 130, 246, 0.06); border: 1px solid rgba(59, 130, 246, 0.2); border-radius: 6px; padding: 8px 10px; font-size: 11px; color: #93c5fd; margin-bottom: 14px; text-align: left; display: flex; align-items: flex-start; gap: 8px;">
+                <i class="bi bi-info-circle-fill" style="margin-top: 1px;"></i>
+                <div>
+                    <strong>Wi-Fi Network Check:</strong> Phone and PC must be connected to the same Wi-Fi router. If phone shows <em>"This site can't be reached"</em>, ensure server was started with <code style="color:#fff;">0.0.0.0:8000</code> and Windows Firewall allows port 8000.
+                </div>
+            </div>
+
+            <div style="display: flex; gap: 10px; justify-content: flex-end;">
+                <button type="button" class="btn btn-secondary" onclick="Cart.closePhoneScannerModal()" style="font-size: 12px; padding: 7px 16px;">Close</button>
+                <button type="button" class="btn btn-danger" onclick="Cart.disconnectPhoneScanner()" style="background: rgba(220, 38, 38, 0.15); border: 1px solid rgba(220, 38, 38, 0.3); color: #f87171; font-size: 12px; padding: 7px 16px;">Disconnect Session</button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const POS_CONFIG = {
+            apiBase: '/api/',
+            checkoutUrl: '/api/sales/checkout/',
+            quoteUrl: '/api/sales/quote/',
+            productsUrl: '/api/products/',
+            categoriesUrl: '/api/categories/',
+            customersUrl: '/api/customers/',
+            csrfToken: document.getElementById('csrf-token').value,
+            userRole: '{{ user_role|escapejs }}',
+        };
+    </script>
+    <script src="{% static 'sales/js/cart.js' %}?v=2.1"></script>
+</body>
+</html>

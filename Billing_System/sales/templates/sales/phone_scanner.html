@@ -1,0 +1,481 @@
+{% load static %}
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>POS Phone Scanner — {% if company %}{{ company.company_name }}{% else %}Terminal{% endif %}</title>
+    <meta name="description" content="Mobile phone camera barcode scanner companion for retail POS terminal.">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@500;600&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css">
+    <link rel="stylesheet" href="{% static 'dashboard/css/theme.css' %}">
+    <script src="{% static 'dashboard/js/theme.js' %}"></script>
+    <script src="https://unpkg.com/@zxing/library@0.21.3/umd/index.min.js"></script>
+    <style>
+        *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+        body {
+            font-family: 'Inter', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+            background: #090d16;
+            color: #f1f5f9;
+            min-height: 100vh;
+            display: flex;
+            flex-direction: column;
+            overflow-x: hidden;
+            touch-action: manipulation;
+        }
+        .scanner-header {
+            background: #0f172a;
+            border-bottom: 1px solid #1e293b;
+            padding: 12px 16px;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+        }
+        .scanner-brand {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+        .scanner-brand i {
+            color: #10b981;
+            font-size: 20px;
+        }
+        .scanner-brand h1 {
+            font-size: 15px;
+            font-weight: 700;
+            color: #ffffff;
+        }
+        .scanner-brand p {
+            font-size: 11px;
+            color: #94a3b8;
+        }
+        .conn-badge {
+            font-size: 11px;
+            font-weight: 600;
+            padding: 4px 10px;
+            border-radius: 20px;
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+        }
+        .conn-badge.active {
+            background: rgba(16, 185, 129, 0.15);
+            color: #34d399;
+            border: 1px solid rgba(16, 185, 129, 0.3);
+        }
+        .conn-badge.inactive {
+            background: rgba(239, 68, 68, 0.15);
+            color: #f87171;
+            border: 1px solid rgba(239, 68, 68, 0.3);
+        }
+        .pulse-dot {
+            width: 7px;
+            height: 7px;
+            border-radius: 50%;
+            background: currentColor;
+            display: inline-block;
+            animation: pulse 1.5s infinite;
+        }
+        @keyframes pulse {
+            0%, 100% { opacity: 1; transform: scale(1); }
+            50% { opacity: 0.4; transform: scale(0.85); }
+        }
+        .viewport-wrap {
+            position: relative;
+            flex: 1;
+            min-height: 280px;
+            background: #000;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            overflow: hidden;
+        }
+        #scanner-video {
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+        }
+        .reticle-box {
+            position: absolute;
+            width: 250px;
+            height: 170px;
+            border: 2px solid rgba(16, 185, 129, 0.8);
+            border-radius: 14px;
+            box-shadow: 0 0 0 4000px rgba(0, 0, 0, 0.5);
+            pointer-events: none;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+        .laser-line {
+            width: 90%;
+            height: 2px;
+            background: #10b981;
+            box-shadow: 0 0 8px #10b981;
+            animation: scanLaser 2s infinite ease-in-out;
+        }
+        @keyframes scanLaser {
+            0%, 100% { transform: translateY(-60px); opacity: 0.3; }
+            50% { transform: translateY(60px); opacity: 1; }
+        }
+        .controls-card {
+            background: #0f172a;
+            border-top: 1px solid #1e293b;
+            padding: 16px;
+            display: flex;
+            flex-direction: column;
+            gap: 12px;
+        }
+        .manual-input-row {
+            display: flex;
+            gap: 8px;
+        }
+        .manual-input-row input {
+            flex: 1;
+            padding: 12px;
+            background: #1e293b;
+            border: 1px solid #334155;
+            border-radius: 8px;
+            color: #ffffff;
+            font-size: 14px;
+            outline: none;
+        }
+        .manual-input-row button {
+            padding: 12px 18px;
+            background: #10b981;
+            border: none;
+            border-radius: 8px;
+            color: #ffffff;
+            font-weight: 600;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            gap: 6px;
+        }
+        .toast-banner {
+            padding: 10px 14px;
+            border-radius: 8px;
+            font-size: 13px;
+            display: none;
+            animation: fadeIn 0.15s ease-out;
+        }
+        .toast-banner.success {
+            background: rgba(16, 185, 129, 0.15);
+            color: #34d399;
+            border: 1px solid rgba(16, 185, 129, 0.3);
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+        .toast-banner.error {
+            background: rgba(239, 68, 68, 0.15);
+            color: #f87171;
+            border: 1px solid rgba(239, 68, 68, 0.3);
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+        .recent-scans-list {
+            max-height: 120px;
+            overflow-y: auto;
+            display: flex;
+            flex-direction: column;
+            gap: 6px;
+        }
+        .recent-scan-pill {
+            background: #1e293b;
+            padding: 6px 10px;
+            border-radius: 6px;
+            font-size: 12px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            font-family: 'JetBrains Mono', monospace;
+        }
+    </style>
+</head>
+<body>
+    <header class="scanner-header">
+        <div class="scanner-brand">
+            <i class="bi bi-phone-vibrate" style="color: #38bdf8;"></i>
+            <div>
+                <h1>{% if company %}{{ company.company_name }}{% else %}POS Scanner{% endif %}</h1>
+                <p><span style="color:#f59e0b;font-weight:700;font-size:10px;background:rgba(245,158,11,0.15);padding:1px 6px;border-radius:4px;border:1px solid rgba(245,158,11,0.3);margin-right:4px;">BACKUP SCANNER</span> {{ terminal_id|default:"Terminal POS-001" }}</p>
+            </div>
+        </div>
+        <div id="conn-status" class="conn-badge {% if session and session.is_valid %}active{% else %}inactive{% endif %}">
+            <span class="pulse-dot"></span>
+            <span id="conn-text">{% if session and session.is_valid %}Paired to {{ terminal_id|default:"POS-001" }}{% else %}Disconnected{% endif %}</span>
+        </div>
+    </header>
+
+    {% if not session or not session.is_valid %}
+    <div style="background: rgba(245, 158, 11, 0.12); border-bottom: 1px solid rgba(245, 158, 11, 0.3); padding: 12px 16px; text-align: center;">
+        <div style="font-size: 13px; font-weight: 700; color: #fbbf24; margin-bottom: 4px;">Pair with POS Terminal</div>
+        <p style="font-size: 11px; color: #cbd5e1; margin-bottom: 8px;">Enter the 6-digit code shown in POS Settings &rarr; Scanner &amp; POS Devices:</p>
+        <form method="GET" style="display: flex; gap: 8px; justify-content: center; max-width: 320px; margin: 0 auto;">
+            <input type="text" name="code" placeholder="e.g. 123-456" maxlength="12" style="flex: 1; padding: 8px 12px; background: #0f172a; border: 1px solid #475569; border-radius: 6px; color: #fff; text-align: center; font-family: 'JetBrains Mono', monospace; font-size: 15px; font-weight: 700; text-transform: uppercase; outline: none;">
+            <button type="submit" style="padding: 8px 16px; font-size: 12px; font-weight: 700; background: #10b981; border: none; border-radius: 6px; color: #fff; cursor: pointer;">Connect</button>
+        </form>
+    </div>
+    {% endif %}
+
+    <div class="viewport-wrap" id="viewport-wrap">
+        <video id="scanner-video" playsinline muted autoplay></video>
+        <div class="reticle-box" id="reticle-box">
+            <div class="laser-line"></div>
+        </div>
+        <!-- Insecure Context / Camera Permission Notice -->
+        <div id="camera-notice" style="display: none; position: absolute; inset: 0; background: rgba(15, 23, 42, 0.94); z-index: 10; padding: 24px; text-align: center; flex-direction: column; justify-content: center; align-items: center; gap: 12px;">
+            <div style="width: 48px; height: 48px; border-radius: 50%; background: rgba(245, 158, 11, 0.15); border: 1px solid rgba(245, 158, 11, 0.3); display: flex; align-items: center; justify-content: center; color: #f59e0b; font-size: 24px;">
+                <i class="bi bi-camera-video-off"></i>
+            </div>
+            <h2 style="font-size: 15px; font-weight: 700; color: #ffffff;" id="camera-notice-title">Camera Blocked by Browser (HTTP)</h2>
+            <p style="font-size: 12px; color: #94a3b8; max-width: 320px; line-height: 1.5;" id="camera-notice-desc">
+                Physical phone browsers (Safari / Chrome) strictly require <strong>HTTPS</strong> to allow hardware camera access over Wi-Fi.
+            </p>
+            <div style="background: #1e293b; border: 1px solid #334155; border-radius: 8px; padding: 10px 14px; font-size: 12px; color: #38bdf8; max-width: 320px;">
+                💡 <strong>Manual Barcode Input:</strong> Type or paste any barcode below to instantly add it to the cashier cart.
+            </div>
+        </div>
+    </div>
+
+    <div class="controls-card">
+        <div id="toast" class="toast-banner"></div>
+
+        <div class="manual-input-row">
+            <input type="text" id="manual-barcode" placeholder="Scan or enter Barcode / SKU...">
+            <button type="button" id="btn-send-manual">
+                <i class="bi bi-send-fill"></i> Send
+            </button>
+        </div>
+
+        <div style="display: flex; justify-content: space-between; align-items: center;">
+            <span style="font-size: 11px; font-weight: 700; color: #94a3b8; text-transform: uppercase;">Recent Scans</span>
+            <button type="button" id="btn-toggle-cam" style="background: none; border: none; color: #38bdf8; font-size: 12px; cursor: pointer;">
+                <i class="bi bi-arrow-repeat"></i> Switch Camera
+            </button>
+        </div>
+
+        <div class="recent-scans-list" id="recent-scans">
+            <div style="font-size: 11px; color: #64748b; text-align: center; padding: 6px;">
+                No barcodes scanned yet
+            </div>
+        </div>
+    </div>
+
+    <script>
+        (function() {
+            const urlParams = new URLSearchParams(window.location.search);
+            const sessionToken = urlParams.get('session') || '{{ session.session_token|default:"" }}';
+            const toast = document.getElementById('toast');
+            const recentList = document.getElementById('recent-scans');
+            const manualInput = document.getElementById('manual-barcode');
+            const manualBtn = document.getElementById('btn-send-manual');
+            const videoElem = document.getElementById('scanner-video');
+            const switchCamBtn = document.getElementById('btn-toggle-cam');
+            
+            let codeReader = null;
+            let currentFacing = 'environment';
+            let recentScans = [];
+            let isCooldown = false;
+
+            function showToast(msg, isSuccess = true) {
+                toast.className = 'toast-banner ' + (isSuccess ? 'success' : 'error');
+                toast.innerHTML = `<i class="bi bi-${isSuccess ? 'check-circle-fill' : 'exclamation-circle-fill'}"></i> <span>${msg}</span>`;
+                toast.style.display = 'flex';
+                setTimeout(() => { toast.style.display = 'none'; }, 3000);
+            }
+
+            function addRecent(code) {
+                recentScans.unshift({ code, time: new Date().toLocaleTimeString() });
+                if (recentScans.length > 5) recentScans.pop();
+                recentList.innerHTML = recentScans.map(s => `
+                    <div class="recent-scan-pill">
+                        <span><i class="bi bi-upc"></i> ${s.code}</span>
+                        <span style="color: #94a3b8; font-size: 10px;">${s.time}</span>
+                    </div>
+                `).join('');
+            }
+
+            function sendBarcodeToPOS(code) {
+                if (!sessionToken) {
+                    showToast('Error: No active POS pairing session.', false);
+                    return;
+                }
+                if (!code || isCooldown) return;
+                
+                isCooldown = true;
+                setTimeout(() => { isCooldown = false; }, 1200);
+
+                if (navigator.vibrate) navigator.vibrate(120);
+
+                fetch(`/api/pos/scanner-session/${encodeURIComponent(sessionToken)}/scan/`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        barcode: code,
+                        device_info: navigator.userAgent.slice(0, 80)
+                    })
+                })
+                .then(r => r.json())
+                .then(data => {
+                    if (data.success) {
+                        showToast(`Sent "${code}" to POS Terminal!`, true);
+                        addRecent(code);
+                        if (manualInput) manualInput.value = '';
+                    } else {
+                        showToast(data.error || 'Failed to send barcode.', false);
+                    }
+                })
+                .catch(err => {
+                    console.error('Scan send error:', err);
+                    showToast('Connection error sending barcode.', false);
+                });
+            }
+
+            manualBtn.addEventListener('click', () => {
+                const val = manualInput.value.trim();
+                if (val) sendBarcodeToPOS(val);
+            });
+            manualInput.addEventListener('keydown', (e) => {
+                if (e.key === 'Enter') {
+                    e.preventDefault();
+                    const val = manualInput.value.trim();
+                    if (val) sendBarcodeToPOS(val);
+                }
+            });
+
+            function showCameraNotice(title, desc) {
+                const notice = document.getElementById('camera-notice');
+                const reticle = document.getElementById('reticle-box');
+                if (notice) {
+                    if (title) document.getElementById('camera-notice-title').textContent = title;
+                    if (desc) document.getElementById('camera-notice-desc').innerHTML = desc;
+                    notice.style.display = 'flex';
+                }
+                if (reticle) reticle.style.display = 'none';
+                if (manualInput) manualInput.focus();
+            }
+
+            function sendHeartbeat() {
+                if (!sessionToken) return;
+                fetch(`/api/pos/scanner-session/${encodeURIComponent(sessionToken)}/scan/`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        heartbeat: true,
+                        device_info: (navigator.userAgent.includes('Mobile') ? 'Mobile Phone' : 'Companion Browser') + ' (' + (navigator.userAgent.slice(0, 35)) + ')'
+                    })
+                })
+                .then(r => r.json())
+                .then(data => {
+                    const badge = document.getElementById('conn-status');
+                    const txt = document.getElementById('conn-text');
+                    if (data.success) {
+                        if (badge) badge.className = 'conn-badge active';
+                        if (txt) txt.textContent = 'Paired to POS';
+                    }
+                })
+                .catch(err => {
+                    const badge = document.getElementById('conn-status');
+                    const txt = document.getElementById('conn-text');
+                    if (badge) badge.className = 'conn-badge inactive';
+                    if (txt) txt.textContent = 'Disconnected';
+                });
+            }
+
+            async function startCamera() {
+                // Check if context is secure (HTTPS or localhost)
+                const isLocal = location.hostname === 'localhost' || location.hostname === '127.0.0.1';
+                if (!window.isSecureContext && !isLocal) {
+                    console.warn('Camera blocked: insecure HTTP context on mobile/remote host.');
+                    showCameraNotice(
+                        'Camera Blocked by Browser (HTTP)',
+                        'Mobile browsers (Chrome &amp; Safari) strictly require <strong>HTTPS</strong> to access phone camera hardware over Wi-Fi.<br><br>Use the <strong>Manual Barcode Input</strong> below to send scans directly to the POS terminal.'
+                    );
+                    return;
+                }
+
+                try {
+                    if (window.ZXing) {
+                        codeReader = new ZXing.BrowserMultiFormatReader();
+                        const videoInputDevices = await codeReader.listVideoInputDevices();
+                        
+                        if (!videoInputDevices || videoInputDevices.length === 0) {
+                            showCameraNotice('No Camera Found', 'No camera hardware detected on this device. Use manual input below.');
+                            return;
+                        }
+
+                        let selectedDeviceId = undefined;
+                        if (videoInputDevices.length > 1) {
+                            const backCam = videoInputDevices.find(d => 
+                                d.label.toLowerCase().includes('back') || 
+                                d.label.toLowerCase().includes('rear') || 
+                                d.label.toLowerCase().includes('environment')
+                            );
+                            if (backCam) selectedDeviceId = backCam.deviceId;
+                        }
+
+                        codeReader.decodeFromVideoDevice(selectedDeviceId, 'scanner-video', (result, err) => {
+                            if (result && result.getText()) {
+                                sendBarcodeToPOS(result.getText().trim());
+                            }
+                        });
+                    } else if (navigator.mediaDevices && navigator.mediaDevices.getUserMedia) {
+                        const stream = await navigator.mediaDevices.getUserMedia({
+                            video: { facingMode: currentFacing }
+                        });
+                        videoElem.srcObject = stream;
+                    } else {
+                        showCameraNotice(
+                            'Camera API Unavailable (HTTP)',
+                            'Hardware camera stream is not supported over insecure HTTP. Use manual input below.'
+                        );
+                    }
+                } catch (e) {
+                    console.warn('Camera initiation fallback:', e);
+                    if (e.name === 'NotAllowedError' || e.name === 'PermissionDeniedError') {
+                        showCameraNotice('Camera Permission Denied', 'Camera permission was denied in your phone browser settings. Please allow camera permissions or use manual entry below.');
+                    } else if (e.name === 'NotFoundError' || e.name === 'DevicesNotFoundError') {
+                        showCameraNotice('No Camera Detected', 'No camera hardware detected on this device. Use manual input below.');
+                    } else {
+                        showCameraNotice(
+                            'Camera Blocked (HTTP / Insecure Context)',
+                            `Phone camera access could not be initialized (${e.name || 'Error'}). Mobile browsers require HTTPS over network. Use manual barcode input below.`
+                        );
+                    }
+                    showToast('Camera unavailable. Manual input ready.', false);
+                }
+            }
+
+            switchCamBtn.addEventListener('click', () => {
+                if (codeReader) {
+                    codeReader.reset();
+                    currentFacing = currentFacing === 'environment' ? 'user' : 'environment';
+                    startCamera();
+                }
+            });
+
+            document.addEventListener('DOMContentLoaded', () => {
+                sendHeartbeat();
+                startCamera();
+
+                // Maintain active companion pairing via periodic heartbeats
+                setInterval(sendHeartbeat, 3000);
+
+                // Notify terminal immediately on tab close or navigation
+                const notifyDisconnect = () => {
+                    if (sessionToken && navigator.sendBeacon) {
+                        navigator.sendBeacon(`/api/pos/scanner-session/${encodeURIComponent(sessionToken)}/disconnect/`);
+                    }
+                };
+                window.addEventListener('pagehide', notifyDisconnect);
+                window.addEventListener('beforeunload', notifyDisconnect);
+            });
+        })();
+    </script>
+</body>
+</html>
