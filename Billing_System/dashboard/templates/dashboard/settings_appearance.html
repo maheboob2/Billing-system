@@ -1,0 +1,147 @@
+{% extends "dashboard/main_nav.html" %}
+{% load static %}
+
+{% block content %}
+<div class="settings-wrap" style="max-width: 900px; margin: 24px auto; padding: 0 16px;">
+    
+    <!-- Header -->
+    <div style="margin-bottom: 20px;">
+        <h1 style="font-size: 22px; font-weight: 700; color: var(--text); margin: 0 0 4px 0;">Settings</h1>
+        <p style="margin: 0; font-size: 13px; color: var(--muted);">Customize theme colors, design tokens, and surface contrast.</p>
+    </div>
+
+    <!-- Navigation Tabs -->
+    <div style="display: flex; gap: 8px; border-bottom: 1px solid var(--border); margin-bottom: 24px; overflow-x: auto;">
+        <a href="{% url 'settings_general' %}" class="settings-tab">
+            <i class="bi bi-gear-fill"></i> General
+        </a>
+        <a href="{% url 'settings_appearance' %}" class="settings-tab active" aria-current="page">
+            <i class="bi bi-palette-fill"></i> Appearance
+        </a>
+        <a href="{% url 'settings_scanner' %}" class="settings-tab">
+            <i class="bi bi-upc-scan"></i> Scanner & POS Devices
+        </a>
+        {% if is_owner %}
+        <a href="{% url 'settings_company' %}" class="settings-tab">
+            <i class="bi bi-building"></i> Company Profile
+        </a>
+        <a href="{% url 'settings_telegram' %}" class="settings-tab">
+            <i class="bi bi-telegram"></i> Telegram Bot & Sync
+        </a>
+        {% endif %}
+    </div>
+
+    <!-- Appearance Configuration -->
+    <div style="background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius-md); padding: 24px; margin-bottom: 24px;">
+        <div style="margin-bottom: 24px;">
+            <h3 style="font-size: 15px; font-weight: 700; color: var(--text); margin: 0 0 6px 0;">Color Themes</h3>
+            <p style="margin: 0 0 16px 0; font-size: 13px; color: var(--muted); line-height: 1.5;">
+                Select a curated color palette for the application. Theme changes update navigation, buttons, active tabs, badges, cards, charts, focused controls and primary actions with smooth transitions.
+            </p>
+
+            <!-- Appearance UI Grid -->
+            <div class="appearance-grid" style="margin-bottom: 20px;">
+                <button type="button" data-theme-option="ash">Ash</button>
+                <button type="button" data-theme-option="forest">Forest</button>
+                <button type="button" data-theme-option="ocean">Ocean</button>
+                <button type="button" data-theme-option="plum">Plum</button>
+                <button type="button" data-theme-option="amber">Amber</button>
+            </div>
+        </div>
+
+        <hr style="border: 0; border-top: 1px solid var(--border); margin: 24px 0;">
+
+        <!-- Surface Contrast Mode (Light / Dark) -->
+        <div>
+            <h3 style="font-size: 15px; font-weight: 700; color: var(--text); margin: 0 0 6px 0;">Surface Contrast Mode</h3>
+            <p style="margin: 0 0 16px 0; font-size: 13px; color: var(--muted);">
+                Switch between clean daytime surfaces and low-light cashier-friendly dark mode.
+            </p>
+
+
+            <div style="display: flex; gap: 12px; align-items: center;">
+                <button type="button" id="btn-mode-light" class="btn btn-secondary mode-btn" style="padding: 10px 18px; font-size: 13px;">
+                    <i class="bi bi-sun-fill" style="color: #f59e0b;"></i> Light Mode
+                </button>
+                <button type="button" id="btn-mode-dark" class="btn btn-secondary mode-btn" style="padding: 10px 18px; font-size: 13px;">
+                    <i class="bi bi-moon-stars-fill" style="color: #6366f1;"></i> Dark Mode
+                </button>
+            </div>
+        </div>
+    </div>
+
+</div>
+
+<script>
+document.addEventListener("DOMContentLoaded", () => {
+  const currentMode = document.documentElement.getAttribute('data-mode') || 'light';
+  const currentTheme = document.documentElement.getAttribute('data-theme') || 'forest';
+  const btnLight = document.getElementById("btn-mode-light");
+  const btnDark = document.getElementById("btn-mode-dark");
+
+  function syncModeButtons(mode) {
+    if (btnLight) {
+      btnLight.classList.toggle('active', mode === 'light');
+      btnLight.setAttribute('aria-pressed', mode === 'light' ? 'true' : 'false');
+    }
+    if (btnDark) {
+      btnDark.classList.toggle('active', mode === 'dark');
+      btnDark.setAttribute('aria-pressed', mode === 'dark' ? 'true' : 'false');
+    }
+  }
+
+  function syncThemeOptions(theme) {
+    document.querySelectorAll("[data-theme-option]").forEach(el => {
+      el.classList.toggle('active', el.dataset.themeOption === theme);
+    });
+  }
+
+  syncModeButtons(currentMode);
+  syncThemeOptions(currentTheme);
+
+  document.querySelectorAll("[data-theme-option]").forEach(el => {
+    el.addEventListener("click", () => {
+      const chosen = el.dataset.themeOption;
+      if (window.ThemeManager) {
+        window.ThemeManager.setTheme(chosen);
+      } else if (typeof applyTheme === 'function') {
+        applyTheme(chosen);
+      }
+      syncThemeOptions(chosen);
+      el.animate(
+        [
+          { transform: "scale(.94)" },
+          { transform: "scale(1.06)" },
+          { transform: "scale(1)" }
+        ],
+        { duration: 240, easing: "cubic-bezier(.2,.8,.2,1)" }
+      );
+    });
+  });
+
+  if (btnLight) {
+    btnLight.addEventListener("click", () => {
+      if (window.ThemeManager) {
+        window.ThemeManager.setMode('light');
+      } else {
+        document.documentElement.setAttribute('data-mode', 'light');
+        localStorage.setItem('pos_mode', 'light');
+      }
+      syncModeButtons('light');
+    });
+  }
+
+  if (btnDark) {
+    btnDark.addEventListener("click", () => {
+      if (window.ThemeManager) {
+        window.ThemeManager.setMode('dark');
+      } else {
+        document.documentElement.setAttribute('data-mode', 'dark');
+        localStorage.setItem('pos_mode', 'dark');
+      }
+      syncModeButtons('dark');
+    });
+  }
+});
+</script>
+{% endblock content %}

@@ -1,0 +1,12 @@
+# Core Backend Framework
+Django>=5.0,<6.0
+djangorestframework>=3.14,<4.0
+python-dotenv>=1.0.0
+Pillow>=10.0.0
+asgiref>=3.8.0
+sqlparse>=0.5.0
+
+# Production & Hosted Database (Cloud Deployments)
+dj-database-url>=2.1.0
+psycopg2-binary>=2.9.9
+requests>=2.31.0

@@ -1,0 +1,175 @@
+<aside class="global-sidebar" id="global-sidebar" aria-label="Application Navigation">
+    <div class="sidebar-brand-header">
+        <a href="{% if user_role == 'Cashier' %}{% url 'cart' %}{% elif user_role == 'Manager' %}{% url 'manager_dashboard' %}{% else %}{% url 'dashboard' %}{% endif %}" class="sidebar-brand-link" title="{{ company.company_name|default:'Store' }}">
+            <div class="sidebar-brand-icon">
+                <i class="bi bi-shop-window"></i>
+            </div>
+            <span class="sidebar-brand-text">{{ company.company_name|default:"Store" }}</span>
+        </a>
+    </div>
+
+    <nav class="sidebar-nav-container">
+        <!-- WORKSPACE GROUP -->
+        <div class="sidebar-group">
+            <div class="sidebar-group-title">WORKSPACE</div>
+            <div class="sidebar-nav-list">
+                {% if user_role != "Cashier" %}
+                <a href="{% if user_role == 'Manager' %}{% url 'manager_dashboard' %}{% else %}{% url 'dashboard' %}{% endif %}"
+                   class="sidebar-link {% if request.path == '/dashboard/' or request.path == '/' or '/manager_dashboard' in request.path %}active{% endif %}"
+                   data-nav-match="/dashboard"
+                   {% if request.path == '/dashboard/' or request.path == '/' or '/manager_dashboard' in request.path %}aria-current="page"{% endif %}
+                   title="Dashboard Overview">
+                    <i class="bi bi-speedometer2 sidebar-link-icon"></i>
+                    <span class="sidebar-link-text">Overview</span>
+                </a>
+                {% endif %}
+                <a href="{% url 'cart' %}"
+                   class="sidebar-link {% if '/cart' in request.path %}active{% endif %}"
+                   data-nav-match="/cart"
+                   {% if '/cart' in request.path %}aria-current="page"{% endif %}
+                   title="Point of Sale Terminal">
+                    <i class="bi bi-upc-scan sidebar-link-icon"></i>
+                    <span class="sidebar-link-text">POS Terminal</span>
+                    <span class="sidebar-link-badge">POS</span>
+                </a>
+            </div>
+        </div>
+
+        {% if user_role != "Cashier" %}
+        <!-- OPERATIONS GROUP -->
+        <div class="sidebar-group">
+            <div class="sidebar-group-title">OPERATIONS</div>
+            <div class="sidebar-nav-list">
+                <a href="{% url 'product' %}"
+                   class="sidebar-link {% if '/product' in request.path %}active{% endif %}"
+                   data-nav-match="/product"
+                   {% if '/product' in request.path %}aria-current="page"{% endif %}
+                   title="Products & Inventory Catalog">
+                    <i class="bi bi-box-seam sidebar-link-icon"></i>
+                    <span class="sidebar-link-text">Inventory</span>
+                </a>
+                <a href="{% url 'category' %}"
+                   class="sidebar-link {% if '/category' in request.path %}active{% endif %}"
+                   data-nav-match="/category"
+                   {% if '/category' in request.path %}aria-current="page"{% endif %}
+                   title="Product Categories">
+                    <i class="bi bi-tags sidebar-link-icon"></i>
+                    <span class="sidebar-link-text">Categories</span>
+                </a>
+                <a href="{% url 'purchase_list' %}"
+                   class="sidebar-link {% if '/purchase' in request.path %}active{% endif %}"
+                   data-nav-match="/purchase"
+                   {% if '/purchase' in request.path %}aria-current="page"{% endif %}
+                   title="Stock Purchases & Inward Shipments">
+                    <i class="bi bi-bag-check sidebar-link-icon"></i>
+                    <span class="sidebar-link-text">Purchases</span>
+                </a>
+                <a href="{% url 'supplier' %}"
+                   class="sidebar-link {% if '/supplier' in request.path %}active{% endif %}"
+                   data-nav-match="/supplier"
+                   {% if '/supplier' in request.path %}aria-current="page"{% endif %}
+                   title="Suppliers & Vendors">
+                    <i class="bi bi-truck sidebar-link-icon"></i>
+                    <span class="sidebar-link-text">Suppliers</span>
+                </a>
+            </div>
+        </div>
+        {% endif %}
+
+        <!-- RECORDS GROUP -->
+        <div class="sidebar-group">
+            <div class="sidebar-group-title">RECORDS</div>
+            <div class="sidebar-nav-list">
+                <a href="{% url 'sales' %}"
+                   class="sidebar-link {% if request.path == '/sales/' or '/invoice' in request.path %}active{% endif %}"
+                   data-nav-match="/sales"
+                   {% if request.path == '/sales/' or '/invoice' in request.path %}aria-current="page"{% endif %}
+                   title="Sales History & Invoices">
+                    <i class="bi bi-receipt sidebar-link-icon"></i>
+                    <span class="sidebar-link-text">Sales & Invoices</span>
+                </a>
+                <a href="{% url 'returns' %}"
+                   class="sidebar-link {% if '/returns' in request.path %}active{% endif %}"
+                   data-nav-match="/returns"
+                   {% if '/returns' in request.path %}aria-current="page"{% endif %}
+                   title="Customer Returns & Stock Dispositions">
+                    <i class="bi bi-arrow-counterclockwise sidebar-link-icon"></i>
+                    <span class="sidebar-link-text">Returns</span>
+                </a>
+                {% if user_role != "Cashier" %}
+                <a href="{% url 'reports' %}"
+                   class="sidebar-link {% if '/reports' in request.path %}active{% endif %}"
+                   data-nav-match="/reports"
+                   {% if '/reports' in request.path %}aria-current="page"{% endif %}
+                   title="Financial & Inventory Reports">
+                    <i class="bi bi-bar-chart-line sidebar-link-icon"></i>
+                    <span class="sidebar-link-text">Reports</span>
+                </a>
+                {% endif %}
+            </div>
+        </div>
+
+        {% if user_role != "Cashier" %}
+        <!-- ADMINISTRATION GROUP -->
+        <div class="sidebar-group">
+            <div class="sidebar-group-title">ADMINISTRATION</div>
+            <div class="sidebar-nav-list">
+                <a href="{% url 'view_employee' %}"
+                   class="sidebar-link {% if '/view_employee' in request.path or '/employee' in request.path %}active{% endif %}"
+                   data-nav-match="/view_employee"
+                   {% if '/view_employee' in request.path or '/employee' in request.path %}aria-current="page"{% endif %}
+                   title="Staff, Cashiers & Role Management">
+                    <i class="bi bi-people sidebar-link-icon"></i>
+                    <span class="sidebar-link-text">Employees / Team</span>
+                </a>
+                {% if is_owner %}
+                <a href="{% url 'payroll_history' %}"
+                   class="sidebar-link {% if '/payroll' in request.path %}active{% endif %}"
+                   data-nav-match="/employee/payroll"
+                   {% if '/payroll' in request.path %}aria-current="page"{% endif %}
+                   title="Monthly Salary History & Payslips">
+                    <i class="bi bi-wallet2 sidebar-link-icon"></i>
+                    <span class="sidebar-link-text">Payroll & Payslips</span>
+                </a>
+                {% endif %}
+                <a href="{% url 'settings_appearance' %}"
+                   class="sidebar-link {% if '/settings' in request.path and '/scanner' not in request.path and '/telegram' not in request.path and '/company' not in request.path and '/general' not in request.path %}active{% endif %}"
+                   data-nav-match="/settings"
+                   {% if '/settings' in request.path and '/scanner' not in request.path and '/telegram' not in request.path and '/company' not in request.path and '/general' not in request.path %}aria-current="page"{% endif %}
+                   title="System Settings & Appearance">
+                    <i class="bi bi-palette sidebar-link-icon"></i>
+                    <span class="sidebar-link-text">Settings</span>
+                </a>
+                <a href="{% url 'settings_scanner' %}"
+                   class="sidebar-link {% if '/settings/scanner' in request.path %}active{% endif %}"
+                   data-nav-match="/settings/scanner"
+                   {% if '/settings/scanner' in request.path %}aria-current="page"{% endif %}
+                   title="Hardware Scanners & Phone Pairing">
+                    <i class="bi bi-upc-scan sidebar-link-icon"></i>
+                    <span class="sidebar-link-text">Scanner & Devices</span>
+                </a>
+            </div>
+        </div>
+        {% endif %}
+    </nav>
+
+    <!-- BOTTOM WHARF-STYLE ACCOUNT AREA -->
+    <div class="sidebar-footer">
+        <div class="sidebar-user-card" title="{{ user.username }} ({{ user_display_role|default:user_role|default:'User' }})">
+            <div class="sidebar-user-avatar">
+                {{ user.username|slice:":1"|upper|default:"U" }}
+            </div>
+            <div class="sidebar-user-info">
+                <div class="sidebar-user-name">{{ user.username|default:"Logged User" }}</div>
+                <div class="sidebar-user-role">{{ user_display_role|default:user_role|default:"User" }}</div>
+            </div>
+        </div>
+        <div class="sidebar-footer-actions">
+            <a href="{% url 'logout' %}" class="btn-sidebar-logout" title="Sign out of session">
+                <i class="bi bi-box-arrow-right"></i>
+                <span>Logout</span>
+            </a>
+        </div>
+    </div>
+</aside>
+<div class="sidebar-backdrop" id="sidebar-backdrop"></div>

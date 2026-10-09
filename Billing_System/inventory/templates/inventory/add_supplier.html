@@ -1,16 +1,122 @@
-{% extends "Dashboard/main_nav.html" %}
+{% extends "dashboard/main_nav.html" %}
+{% load static %}
 
 {% block content %}
+<div style="max-width: 860px; margin: 32px auto; padding: 0 16px;">
+    <!-- Header -->
+    <div style="margin-bottom: 24px; display: flex; align-items: center; justify-content: space-between;">
+        <div>
+            <div style="display: flex; align-items: center; gap: 8px; margin-bottom: 4px;">
+                <a href="{% url 'supplier' %}" style="color: var(--muted); text-decoration: none; font-size: 13px;">
+                    <i class="bi bi-arrow-left"></i> Suppliers
+                </a>
+                <span style="color: var(--muted);">&bull;</span>
+                <h2 style="font-size: 20px; font-weight: 700; color: var(--text); margin: 0;">Add Supplier</h2>
+            </div>
+            <p style="margin: 0; font-size: 13px; color: var(--muted);">Register a wholesale vendor or distributor for {{ company.company_name }}.</p>
+        </div>
+    </div>
 
-<h2>Add Supplier</h2>
+    {% if form.errors %}
+    <div style="background: rgba(220, 38, 38, 0.12); border: 1px solid rgba(220, 38, 38, 0.3); color: var(--danger); padding: 12px 16px; border-radius: var(--radius-sm); margin-bottom: 20px; font-size: 13px;">
+        <div style="font-weight: 600; margin-bottom: 4px; display: flex; align-items: center; gap: 6px;">
+            <i class="bi bi-exclamation-triangle-fill"></i> Please correct the errors below:
+        </div>
+        <ul style="margin: 0; padding-left: 20px;">
+            {% for field, errors in form.errors.items %}
+                {% for err in errors %}
+                    <li><strong>{{ field|title }}:</strong> {{ err }}</li>
+                {% endfor %}
+            {% endfor %}
+        </ul>
+    </div>
+    {% endif %}
 
-<form method="POST">
-    {% csrf_token %}
+    <div style="background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius-md); padding: 28px; box-shadow: 0 2px 12px rgba(0,0,0,0.1);">
+        <form method="POST">
+            {% csrf_token %}
 
-    {{ form.as_p }}
+            <!-- Section 1: Business Identity -->
+            <div style="margin-bottom: 24px;">
+                <h4 style="font-size: 12px; font-weight: 700; color: var(--primary); text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 14px; border-bottom: 1px solid var(--border); padding-bottom: 6px;">
+                    <i class="bi bi-building"></i> Supplier Identity
+                </h4>
+                <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 14px; margin-bottom: 14px;">
+                    <div>
+                        <label style="display: block; font-size: 12px; font-weight: 600; color: var(--text); margin-bottom: 6px;">Supplier / Company Name *</label>
+                        <input type="text" name="name" value="{{ form.name.value|default:'' }}" required placeholder="e.g. Metro Cash & Carry Ltd" style="width: 100%; padding: 10px 12px; background: var(--surface-2); border: 1px solid var(--border); border-radius: var(--radius-sm); color: var(--text); font-size: 14px; outline: none;">
+                    </div>
+                    <div>
+                        <label style="display: block; font-size: 12px; font-weight: 600; color: var(--text); margin-bottom: 6px;">Contact Person</label>
+                        <input type="text" name="contact_person" value="{{ form.contact_person.value|default:'' }}" placeholder="e.g. Rajesh Kumar" style="width: 100%; padding: 10px 12px; background: var(--surface-2); border: 1px solid var(--border); border-radius: var(--radius-sm); color: var(--text); font-size: 14px; outline: none;">
+                    </div>
+                </div>
+                <div>
+                    <label style="display: block; font-size: 12px; font-weight: 600; color: var(--text); margin-bottom: 6px;">GSTIN / Tax ID</label>
+                    <input type="text" name="gst_number" value="{{ form.gst_number.value|default:'' }}" placeholder="e.g. 29AAAAA0000A1Z5" style="width: 100%; padding: 10px 12px; background: var(--surface-2); border: 1px solid var(--border); border-radius: var(--radius-sm); color: var(--text); font-size: 14px; outline: none;">
+                </div>
+            </div>
 
-    <button type="submit">Save Supplier</button>
-    {% comment %} <a href="{% url 'supplier' %}">Cancel</a> {% endcomment %}
-</form>
+            <!-- Section 2: Contact Info -->
+            <div style="margin-bottom: 24px;">
+                <h4 style="font-size: 12px; font-weight: 700; color: var(--primary); text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 14px; border-bottom: 1px solid var(--border); padding-bottom: 6px;">
+                    <i class="bi bi-telephone"></i> Contact Details
+                </h4>
+                <div style="display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 14px;">
+                    <div>
+                        <label style="display: block; font-size: 12px; font-weight: 600; color: var(--text); margin-bottom: 6px;">Primary Phone *</label>
+                        <input type="text" name="phone" value="{{ form.phone.value|default:'' }}" required placeholder="e.g. +91 9876543210" style="width: 100%; padding: 10px 12px; background: var(--surface-2); border: 1px solid var(--border); border-radius: var(--radius-sm); color: var(--text); font-size: 14px; outline: none;">
+                    </div>
+                    <div>
+                        <label style="display: block; font-size: 12px; font-weight: 600; color: var(--text); margin-bottom: 6px;">Alternate Phone</label>
+                        <input type="text" name="alternate_phone" value="{{ form.alternate_phone.value|default:'' }}" placeholder="Optional phone" style="width: 100%; padding: 10px 12px; background: var(--surface-2); border: 1px solid var(--border); border-radius: var(--radius-sm); color: var(--text); font-size: 14px; outline: none;">
+                    </div>
+                    <div>
+                        <label style="display: block; font-size: 12px; font-weight: 600; color: var(--text); margin-bottom: 6px;">Email Address</label>
+                        <input type="email" name="email" value="{{ form.email.value|default:'' }}" placeholder="vendor@supplier.com" style="width: 100%; padding: 10px 12px; background: var(--surface-2); border: 1px solid var(--border); border-radius: var(--radius-sm); color: var(--text); font-size: 14px; outline: none;">
+                    </div>
+                </div>
+            </div>
 
-{% endblock %}
+            <!-- Section 3: Address & Status -->
+            <div style="margin-bottom: 28px;">
+                <h4 style="font-size: 12px; font-weight: 700; color: var(--primary); text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 14px; border-bottom: 1px solid var(--border); padding-bottom: 6px;">
+                    <i class="bi bi-geo-alt"></i> Address & Dispatch Location
+                </h4>
+                <div style="margin-bottom: 14px;">
+                    <label style="display: block; font-size: 12px; font-weight: 600; color: var(--text); margin-bottom: 6px;">Street Address</label>
+                    <input type="text" name="address" value="{{ form.address.value|default:'' }}" placeholder="Warehouse / Depot Address" style="width: 100%; padding: 10px 12px; background: var(--surface-2); border: 1px solid var(--border); border-radius: var(--radius-sm); color: var(--text); font-size: 14px; outline: none;">
+                </div>
+                <div style="display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 14px; margin-bottom: 16px;">
+                    <div>
+                        <label style="display: block; font-size: 12px; font-weight: 600; color: var(--text); margin-bottom: 6px;">City</label>
+                        <input type="text" name="city" value="{{ form.city.value|default:'' }}" placeholder="City" style="width: 100%; padding: 10px 12px; background: var(--surface-2); border: 1px solid var(--border); border-radius: var(--radius-sm); color: var(--text); font-size: 14px; outline: none;">
+                    </div>
+                    <div>
+                        <label style="display: block; font-size: 12px; font-weight: 600; color: var(--text); margin-bottom: 6px;">State</label>
+                        <input type="text" name="state" value="{{ form.state.value|default:'' }}" placeholder="State" style="width: 100%; padding: 10px 12px; background: var(--surface-2); border: 1px solid var(--border); border-radius: var(--radius-sm); color: var(--text); font-size: 14px; outline: none;">
+                    </div>
+                    <div>
+                        <label style="display: block; font-size: 12px; font-weight: 600; color: var(--text); margin-bottom: 6px;">Pincode</label>
+                        <input type="text" name="pincode" value="{{ form.pincode.value|default:'' }}" placeholder="Pincode" style="width: 100%; padding: 10px 12px; background: var(--surface-2); border: 1px solid var(--border); border-radius: var(--radius-sm); color: var(--text); font-size: 14px; outline: none;">
+                    </div>
+                </div>
+
+                <div style="display: flex; align-items: center; gap: 10px; background: var(--surface-2); padding: 12px 16px; border-radius: var(--radius-sm); border: 1px solid var(--border);">
+                    <input type="checkbox" id="id_status" name="status" {% if form.status.value != False %}checked{% endif %} style="width: 18px; height: 18px; accent-color: var(--primary); cursor: pointer;">
+                    <label for="id_status" style="font-size: 13px; font-weight: 600; color: var(--text); cursor: pointer; margin: 0;">
+                        Active Supplier (available for purchase orders and inventory catalog)
+                    </label>
+                </div>
+            </div>
+
+            <div style="display: flex; gap: 12px; justify-content: flex-end; padding-top: 16px; border-top: 1px solid var(--border);">
+                <a href="{% url 'supplier' %}" class="btn btn-secondary" style="text-decoration: none;">Cancel</a>
+                <button type="submit" class="btn btn-primary" style="display: inline-flex; align-items: center; gap: 8px;">
+                    <i class="bi bi-check-lg"></i> Save Supplier
+                </button>
+            </div>
+        </form>
+    </div>
+</div>
+{% endblock content %}

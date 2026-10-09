@@ -1,215 +1,224 @@
+{% extends "dashboard/main_nav.html" %}
 {% load static %}
-<!DOCTYPE html>
-<html lang="en">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Edit Employee</title>
-</head>
-<body>
-    <form method="post">
-      {% csrf_token %}
 
-        <!-- User Information -->
-
-        <h3>User Information</h3>
-
-        <label>Username</label>
-        <input
-            type="text"
-            name="username"
-            value="{{ employee.user.username }}"
-            required
-        >
-
-        <br><br>
-
-
-        <label>First Name</label>
-        <input
-            type="text"
-            name="first_name"
-            value="{{ employee.user.first_name }}"
-            required
-        >
-
-        <br><br>
-
-
-        <label>Last Name</label>
-        <input
-            type="text"
-            name="last_name"
-            value="{{ employee.user.last_name }}"
-            required
-        >
-
-        <br><br>
-
-
-        <label>Email</label>
-        <input
-            type="email"
-            name="email"
-            value="{{ employee.user.email }}"
-            required
-        >
-
-        <br><br>
-
-
-        <!-- Employee Information -->
-
-        <h3>Employee Information</h3>
-
-        <label>Employee ID</label>
-        <input
-            type="text"
-            name="employee_id"
-            value="{{ employee.employee_id }}"
-            required
-        >
-
-        <br><br>
-
-
-        <label>Phone</label>
-        <input
-            type="text"
-            name="Phone"
-            value="{{ employee.Phone }}"
-        >
-
-        <br><br>
-
-
-        <label>Alternate Phone</label>
-        <input
-            type="text"
-            name="Alternate_phone"
-            value="{{ employee.Alternate_phone }}"
-        >
-
-        <br><br>
-
-
-        <label>Address</label>
-        <textarea
-            name="address"
-            rows="4"
-            cols="30"
-        >{{ employee.address }}</textarea>
-
-        <br><br>
-
-
-        <label>Gender</label>
-
-        <select name="Gender">
-
-            <option value="Male"
-                {% if employee.Gender == "Male" %}selected{% endif %}>
-                Male
-            </option>
-
-            <option value="Female"
-                {% if employee.Gender == "Female" %}selected{% endif %}>
-                Female
-            </option>
-
-            <option value="Other"
-                {% if employee.Gender == "Other" %}selected{% endif %}>
-                Other
-            </option>
-
-        </select>
-
-        <br><br>
-
-
-        <label>Role</label>
-
-        <select name="Role">
-
-            <option value="Manager"
-                {% if employee.Role == "Manager" %}selected{% endif %}>
-                Manager
-            </option>
-
-            <option value="Cashier"
-                {% if employee.Role == "Cashier" %}selected{% endif %}>
-                Cashier
-            </option>
-
-        </select>
-
-        <br><br>
-
-
-        <label>Joining Date</label>
-
-        <input
-            type="date"
-            name="joining_date"
-            value="{{ employee.joining_date|date:'Y-m-d' }}"
-        >
-
-        <br><br>
-
-
-        <label>Monthly Salary</label>
-
-        <input
-            type="number"
-            name="monthaly_salary"
-            value="{{ employee.monthaly_salary }}"
-            step="0.01"
-        >
-
-        <br><br>
-
-
-        <label>Payment</label>
-
-        <select name="payment">
-
-            <option value="Monthly"
-                {% if employee.payment == "Monthly" %}selected{% endif %}>
-                Monthly
-            </option>
-
-            <option value="Weekly"
-                {% if employee.payment == "Weekly" %}selected{% endif %}>
-                Weekly
-            </option>
-
-        </select>
-
-        <br><br>
-
-
-        <label>Status</label>
-
-        <select name="status">
-
-            <option value="Active"
-                {% if employee.status == "Active" %}selected{% endif %}>
-                Active
-            </option>
-
-            <option value="Inactive"
-                {% if employee.status == "Inactive" %}selected{% endif %}>
-                Inactive
-            </option>
-
-        </select>
-
-        <br><br>
-
-
-        <button type="submit">
-            Update Employee
-        </button>
-   </form>
-</body>
-</html>
+{% block content %}
+<div class="employee-form-container" style="max-width: 860px; margin: 24px auto; padding: 0 16px;">
+    
+    <div style="margin-bottom: 20px; display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 12px;">
+        <div>
+            <div style="display: flex; align-items: center; gap: 8px; margin-bottom: 4px;">
+                <a href="{% url 'view_employee' %}" style="color: var(--muted); text-decoration: none; font-size: 13px;">
+                    <i class="bi bi-arrow-left"></i> Team
+                </a>
+                <span style="color: var(--muted);">&bull;</span>
+                <h2 style="font-size: 20px; font-weight: 700; color: var(--text); margin: 0;">Edit Team Member</h2>
+            </div>
+            <p style="margin: 0; font-size: 13px; color: var(--muted);">Update employee details for {{ employee.user.username }} ({{ employee.employee_id }}).</p>
+        </div>
+        <div>
+            <button type="button" class="btn btn-secondary" onclick="document.getElementById('credentials-modal').style.display='flex';" style="font-size: 13px; padding: 7px 14px; display: inline-flex; align-items: center; gap: 6px;">
+                <i class="bi bi-key-fill" style="color: var(--warning, #eab308);"></i> Change Login Credentials
+            </button>
+        </div>
+    </div>
+
+    {% if messages %}
+        {% for message in messages %}
+        <div style="background: {% if message.tags == 'error' %}rgba(220, 38, 38, 0.1){% else %}rgba(16, 185, 129, 0.1){% endif %}; border: 1px solid {% if message.tags == 'error' %}rgba(220, 38, 38, 0.25){% else %}rgba(16, 185, 129, 0.25){% endif %}; color: {% if message.tags == 'error' %}var(--danger){% else %}var(--success, #10b981){% endif %}; padding: 12px 16px; border-radius: var(--radius-sm); margin-bottom: 20px; font-size: 13px; display: flex; align-items: center; gap: 8px;">
+            <i class="bi {% if message.tags == 'error' %}bi-exclamation-triangle-fill{% else %}bi-check-circle-fill{% endif %}"></i>
+            <span>{{ message }}</span>
+        </div>
+        {% endfor %}
+    {% endif %}
+
+    {% if error %}
+    <div style="background: rgba(220, 38, 38, 0.1); border: 1px solid rgba(220, 38, 38, 0.25); color: var(--danger); padding: 12px 16px; border-radius: var(--radius-sm); margin-bottom: 20px; font-size: 13px; display: flex; align-items: center; gap: 8px;">
+        <i class="bi bi-exclamation-triangle-fill"></i>
+        <span>{{ error }}</span>
+    </div>
+    {% endif %}
+
+    <div style="background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius-md); padding: 24px; box-shadow: 0 1px 3px rgba(0,0,0,0.04);">
+        <form method="POST" enctype="multipart/form-data">
+            {% csrf_token %}
+
+            <!-- Section 1: Account Login Information -->
+            <div style="margin-bottom: 24px;">
+                <h4 style="font-size: 12px; font-weight: 700; color: var(--muted); text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 14px; border-bottom: 1px solid var(--border); padding-bottom: 6px;">
+                    <i class="bi bi-person-circle"></i> Member Account
+                </h4>
+                
+                <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 14px; margin-bottom: 12px;">
+                    <div>
+                        <label style="display: block; font-size: 12px; font-weight: 600; color: var(--text); margin-bottom: 6px;">First Name</label>
+                        <input type="text" name="first_name" value="{{ employee.user.first_name }}" style="width: 100%;">
+                    </div>
+                    <div>
+                        <label style="display: block; font-size: 12px; font-weight: 600; color: var(--text); margin-bottom: 6px;">Last Name</label>
+                        <input type="text" name="last_name" value="{{ employee.user.last_name }}" style="width: 100%;">
+                    </div>
+                </div>
+
+                <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 14px;">
+                    <div>
+                        <label style="display: block; font-size: 12px; font-weight: 600; color: var(--text); margin-bottom: 6px;">Username *</label>
+                        <input type="text" name="username" value="{{ employee.user.username }}" required style="width: 100%;">
+                    </div>
+                    <div>
+                        <label style="display: block; font-size: 12px; font-weight: 600; color: var(--text); margin-bottom: 6px;">Email</label>
+                        <input type="email" name="email" value="{{ employee.user.email }}" style="width: 100%;">
+                    </div>
+                </div>
+            </div>
+
+            <!-- Section 2: Store Operational Information -->
+            <div style="margin-bottom: 24px;">
+                <h4 style="font-size: 12px; font-weight: 700; color: var(--muted); text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 14px; border-bottom: 1px solid var(--border); padding-bottom: 6px;">
+                    <i class="bi bi-briefcase"></i> Role & Store Information
+                </h4>
+
+                <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 14px; margin-bottom: 12px;">
+                    <div>
+                        <label style="display: block; font-size: 12px; font-weight: 600; color: var(--text); margin-bottom: 6px;">Employee ID *</label>
+                        <input type="text" name="employee_id" value="{{ employee.employee_id }}" required style="width: 100%;">
+                    </div>
+                    <div>
+                        <label style="display: block; font-size: 12px; font-weight: 600; color: var(--text); margin-bottom: 6px;">Role *</label>
+                        <select name="Role" required style="width: 100%;">
+                            <option value="Cashier" {% if employee.Role == 'Cashier' %}selected{% endif %}>Cashier (Front Billing & Barcode Terminal)</option>
+                            <option value="Stock Manager" {% if employee.Role == 'Stock Manager' %}selected{% endif %}>Stock Manager (Inventory & Purchases)</option>
+                            <option value="Manager" {% if employee.Role == 'Manager' %}selected{% endif %}>Manager (Operational Management)</option>
+                            <option value="Worker" {% if employee.Role == 'Worker' %}selected{% endif %}>Worker (General Floor)</option>
+                        </select>
+                    </div>
+                </div>
+
+                <div style="display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 14px; margin-bottom: 12px;">
+                    <div>
+                        <label style="display: block; font-size: 12px; font-weight: 600; color: var(--text); margin-bottom: 6px;">Joining Date</label>
+                        <input type="date" name="joining_date" value="{{ employee.joining_date|date:'Y-m-d' }}" style="width: 100%;">
+                    </div>
+                    <div>
+                        <label style="display: block; font-size: 12px; font-weight: 600; color: var(--text); margin-bottom: 6px;">Status</label>
+                        <select name="status" style="width: 100%;">
+                            <option value="active" {% if employee.status == 'active' %}selected{% endif %}>Active</option>
+                            <option value="inactive" {% if employee.status == 'inactive' %}selected{% endif %}>Inactive</option>
+                        </select>
+                    </div>
+                    <div>
+                        <label style="display: block; font-size: 12px; font-weight: 600; color: var(--text); margin-bottom: 6px;">Gender</label>
+                        <select name="Gender" style="width: 100%;">
+                            <option value="Male" {% if employee.Gender == 'Male' %}selected{% endif %}>Male</option>
+                            <option value="Female" {% if employee.Gender == 'Female' %}selected{% endif %}>Female</option>
+                            <option value="Other" {% if employee.Gender == 'Other' %}selected{% endif %}>Other</option>
+                        </select>
+                    </div>
+                </div>
+
+                <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 14px; margin-bottom: 12px;">
+                    <div>
+                        <label style="display: block; font-size: 12px; font-weight: 600; color: var(--text); margin-bottom: 6px;">Phone Number *</label>
+                        <input type="text" name="Phone" value="{{ employee.Phone }}" required style="width: 100%;">
+                    </div>
+                    <div>
+                        <label style="display: block; font-size: 12px; font-weight: 600; color: var(--text); margin-bottom: 6px;">Alternate Phone</label>
+                        <input type="text" name="Alternate_phone" value="{{ employee.Alternate_phone }}" style="width: 100%;">
+                    </div>
+                </div>
+
+                <div style="margin-bottom: 12px;">
+                    <label style="display: block; font-size: 12px; font-weight: 600; color: var(--text); margin-bottom: 6px;">Address *</label>
+                    <textarea name="address" required rows="2" style="width: 100%;">{{ employee.address }}</textarea>
+                </div>
+
+                <div>
+                    <label style="display: block; font-size: 12px; font-weight: 600; color: var(--text); margin-bottom: 6px;">Update Profile Picture</label>
+                    <input type="file" name="profile_pic" accept="image/*" style="width: 100%;">
+                </div>
+            </div>
+
+            {% if is_owner %}
+            <!-- Section 3: OWNER ONLY Compensation & Payroll -->
+            <div style="margin-bottom: 24px; background: var(--surface-2); border: 1px solid var(--border); border-radius: var(--radius-sm); padding: 16px;">
+                <h4 style="font-size: 12px; font-weight: 700; color: var(--primary); text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 12px;">
+                    <i class="bi bi-cash-coin"></i> Compensation & Payroll (Owner Only)
+                </h4>
+
+                <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 14px;">
+                    <div>
+                        <label style="display: block; font-size: 12px; font-weight: 600; color: var(--text); margin-bottom: 6px;">Monthly Salary (₹)</label>
+                        <input type="number" step="0.01" name="monthaly_salary" value="{{ employee.monthaly_salary }}" style="width: 100%;">
+                    </div>
+                    <div>
+                        <label style="display: block; font-size: 12px; font-weight: 600; color: var(--text); margin-bottom: 6px;">Payroll Status</label>
+                        <select name="payment" style="width: 100%;">
+                            <option value="Paid" {% if employee.payment == 'Paid' %}selected{% endif %}>Paid</option>
+                            <option value="Unpaid" {% if employee.payment == 'Unpaid' %}selected{% endif %}>Unpaid</option>
+                            <option value="Due" {% if employee.payment == 'Due' %}selected{% endif %}>Due</option>
+                        </select>
+                    </div>
+                </div>
+            </div>
+            {% endif %}
+
+            <!-- Action Buttons -->
+            <div style="display: flex; justify-content: flex-end; gap: 12px; margin-top: 20px; border-top: 1px solid var(--border); padding-top: 16px;">
+                <a href="{% url 'view_employee' %}" class="btn btn-secondary" style="text-decoration: none;">Cancel</a>
+                <button type="submit" class="btn btn-primary" style="padding: 9px 22px;">
+                    <i class="bi bi-save"></i> Save Changes
+                </button>
+            </div>
+        </form>
+    </div>
+</div>
+
+<!-- Modal: Change Login Credentials -->
+<div id="credentials-modal" style="display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.7); backdrop-filter: blur(4px); z-index: 1000; align-items: center; justify-content: center; padding: 16px;">
+    <div style="background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius-md); max-width: 480px; width: 100%; box-shadow: 0 20px 40px rgba(0,0,0,0.5); overflow: hidden;">
+        <div style="padding: 16px 20px; border-bottom: 1px solid var(--border); display: flex; align-items: center; justify-content: space-between;">
+            <div style="display: flex; align-items: center; gap: 8px;">
+                <i class="bi bi-shield-lock-fill" style="color: var(--warning, #eab308); font-size: 18px;"></i>
+                <h3 style="margin: 0; font-size: 16px; font-weight: 700; color: var(--text);">Change Login Credentials</h3>
+            </div>
+            <button type="button" onclick="document.getElementById('credentials-modal').style.display='none';" style="background: none; border: none; color: var(--muted); cursor: pointer; font-size: 18px;">&times;</button>
+        </div>
+
+        <form method="POST" action="{% url 'change_employee_credentials' employee.employee_id %}" style="padding: 20px;">
+            {% csrf_token %}
+
+            <div style="background: var(--surface-2); border: 1px solid var(--border); border-radius: var(--radius-sm); padding: 10px 12px; margin-bottom: 16px; font-size: 12px; color: var(--muted); line-height: 1.5;">
+                <i class="bi bi-info-circle" style="color: var(--primary);"></i>
+                Existing passwords are encrypted and cannot be retrieved. Entering a new password will securely re-hash and update this account's credentials.
+            </div>
+
+            {% if not is_owner and employee.Role in 'Admin,Owner' or not is_owner and employee.user == company.owner %}
+            <div style="background: rgba(220, 38, 38, 0.1); border: 1px solid rgba(220, 38, 38, 0.25); color: var(--danger); padding: 10px 12px; border-radius: var(--radius-sm); margin-bottom: 16px; font-size: 12px;">
+                <i class="bi bi-slash-circle"></i> Managers are not permitted to change Owner or Admin credentials.
+            </div>
+            {% endif %}
+
+            <div style="margin-bottom: 14px;">
+                <label style="display: block; font-size: 12px; font-weight: 600; color: var(--text); margin-bottom: 6px;">Login Email Address</label>
+                <input type="email" name="email" value="{{ employee.user.email }}" style="width: 100%;">
+            </div>
+
+            <div style="margin-bottom: 14px;">
+                <label style="display: block; font-size: 12px; font-weight: 600; color: var(--text); margin-bottom: 6px;">New Password *</label>
+                <input type="password" name="new_password" placeholder="At least 6 characters" minlength="6" required style="width: 100%;">
+            </div>
+
+            <div style="margin-bottom: 20px;">
+                <label style="display: block; font-size: 12px; font-weight: 600; color: var(--text); margin-bottom: 6px;">Confirm Password *</label>
+                <input type="password" name="confirm_password" placeholder="Re-enter new password" minlength="6" required style="width: 100%;">
+            </div>
+
+            <div style="display: flex; justify-content: flex-end; gap: 10px;">
+                <button type="button" class="btn btn-secondary" onclick="document.getElementById('credentials-modal').style.display='none';">Cancel</button>
+                <button type="submit" class="btn btn-primary" {% if not is_owner and employee.Role in 'Admin,Owner' or not is_owner and employee.user == company.owner %}disabled{% endif %}>
+                    <i class="bi bi-check2-circle"></i> Update Credentials
+                </button>
+            </div>
+        </form>
+    </div>
+</div>
+{% endblock content %}

@@ -1,78 +1,151 @@
+{% extends "dashboard/main_nav.html" %}
 {% load static %}
 
-<!DOCTYPE html>
-<html lang="en">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Categories</title>
-</head>
+{% block content %}
+<div class="category-page-container" style="max-width: 1400px; margin: 0 auto; padding: 22px 20px;">
+    
+    <!-- Header Toolbar -->
+    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; flex-wrap: wrap; gap: 14px;">
+        <div>
+            <div style="display: flex; align-items: center; gap: 10px; margin-bottom: 4px;">
+                <h1 style="font-size: 22px; font-weight: 700; color: var(--text); margin: 0;">Product Categories</h1>
+                <span style="font-size: 12px; background: var(--surface-2); border: 1px solid var(--border); padding: 3px 9px; border-radius: 14px; color: var(--muted); font-weight: 600;">
+                    {{ company.company_name }}
+                </span>
+            </div>
+            <p style="margin: 0; font-size: 13px; color: var(--muted);">Organize inventory taxonomy, department classifications, and POS catalog groupings.</p>
+        </div>
 
-<body>
+        <div style="display: flex; gap: 10px;">
+            <a href="{% url 'add_category' %}" class="btn btn-primary" style="font-size: 13px; padding: 8px 16px; text-decoration: none;">
+                <i class="bi bi-plus-circle-fill"></i> Add Category
+            </a>
+            <a href="{% url 'product' %}" class="btn btn-secondary" style="font-size: 13px; padding: 8px 14px; text-decoration: none;">
+                <i class="bi bi-box-seam"></i> Products
+            </a>
+        </div>
+    </div>
 
-    <h1>Categories</h1>
+    <!-- Search / Filter Bar -->
+    <div style="background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius-md); padding: 12px 16px; margin-bottom: 16px; display: flex; align-items: center; gap: 12px; flex-wrap: wrap;">
+        <div style="position: relative; flex: 1; min-width: 260px;">
+            <i class="bi bi-search" style="position: absolute; left: 12px; top: 50%; transform: translateY(-50%); color: var(--muted); font-size: 13px;"></i>
+            <input type="text"
+                   id="cat-search"
+                   placeholder="Filter by category name, description..."
+                   oninput="filterCategories()"
+                   style="padding-left: 34px; width: 100%; border-radius: var(--radius-sm); font-size: 13px;">
+        </div>
 
-    <a href="{% url 'add_category' %}">
-        Add Category
-    </a>
+        <span style="font-size: 12px; color: var(--muted); margin-left: auto;">
+            Total: <strong style="color: var(--text);">{{ categories.count }}</strong> Categories
+        </span>
+    </div>
 
-    <br><br>
+    <!-- Categories Table -->
+    <div style="background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius-md); overflow: hidden; min-height: 240px;">
+        <div style="overflow-x: auto;">
+            <table class="table-theme" id="categories-table" style="width: 100%; border-collapse: collapse;">
+                <thead>
+                    <tr>
+                        <th style="width: 50px; text-align: center;">#</th>
+                        <th>Category Name</th>
+                        <th>Description</th>
+                        <th>Status</th>
+                        <th style="text-align: right; width: 180px;">Action</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for category in categories %}
+                    <tr class="cat-row" data-search="{{ category.name|lower }} {{ category.description|default:''|lower }}">
+                        <td style="text-align: center; color: var(--muted); font-family: var(--font-mono); font-size: 12px;">
+                            {{ forloop.counter }}
+                        </td>
 
-    <table border="1">
+                        <td>
+                            <div style="display: flex; align-items: center; gap: 10px;">
+                                <div class="product-visual-avatar" style="width: 34px; height: 34px; border-radius: 8px; background: var(--surface-2); border: 1px solid var(--border); display: flex; align-items: center; justify-content: center;">
+                                    {% with c=category.name|lower %}
+                                        {% if "dairy" in c or "milk" in c or "egg" in c %}
+                                            <i class="bi bi-droplet-half" style="color: #38bdf8;" title="Dairy & Milk"></i>
+                                        {% elif "biscuit" in c or "bakery" in c or "bread" in c or "cookie" in c %}
+                                            <i class="bi bi-cake2" style="color: #d97706;" title="Biscuits / Bakery"></i>
+                                        {% elif "beverage" in c or "drink" in c or "tea" in c or "coffee" in c %}
+                                            <i class="bi bi-cup-straw" style="color: #0284c7;" title="Beverages"></i>
+                                        {% elif "grocer" in c or "grain" in c or "rice" in c or "food" in c %}
+                                            <i class="bi bi-basket2" style="color: #16a34a;" title="Grocery"></i>
+                                        {% elif "care" in c or "pharma" in c or "soap" in c or "beauty" in c %}
+                                            <i class="bi bi-heart-pulse" style="color: #9333ea;" title="Personal Care"></i>
+                                        {% else %}
+                                            <i class="bi bi-tag-fill" style="color: var(--primary);" title="Category"></i>
+                                        {% endif %}
+                                    {% endwith %}
+                                </div>
+                                <div>
+                                    <span style="font-weight: 600; color: var(--text);">{{ category.name }}</span>
+                                </div>
+                            </div>
+                        </td>
 
-        <tr>
-            <th>Category Name</th>
-            <th>Description</th>
-            <th>Status</th>
-            <th>Action</th>
-        </tr>
+                        <td style="color: var(--muted); font-size: 13px;">
+                            {{ category.description|default:"—" }}
+                        </td>
 
-        {% for category in categories %}
+                        <td>
+                            {% if category.status %}
+                                <span class="badge badge-success" style="font-size: 11px;">Active</span>
+                            {% else %}
+                                <span class="badge badge-danger" style="font-size: 11px;">Inactive</span>
+                            {% endif %}
+                        </td>
 
-        <tr>
+                        <td style="text-align: right;">
+                            <div style="display: flex; gap: 6px; justify-content: flex-end;">
+                                <a href="{% url 'edit_category' category.id %}" class="btn btn-secondary" style="padding: 5px 10px; font-size: 12px; text-decoration: none;" title="Edit Category">
+                                    <i class="bi bi-pencil"></i> Edit
+                                </a>
+                                {% if category.status %}
+                                    <a href="{% url 'deactivate_category' category.id %}" class="btn btn-outline" style="padding: 5px 10px; font-size: 12px; text-decoration: none; color: var(--danger); border-color: rgba(220, 38, 38, 0.3);" title="Deactivate Category">
+                                        <i class="bi bi-slash-circle"></i> Deactivate
+                                    </a>
+                                {% endif %}
+                            </div>
+                        </td>
+                    </tr>
+                    {% empty %}
+                    <tr id="empty-categories-tr">
+                        <td colspan="5" style="text-align: center; padding: 48px 20px;">
+                            <div style="max-width: 320px; margin: 0 auto; color: var(--muted);">
+                                <i class="bi bi-tags" style="font-size: 36px; color: var(--muted); display: block; margin-bottom: 10px;"></i>
+                                <div style="font-size: 15px; font-weight: 600; color: var(--text); margin-bottom: 4px;">No Categories Found</div>
+                                <p style="font-size: 12px; margin-bottom: 16px;">Create categories to organize your store inventory and POS quick-lookup tabs.</p>
+                                <a href="{% url 'add_category' %}" class="btn btn-primary" style="font-size: 12px; padding: 6px 14px; text-decoration: none;">
+                                    <i class="bi bi-plus-circle"></i> Add First Category
+                                </a>
+                            </div>
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
 
-            <td>
-                {{ category.name }}
-            </td>
-
-            <td>
-                {{ category.description }}
-            </td>
-
-            <td>
-                {% if category.status %}
-                    Active
-                {% else %}
-                    Inactive
-                {% endif %}
-            </td>
-
-            <td>
-                <a href="{% url 'edit_category' category.id %}">
-                    Edit
-                </a>
-
-                {% if category.status %}
-                    |
-                    <a href="{% url 'deactivate_category' category.id %}">
-                        Deactivate
-                    </a>
-                {% endif %}
-            </td>
-
-        </tr>
-
-        {% empty %}
-
-        <tr>
-            <td colspan="4">
-                No categories found.
-            </td>
-        </tr>
-
-        {% endfor %}
-
-    </table>
-
-</body>
-</html>
+<script>
+function filterCategories() {
+    const q = (document.getElementById('cat-search').value || '').trim().toLowerCase();
+    const rows = document.querySelectorAll('.cat-row');
+    let visible = 0;
+    rows.forEach(row => {
+        const text = row.getAttribute('data-search') || '';
+        if (!q || text.includes(q)) {
+            row.style.display = '';
+            visible++;
+        } else {
+            row.style.display = 'none';
+        }
+    });
+}
+</script>
+{% endblock content %}

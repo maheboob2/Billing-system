@@ -1,0 +1,57 @@
+<style>
+@keyframes btn-spinner-anim {
+    to { transform: rotate(360deg); }
+}
+.btn-submitting {
+    opacity: 0.75 !important;
+    cursor: not-allowed !important;
+    pointer-events: none !important;
+}
+.btn-spinner {
+    display: inline-block;
+    width: 12px;
+    height: 12px;
+    border: 2px solid rgba(255,255,255,0.4);
+    border-top-color: currentColor;
+    border-radius: 50%;
+    animation: btn-spinner-anim 0.6s linear infinite;
+    vertical-align: middle;
+    margin-right: 6px;
+}
+</style>
+<script>
+document.addEventListener("DOMContentLoaded", function () {
+    document.querySelectorAll("form").forEach(function (form) {
+        var method = (form.getAttribute("method") || "").toUpperCase();
+        if (method === "POST") {
+            form.addEventListener("submit", function (event) {
+                // If form is already submitting, block rapid duplicate submission
+                if (form.dataset.submitting === "true") {
+                    event.preventDefault();
+                    event.stopImmediatePropagation();
+                    return false;
+                }
+
+                // Check HTML5 form validity if available
+                if (form.checkValidity && !form.checkValidity()) {
+                    return; // Let browser highlight missing/invalid fields
+                }
+
+                form.dataset.submitting = "true";
+
+                // Locate and disable submit buttons with visual loading feedback
+                var submitButtons = form.querySelectorAll("button[type='submit'], input[type='submit']");
+                submitButtons.forEach(function (btn) {
+                    btn.disabled = true;
+                    btn.classList.add("btn-submitting");
+                    if (btn.tagName === "BUTTON") {
+                        btn.innerHTML = '<span class="btn-spinner"></span> Processing...';
+                    } else if (btn.tagName === "INPUT") {
+                        btn.value = "Processing...";
+                    }
+                });
+            });
+        }
+    });
+});
+</script>

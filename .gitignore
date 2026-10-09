@@ -1,29 +1,46 @@
-
-
-# Python
+# Byte-compiled / optimized / DLL files
 __pycache__/
 *.py[cod]
+*.class
 *.pyo
 
 # Virtual environments
 .venv/
-.venv-1/
-.venv-2/
+.venv-*/
+env/
+venv/
+ENV/
 
-# Django database and files
-db.sqlite3
-**/db.sqlite3
+# Database files & local records
+*.sqlite3
+*.sqlite3*
+*.sqlite3-journal
+*.sqlite3-wal
+*.sqlite3-shm
+*.backup*
+db.sqlite3*
+db.sqlite3.*
+
+# Media & static builds
 media/
 staticfiles/
 
-# Environment variables
+# Environment variables & secrets
 .env
 .env.*
+*.env
+!.env.example
 
-# IDE
+# Local test scratch, screenshots & logs
+dom_*.html
+*.png
+*.log
+scratch/
+qa_evidence_v3/
+.tempmediaStorage/
+
+# IDE & OS
 .vscode/
 .idea/
-
-# OS
 .DS_Store
 Thumbs.db

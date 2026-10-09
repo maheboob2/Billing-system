@@ -1,21 +1,41 @@
+{% extends "dashboard/main_nav.html" %}
 {% load static %}
-<!DOCTYPE html>
-<html lang="en">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Document</title>
-</head>
-<body>
-    <h1>Delete Employee</h1>
-    <p>Are you sure want to delete  {{ employee.user.first_name }} - {{employee.employee_id}} </p>
 
-    <form method="post">
-        {% csrf_token %}
+{% block content %}
+<div style="max-width: 520px; margin: 60px auto; padding: 0 16px;">
+    <div style="background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius-md); padding: 28px; box-shadow: 0 4px 16px rgba(0,0,0,0.06); text-align: center;">
+        
+        <div style="width: 54px; height: 54px; border-radius: 50%; background: rgba(220, 38, 38, 0.12); color: var(--danger); display: flex; align-items: center; justify-content: center; font-size: 26px; margin: 0 auto 16px;">
+            <i class="bi bi-person-x-fill"></i>
+        </div>
 
-        <button type="submit">
-            Confirm Delete
-        </button>
-    </form>
-</body>
-</html>
+        <h3 style="font-size: 18px; font-weight: 700; color: var(--text); margin-bottom: 8px;">Remove Team Member?</h3>
+        <p style="font-size: 13px; color: var(--muted); line-height: 1.5; margin-bottom: 20px;">
+            Are you sure you want to delete <strong>{{ employee.user.username }}</strong> ({{ employee.employee_id }}) from {{ company.company_name }}? This will terminate their system account access.
+        </p>
+
+        <div style="background: var(--surface-2); border: 1px solid var(--border); border-radius: var(--radius-sm); padding: 12px; margin-bottom: 22px; font-size: 12px; text-align: left;">
+            <div style="display: flex; justify-content: space-between; margin-bottom: 4px;">
+                <span style="color: var(--muted);">Full Name:</span>
+                <strong style="color: var(--text);">{{ employee.user.first_name }} {{ employee.user.last_name|default:'' }}</strong>
+            </div>
+            <div style="display: flex; justify-content: space-between; margin-bottom: 4px;">
+                <span style="color: var(--muted);">Role:</span>
+                <strong style="color: var(--primary);">{{ employee.Role }}</strong>
+            </div>
+            <div style="display: flex; justify-content: space-between;">
+                <span style="color: var(--muted);">Employee ID:</span>
+                <strong style="color: var(--text); font-family: var(--font-mono);">{{ employee.employee_id }}</strong>
+            </div>
+        </div>
+
+        <form method="POST" style="display: flex; gap: 12px; justify-content: center;">
+            {% csrf_token %}
+            <a href="{% url 'view_employee' %}" class="btn btn-secondary" style="flex: 1; text-decoration: none;">Cancel</a>
+            <button type="submit" class="btn btn-danger" style="flex: 1;">
+                <i class="bi bi-trash-fill"></i> Yes, Remove
+            </button>
+        </form>
+    </div>
+</div>
+{% endblock content %}

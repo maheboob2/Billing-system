@@ -23,17 +23,81 @@ BASE_DIR = Path(__file__).resolve().parent.parent
 # See https://docs.djangoproject.com/en/6.0/howto/deployment/checklist/
 
 # SECURITY WARNING: keep the secret key used in production secret!
-load_dotenv()
+load_dotenv(BASE_DIR / ".env", override=True)
 
+# DEBUG defaults to False unless explicitly configured in environment
+DEBUG = os.getenv("DEBUG", "True").lower() in ("true", "1", "yes")
+
+# SECRET_KEY must come from environment.
+# In development (DEBUG=True), generate an ephemeral key if missing from .env
+# In production (DEBUG=False), missing SECRET_KEY raises ImproperlyConfigured
 SECRET_KEY = os.getenv("SECRET_KEY")
-
 if not SECRET_KEY:
-    raise ValueError("SECRET_KEY is missing!")
+    if DEBUG:
+        import secrets
+        SECRET_KEY = secrets.token_urlsafe(50)
+    else:
+        from django.core.exceptions import ImproperlyConfigured
+        raise ImproperlyConfigured("The SECRET_KEY environment variable must be set when DEBUG is False.")
 
-# SECURITY WARNING: don't run with debug turned on in production!
-DEBUG = True
+# ALLOWED_HOSTS must not default to '*'
+raw_allowed_hosts = os.getenv("ALLOWED_HOSTS", "localhost,127.0.0.1,testserver")
+ALLOWED_HOSTS = [h.strip() for h in raw_allowed_hosts.split(",") if h.strip()]
 
-ALLOWED_HOSTS = []
+# POS Scanner Base URL (e.g. http://192.168.1.10:8000 or https://pos.store.local)
+# If blank, LAN IPv4 address is dynamically discovered for the phone QR code
+POS_SCANNER_BASE_URL = os.getenv("POS_SCANNER_BASE_URL", "").strip()
+if POS_SCANNER_BASE_URL:
+    try:
+        from urllib.parse import urlparse
+        parsed_scanner = urlparse(POS_SCANNER_BASE_URL)
+        scanner_host = parsed_scanner.hostname
+        if scanner_host and scanner_host not in ALLOWED_HOSTS:
+            ALLOWED_HOSTS.append(scanner_host)
+    except Exception:
+        pass
+
+# Telegram Bot Integration (Optional)
+# If not configured or blank, Telegram features remain gracefully disabled / offline
+TELEGRAM_BOT_TOKEN = os.getenv("TELEGRAM_BOT_TOKEN", "").strip()
+
+# In development/DEBUG mode: permit local LAN IPv4 addresses dynamically so
+# physical phones on the same Wi-Fi network can reach the POS companion.
+# In production (DEBUG=False), ALLOWED_HOSTS strictly uses the explicit configured list.
+if DEBUG:
+    class DynamicDebugAllowedHosts(list):
+        def __iter__(self):
+            yield from super().__iter__()
+            try:
+                import socket
+                s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+                s.settimeout(0.2)
+                s.connect(("8.8.8.8", 80))
+                lan_ip = s.getsockname()[0]
+                s.close()
+                if lan_ip:
+                    yield lan_ip
+            except Exception:
+                pass
+            try:
+                hostname = socket.gethostname()
+                for info in socket.getaddrinfo(hostname, None):
+                    ip = info[4][0]
+                    if ":" not in ip and not ip.startswith("127.") and not ip.startswith("0.") and not ip.startswith("169.254."):
+                        yield ip
+            except Exception:
+                pass
+
+        def __contains__(self, item):
+            if super().__contains__(item):
+                return True
+            for dynamic_ip in self:
+                if dynamic_ip == item:
+                    return True
+            return False
+
+    ALLOWED_HOSTS = DynamicDebugAllowedHosts(ALLOWED_HOSTS)
+    ALLOWED_HOSTS.extend(["0.0.0.0", ".local", ".lan"])
 
 
 # Application definition
@@ -45,6 +109,7 @@ INSTALLED_APPS = [
     'django.contrib.sessions',
     'django.contrib.messages',
     'django.contrib.staticfiles',
+    'rest_framework',
     'accounts',
     'dashboard',
     'inventory',
@@ -77,6 +142,7 @@ TEMPLATES = [
                 'django.template.context_processors.request',
                 'django.contrib.auth.context_processors.auth',
                 'django.contrib.messages.context_processors.messages',
+                'accounts.context_processors.tenancy_context',
             ],
         },
     },
@@ -88,12 +154,50 @@ WSGI_APPLICATION = 'config.wsgi.application'
 # Database
 # https://docs.djangoproject.com/en/6.0/ref/settings/#databases
 
-DATABASES = {
-    'default': {
-        'ENGINE': 'django.db.backends.sqlite3',
-        'NAME': BASE_DIR / 'db.sqlite3',
+# Database Configuration
+# Supports Hosted PostgreSQL via DATABASE_URL or environment variables,
+# with clean fallback to SQLite for local development.
+DATABASE_URL = os.getenv('DATABASE_URL')
+if DATABASE_URL:
+    try:
+        import dj_database_url
+        DATABASES = {
+            'default': dj_database_url.parse(DATABASE_URL, conn_max_age=600)
+        }
+    except ImportError:
+        import urllib.parse
+        parsed = urllib.parse.urlparse(DATABASE_URL)
+        DATABASES = {
+            'default': {
+                'ENGINE': 'django.db.backends.postgresql',
+                'NAME': parsed.path.lstrip('/'),
+                'USER': parsed.username or '',
+                'PASSWORD': parsed.password or '',
+                'HOST': parsed.hostname or 'localhost',
+                'PORT': parsed.port or 5432,
+            }
+        }
+elif os.getenv('DB_ENGINE') == 'django.db.backends.postgresql':
+    DATABASES = {
+        'default': {
+            'ENGINE': 'django.db.backends.postgresql',
+            'NAME': os.getenv('DB_NAME', 'pos_demo_db'),
+            'USER': os.getenv('DB_USER', 'postgres'),
+            'PASSWORD': os.getenv('DB_PASSWORD', ''),
+            'HOST': os.getenv('DB_HOST', 'localhost'),
+            'PORT': os.getenv('DB_PORT', '5432'),
+        }
     }
-}
+else:
+    DATABASES = {
+        'default': {
+            'ENGINE': 'django.db.backends.sqlite3',
+            'NAME': BASE_DIR / 'db.sqlite3',
+            'OPTIONS': {
+                'timeout': 30,
+            },
+        }
+    }
 
 
 # Password validation
@@ -131,6 +235,37 @@ USE_TZ = True
 # https://docs.djangoproject.com/en/6.0/howto/static-files/
 
 STATIC_URL = 'static/'
-import os
+STATIC_ROOT = os.path.join(BASE_DIR, 'staticfiles')
+
 MEDIA_URL = '/media/'
 MEDIA_ROOT = os.path.join(BASE_DIR, 'media')
+
+DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
+
+LOGIN_URL = 'accounts'
+LOGIN_REDIRECT_URL = 'dashboard'
+
+REST_FRAMEWORK = {
+    'DEFAULT_AUTHENTICATION_CLASSES': [
+        'rest_framework.authentication.SessionAuthentication',
+        'rest_framework.authentication.BasicAuthentication',
+    ],
+    'DEFAULT_PERMISSION_CLASSES': [
+        'rest_framework.permissions.IsAuthenticated',
+    ],
+    'DEFAULT_RENDERER_CLASSES': [
+        'rest_framework.renderers.JSONRenderer',
+        'rest_framework.renderers.BrowsableAPIRenderer',
+    ],
+    'DEFAULT_THROTTLE_CLASSES': [
+        'rest_framework.throttling.UserRateThrottle',
+        'rest_framework.throttling.AnonRateThrottle',
+    ],
+    'DEFAULT_THROTTLE_RATES': {
+        'user': '1000/hour',
+        'anon': '100/hour',
+        'checkout': '50/minute',
+        'payment': '30/minute',
+    },
+}
+

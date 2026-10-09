@@ -1,0 +1,108 @@
+{% extends "dashboard/main_nav.html" %}
+{% load static %}
+
+{% block content %}
+<div class="settings-wrap" style="max-width: 900px; margin: 24px auto; padding: 0 16px;">
+    
+    <!-- Header -->
+    <div style="margin-bottom: 20px;">
+        <h1 style="font-size: 22px; font-weight: 700; color: var(--text); margin: 0 0 4px 0;">Company Profile & Ownership</h1>
+        <p style="margin: 0; font-size: 13px; color: var(--muted);">Owner confidential business information and statutory tax configuration.</p>
+    </div>
+
+    <!-- Navigation Tabs -->
+    <div style="display: flex; gap: 8px; border-bottom: 1px solid var(--border); margin-bottom: 24px; overflow-x: auto;">
+        <a href="{% url 'settings_general' %}" class="settings-tab">
+            <i class="bi bi-gear-fill"></i> General
+        </a>
+        <a href="{% url 'settings_appearance' %}" class="settings-tab">
+            <i class="bi bi-palette-fill"></i> Appearance
+        </a>
+        <a href="{% url 'settings_company' %}" class="settings-tab active" aria-current="page">
+            <i class="bi bi-building"></i> Company Profile
+        </a>
+        <a href="{% url 'settings_scanner' %}" class="settings-tab">
+            <i class="bi bi-upc-scan"></i> Scanner & POS Devices
+        </a>
+        <a href="{% url 'settings_telegram' %}" class="settings-tab">
+            <i class="bi bi-telegram"></i> Telegram Bot & Sync
+        </a>
+    </div>
+
+    {% if saved_msg %}
+    <div style="background: rgba(22, 163, 74, 0.12); border: 1px solid rgba(22, 163, 74, 0.3); color: var(--success); padding: 12px 16px; border-radius: var(--radius-sm); margin-bottom: 20px; font-size: 13px; display: flex; align-items: center; gap: 8px;">
+        <i class="bi bi-check-circle-fill"></i>
+        <span>{{ saved_msg }}</span>
+    </div>
+    {% endif %}
+
+    <div style="background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius-md); padding: 24px;">
+        <form method="POST">
+            {% csrf_token %}
+
+            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 14px; margin-bottom: 14px;">
+                <div>
+                    <label style="display: block; font-size: 12px; font-weight: 600; color: var(--text); margin-bottom: 6px;">Company Name *</label>
+                    <input type="text" name="company_name" value="{{ company.company_name }}" required style="width: 100%;">
+                </div>
+                <div>
+                    <label style="display: block; font-size: 12px; font-weight: 600; color: var(--text); margin-bottom: 6px;">GSTIN / GST Number</label>
+                    <input type="text" name="gst_number" value="{{ company.gst_number }}" style="width: 100%;">
+                </div>
+            </div>
+
+            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 14px; margin-bottom: 14px;">
+                <div>
+                    <label style="display: block; font-size: 12px; font-weight: 600; color: var(--text); margin-bottom: 6px;">Primary Phone *</label>
+                    <input type="text" name="phone" value="{{ company.phone }}" required style="width: 100%;">
+                </div>
+                <div>
+                    <label style="display: block; font-size: 12px; font-weight: 600; color: var(--text); margin-bottom: 6px;">Alternate Phone</label>
+                    <input type="text" name="alternate_phone" value="{{ company.alternate_phone }}" style="width: 100%;">
+                </div>
+            </div>
+
+            <div style="display: grid; grid-template-columns: 2fr 1fr 1fr; gap: 14px; margin-bottom: 14px;">
+                <div>
+                    <label style="display: block; font-size: 12px; font-weight: 600; color: var(--text); margin-bottom: 6px;">Address Line *</label>
+                    <input type="text" name="address_line" value="{{ company.address_line }}" required style="width: 100%;">
+                </div>
+                <div>
+                    <label style="display: block; font-size: 12px; font-weight: 600; color: var(--text); margin-bottom: 6px;">City *</label>
+                    <input type="text" name="city" value="{{ company.city }}" required style="width: 100%;">
+                </div>
+                <div>
+                    <label style="display: block; font-size: 12px; font-weight: 600; color: var(--text); margin-bottom: 6px;">Pincode *</label>
+                    <input type="text" name="pincode" value="{{ company.pincode }}" required style="width: 100%;">
+                </div>
+            </div>
+
+            <div style="display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 14px; margin-bottom: 14px;">
+                <div>
+                    <label style="display: block; font-size: 12px; font-weight: 600; color: var(--text); margin-bottom: 6px;">State *</label>
+                    <input type="text" name="state" value="{{ company.state }}" required style="width: 100%;">
+                </div>
+                <div>
+                    <label style="display: block; font-size: 12px; font-weight: 600; color: var(--text); margin-bottom: 6px;">Country</label>
+                    <input type="text" name="country" value="{{ company.country|default:'India' }}" required style="width: 100%;">
+                </div>
+                <div>
+                    <label style="display: block; font-size: 12px; font-weight: 600; color: var(--text); margin-bottom: 6px;">PAN Number</label>
+                    <input type="text" name="pan_number" value="{{ company.pan_number|default:'' }}" style="width: 100%;">
+                </div>
+            </div>
+
+            <div style="margin-bottom: 16px;">
+                <label style="display: block; font-size: 12px; font-weight: 600; color: var(--text); margin-bottom: 6px;">Business Info / Tagline</label>
+                <textarea name="business_info" rows="2" style="width: 100%;">{{ company.business_info }}</textarea>
+            </div>
+
+            <div style="display: flex; justify-content: flex-end; gap: 12px; border-top: 1px solid var(--border); padding-top: 16px;">
+                <button type="submit" class="btn btn-primary" style="padding: 9px 20px;">
+                    <i class="bi bi-save"></i> Save Company Profile
+                </button>
+            </div>
+        </form>
+    </div>
+</div>
+{% endblock content %}

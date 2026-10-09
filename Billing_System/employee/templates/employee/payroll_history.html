@@ -1,0 +1,401 @@
+{% extends "dashboard/main_nav.html" %}
+{% load static %}
+
+{% block content %}
+<div class="payroll-wrap" style="max-width: 1400px; margin: 0 auto; padding: 22px 20px;">
+    
+    <!-- Header -->
+    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 22px; flex-wrap: wrap; gap: 14px;">
+        <div>
+            <div style="display: flex; align-items: center; gap: 10px; margin-bottom: 4px;">
+                <h1 style="font-size: 22px; font-weight: 700; color: var(--text); margin: 0;">Payroll History & Reports</h1>
+                <span class="badge badge-warning" style="font-size: 11px;">
+                    <i class="bi bi-lock-fill"></i> Owner Confidential
+                </span>
+            </div>
+            <p style="margin: 0; font-size: 13px; color: var(--muted);">
+                Historical and active salary disbursements for <strong>{{ company.company_name }}</strong> &bull; Period April 2025 onwards.
+            </p>
+        </div>
+
+        <div style="display: flex; gap: 10px; align-items: center;">
+            <a href="{% url 'view_employee' %}" class="btn btn-secondary" style="font-size: 13px; padding: 8px 16px; text-decoration: none;">
+                <i class="bi bi-people-fill"></i> Store Team Roster
+            </a>
+            <a href="{% url 'employee' %}" class="btn btn-primary" style="font-size: 13px; padding: 8px 16px; text-decoration: none;">
+                <i class="bi bi-person-plus-fill"></i> Add Team Member
+            </a>
+        </div>
+    </div>
+
+    {% if post_msg %}
+    <div style="background: rgba(22, 163, 74, 0.12); border: 1px solid rgba(22, 163, 74, 0.3); color: var(--success); padding: 12px 16px; border-radius: var(--radius-sm); margin-bottom: 18px; font-size: 13px; display: flex; align-items: center; gap: 8px;">
+        <i class="bi bi-check-circle-fill"></i>
+        <span>{{ post_msg }}</span>
+    </div>
+    {% endif %}
+
+    {% if post_error %}
+    <div style="background: rgba(239, 68, 68, 0.12); border: 1px solid rgba(239, 68, 68, 0.3); color: var(--danger); padding: 12px 16px; border-radius: var(--radius-sm); margin-bottom: 18px; font-size: 13px; display: flex; align-items: center; gap: 8px;">
+        <i class="bi bi-exclamation-triangle-fill"></i>
+        <span>{{ post_error }}</span>
+    </div>
+    {% endif %}
+
+    <!-- Filter & Period Selector Toolbar -->
+    <div style="background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius-md); padding: 16px 20px; margin-bottom: 22px;">
+        <form method="GET" style="display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 16px;">
+            <div style="display: flex; align-items: center; gap: 12px; flex-wrap: wrap;">
+                <label style="font-size: 13px; font-weight: 700; color: var(--text); text-transform: uppercase; letter-spacing: 0.5px;">
+                    <i class="bi bi-calendar3" style="color: var(--primary);"></i> Payroll Period:
+                </label>
+                
+                <select name="month" id="payroll-month-select" style="padding: 8px 14px; background: var(--surface-2); border: 1px solid var(--border); border-radius: var(--radius-sm); color: var(--text); font-size: 13px; font-weight: 600; outline: none;">
+                    {% for m_num, m_name in months_list %}
+                    <option value="{{ m_num }}" {% if m_num == selected_month %}selected{% endif %}>{{ m_name }}</option>
+                    {% endfor %}
+                </select>
+
+                <select name="year" id="payroll-year-select" style="padding: 8px 14px; background: var(--surface-2); border: 1px solid var(--border); border-radius: var(--radius-sm); color: var(--text); font-size: 13px; font-weight: 600; outline: none;">
+                    {% for yr in available_years %}
+                    <option value="{{ yr }}" {% if yr == selected_year %}selected{% endif %}>{{ yr }}</option>
+                    {% endfor %}
+                </select>
+
+                <button type="submit" class="btn btn-secondary" style="padding: 8px 18px; font-size: 13px;">
+                    <i class="bi bi-funnel-fill"></i> Load Period
+                </button>
+            </div>
+
+            <div style="font-size: 13px; color: var(--muted);">
+                Active Period: <strong style="color: var(--primary); font-size: 14px;">{{ selected_period_display }}</strong>
+            </div>
+        </form>
+    </div>
+
+    <!-- ── KPI METRICS CARDS ─────────────────────────────────────────── -->
+    <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 14px; margin-bottom: 22px;">
+        <div class="stat-card" style="padding: 16px;">
+            <div style="font-size: 11px; font-weight: 700; color: var(--muted); text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 6px;">Eligible Team</div>
+            <div id="stat-eligible-count" style="font-size: 26px; font-weight: 700; font-family: var(--font-mono); color: var(--text);">{{ eligible_count }}</div>
+            <div style="font-size: 11px; color: var(--muted); margin-top: 4px;">Staff eligible for {{ selected_period_display }}</div>
+        </div>
+
+        <div class="stat-card" style="padding: 16px;">
+            <div style="font-size: 11px; font-weight: 700; color: var(--muted); text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 6px;">Paid vs Pending Staff</div>
+            <div id="stat-paid-count" style="font-size: 26px; font-weight: 700; font-family: var(--font-mono); color: #16a34a;">{{ paid_count }} Paid</div>
+            <div style="font-size: 11px; color: var(--muted); margin-top: 4px;">
+                <span style="color: var(--warning); font-weight: 600;">{{ partial_count }} Partial</span> &bull; 
+                <span style="color: var(--danger); font-weight: 600;">{{ unpaid_count }} Unpaid</span>
+            </div>
+        </div>
+
+        <div class="stat-card" style="padding: 16px; border-left: 4px solid var(--primary);">
+            <div style="font-size: 11px; font-weight: 700; color: var(--muted); text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 6px;">Total Payable</div>
+            <div style="font-size: 26px; font-weight: 700; font-family: var(--font-mono); color: var(--text);">₹{{ total_payable|floatformat:2 }}</div>
+            <div style="font-size: 11px; color: var(--muted); margin-top: 4px;">Net salary commitments</div>
+        </div>
+
+        <div class="stat-card" style="padding: 16px;">
+            <div style="font-size: 11px; font-weight: 700; color: var(--muted); text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 6px;">Disbursed (Paid)</div>
+            <div style="font-size: 26px; font-weight: 700; font-family: var(--font-mono); color: var(--success);">₹{{ total_paid|floatformat:2 }}</div>
+            <div style="font-size: 11px; color: var(--muted); margin-top: 4px;">
+                Completion: <strong style="color: var(--primary);">{{ completion_pct }}%</strong>
+            </div>
+        </div>
+
+        <div class="stat-card" style="padding: 16px;">
+            <div style="font-size: 11px; font-weight: 700; color: var(--muted); text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 6px;">Pending Balance</div>
+            <div id="stat-pending-amount" style="font-size: 26px; font-weight: 700; font-family: var(--font-mono); color: {% if total_pending > 0 %}var(--warning){% else %}var(--success){% endif %};">₹{{ total_pending|floatformat:2 }}</div>
+            <div style="font-size: 11px; color: var(--muted); margin-top: 4px;">Outstanding payroll due</div>
+        </div>
+    </div>
+
+    <!-- Progress Bar -->
+    <div style="background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius-sm); padding: 12px 16px; margin-bottom: 24px; display: flex; align-items: center; gap: 14px;">
+        <span style="font-size: 12px; font-weight: 600; color: var(--text); white-space: nowrap;">Disbursement Progress:</span>
+        <div style="flex: 1; height: 10px; background: var(--surface-2); border-radius: 9999px; overflow: hidden; border: 1px solid var(--border);">
+            <div style="height: 100%; width: {{ completion_pct }}%; background: var(--primary); transition: width 0.3s ease;"></div>
+        </div>
+        <span style="font-size: 13px; font-family: var(--font-mono); font-weight: 700; color: var(--primary);">{{ completion_pct }}%</span>
+    </div>
+
+    <!-- ── SECTION 1: EMPLOYEE ROSTER FOR SELECTED PERIOD ─────────────── -->
+    <div style="background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius-md); overflow: hidden; margin-bottom: 30px; box-shadow: 0 1px 3px rgba(0,0,0,0.05);">
+        <div style="padding: 16px 20px; border-bottom: 1px solid var(--border); display: flex; justify-content: space-between; align-items: center; background: var(--surface-2);">
+            <h3 style="font-size: 15px; font-weight: 700; color: var(--text); margin: 0; display: flex; align-items: center; gap: 8px;">
+                <i class="bi bi-person-lines-fill" style="color: var(--primary);"></i> Staff Payroll Roster &mdash; {{ selected_period_display }}
+            </h3>
+            <span style="font-size: 12px; color: var(--muted);">{{ employee_roster|length }} Employees</span>
+        </div>
+
+        {% if employee_roster %}
+        <div style="overflow-x: auto;">
+            <table id="employee-roster-table" style="width: 100%; border-collapse: collapse; font-size: 13px;">
+                <thead>
+                    <tr style="background: var(--surface); border-bottom: 2px solid var(--border); text-align: left;">
+                        <th style="padding: 12px 16px; color: var(--muted); font-size: 11px; text-transform: uppercase;">Employee</th>
+                        <th style="padding: 12px 16px; color: var(--muted); font-size: 11px; text-transform: uppercase;">Role / Dept</th>
+                        <th style="padding: 12px 16px; color: var(--muted); font-size: 11px; text-transform: uppercase;">Joined</th>
+                        <th style="padding: 12px 16px; color: var(--muted); font-size: 11px; text-transform: uppercase; text-align: right;">Gross</th>
+                        <th style="padding: 12px 16px; color: var(--muted); font-size: 11px; text-transform: uppercase; text-align: right;">Net Payable</th>
+                        <th style="padding: 12px 16px; color: var(--muted); font-size: 11px; text-transform: uppercase; text-align: right;">Paid</th>
+                        <th style="padding: 12px 16px; color: var(--muted); font-size: 11px; text-transform: uppercase; text-align: right;">Pending</th>
+                        <th style="padding: 12px 16px; color: var(--muted); font-size: 11px; text-transform: uppercase; text-align: center;">Status</th>
+                        <th style="padding: 12px 16px; color: var(--muted); font-size: 11px; text-transform: uppercase; text-align: right;">Actions</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for item in employee_roster %}
+                    <tr style="border-bottom: 1px solid var(--border);">
+                        <td style="padding: 12px 16px;">
+                            <div style="font-weight: 700; color: var(--text);">{{ item.employee.user.get_full_name|default:item.employee.user.username }}</div>
+                            <div style="font-size: 11px; color: var(--muted); font-family: var(--font-mono);">{{ item.employee.employee_id }}</div>
+                        </td>
+                        <td style="padding: 12px 16px;">
+                            <span class="badge badge-secondary" style="font-size: 11px;">{{ item.employee.Role }}</span>
+                        </td>
+                        <td style="padding: 12px 16px; font-size: 12px; color: var(--muted);">
+                            {{ item.employee.joining_date|date:"d M Y" }}
+                        </td>
+                        <td style="padding: 12px 16px; text-align: right; font-family: var(--font-mono);">
+                            ₹{{ item.gross_salary|floatformat:2 }}
+                        </td>
+                        <td style="padding: 12px 16px; text-align: right; font-family: var(--font-mono); font-weight: 700; color: var(--text);">
+                            ₹{{ item.net_payable|floatformat:2 }}
+                        </td>
+                        <td style="padding: 12px 16px; text-align: right; font-family: var(--font-mono); color: var(--success); font-weight: 600;">
+                            ₹{{ item.paid_amount|floatformat:2 }}
+                        </td>
+                        <td style="padding: 12px 16px; text-align: right; font-family: var(--font-mono); color: {% if item.pending_amount > 0 %}var(--warning){% else %}var(--muted){% endif %};">
+                            ₹{{ item.pending_amount|floatformat:2 }}
+                        </td>
+                        <td style="padding: 12px 16px; text-align: center;">
+                            {% if item.status == "Paid" %}
+                            <span class="badge badge-success" style="font-size: 11px;">● Paid</span>
+                            {% elif item.status == "Partial" %}
+                            <span class="badge badge-warning" style="font-size: 11px;">◐ Partial</span>
+                            {% else %}
+                            <span class="badge badge-danger" style="font-size: 11px;">○ Unpaid</span>
+                            {% endif %}
+                        </td>
+                        <td style="padding: 12px 16px; text-align: right;">
+                            <div style="display: flex; gap: 6px; justify-content: flex-end;">
+                                <a href="{% url 'employee_payslip' item.employee.employee_id %}?year={{ selected_year }}&month={{ selected_month }}" 
+                                   target="_blank"
+                                   class="btn btn-secondary btn-sm" 
+                                   style="padding: 4px 10px; font-size: 11px; text-decoration: none;"
+                                   title="View or Print Official Payslip">
+                                    <i class="bi bi-file-earmark-text"></i> View Payslip
+                                </a>
+                                <button type="button" 
+                                        class="btn btn-primary btn-sm btn-record-pay"
+                                        style="padding: 4px 10px; font-size: 11px;"
+                                        data-emp-id="{{ item.employee.employee_id }}"
+                                        data-emp-name="{{ item.employee.user.get_full_name|default:item.employee.user.username }}"
+                                        data-basic="{{ item.employee.monthaly_salary|default:0 }}"
+                                        data-paid="{{ item.paid_amount }}"
+                                        data-net="{{ item.net_payable }}">
+                                    <i class="bi bi-cash"></i> Pay / Edit
+                                </button>
+                            </div>
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+        {% else %}
+        <div style="padding: 40px 20px; text-align: center; color: var(--muted);">
+            <i class="bi bi-calendar-x" style="font-size: 32px; display: block; margin-bottom: 8px;"></i>
+            <strong>No active employees eligible for {{ selected_period_display }}</strong>
+            <p style="font-size: 12px; margin-top: 4px;">Staff joining dates must be on or before the end of this month.</p>
+        </div>
+        {% endif %}
+    </div>
+
+    <!-- ── SECTION 2: MONTH-BY-MONTH HISTORICAL TABLE ─────────────────── -->
+    <div style="background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius-md); overflow: hidden; box-shadow: 0 1px 3px rgba(0,0,0,0.05);">
+        <div style="padding: 16px 20px; border-bottom: 1px solid var(--border); display: flex; justify-content: space-between; align-items: center; background: var(--surface-2);">
+            <div>
+                <h3 style="font-size: 15px; font-weight: 700; color: var(--text); margin: 0; display: flex; align-items: center; gap: 8px;">
+                    <i class="bi bi-table" style="color: var(--primary);"></i> Historical Month-by-Month Payroll Ledger
+                </h3>
+                <div style="font-size: 11px; color: var(--muted); margin-top: 2px;">Reporting cycle: April 2025 to {{ selected_period_display }}</div>
+            </div>
+            <span style="font-size: 12px; color: var(--muted);">{{ history_table|length }} Periods Tracked</span>
+        </div>
+
+        {% if history_table %}
+        <div style="overflow-x: auto;">
+            <table id="payroll-history-table" style="width: 100%; border-collapse: collapse; font-size: 13px;">
+                <thead>
+                    <tr style="background: var(--surface); border-bottom: 2px solid var(--border); text-align: left;">
+                        <th style="padding: 12px 16px; color: var(--muted); font-size: 11px; text-transform: uppercase;">Period</th>
+                        <th style="padding: 12px 16px; color: var(--muted); font-size: 11px; text-transform: uppercase; text-align: center;">Eligible Staff</th>
+                        <th style="padding: 12px 16px; color: var(--muted); font-size: 11px; text-transform: uppercase; text-align: center;">Disbursed / Due</th>
+                        <th style="padding: 12px 16px; color: var(--muted); font-size: 11px; text-transform: uppercase; text-align: right;">Total Payable</th>
+                        <th style="padding: 12px 16px; color: var(--muted); font-size: 11px; text-transform: uppercase; text-align: right;">Disbursed</th>
+                        <th style="padding: 12px 16px; color: var(--muted); font-size: 11px; text-transform: uppercase; text-align: right;">Balance Due</th>
+                        <th style="padding: 12px 16px; color: var(--muted); font-size: 11px; text-transform: uppercase; text-align: center;">Completion</th>
+                        <th style="padding: 12px 16px; color: var(--muted); font-size: 11px; text-transform: uppercase; text-align: right;">Action</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for row in history_table %}
+                    <tr style="border-bottom: 1px solid var(--border); {% if row.is_selected %}background: var(--primary-soft);{% endif %}">
+                        <td style="padding: 12px 16px; font-weight: 700; color: var(--text);">
+                            {{ row.period_display }}
+                            {% if row.is_selected %}
+                            <span class="badge badge-primary" style="font-size: 10px; margin-left: 6px;">Active</span>
+                            {% endif %}
+                        </td>
+                        <td style="padding: 12px 16px; text-align: center; font-family: var(--font-mono);">
+                            {{ row.eligible_count }}
+                        </td>
+                        <td style="padding: 12px 16px; text-align: center; font-size: 12px;">
+                            <span style="color: var(--success); font-weight: 600;">{{ row.paid_count }} Paid</span> / 
+                            <span style="color: var(--warning); font-weight: 600;">{{ row.unpaid_count }} Due</span>
+                        </td>
+                        <td style="padding: 12px 16px; text-align: right; font-family: var(--font-mono);">
+                            ₹{{ row.payable_amount|floatformat:2 }}
+                        </td>
+                        <td style="padding: 12px 16px; text-align: right; font-family: var(--font-mono); color: var(--success); font-weight: 600;">
+                            ₹{{ row.paid_amount|floatformat:2 }}
+                        </td>
+                        <td style="padding: 12px 16px; text-align: right; font-family: var(--font-mono); color: {% if row.pending_amount > 0 %}var(--warning){% else %}var(--muted){% endif %};">
+                            ₹{{ row.pending_amount|floatformat:2 }}
+                        </td>
+                        <td style="padding: 12px 16px; text-align: center;">
+                            <span class="badge {% if row.completion_pct == 100 %}badge-success{% elif row.completion_pct > 0 %}badge-warning{% else %}badge-secondary{% endif %}" style="font-size: 11px;">
+                                {{ row.completion_pct }}%
+                            </span>
+                        </td>
+                        <td style="padding: 12px 16px; text-align: right;">
+                            <a href="?year={{ row.year }}&month={{ row.month }}" class="btn btn-secondary btn-sm" style="padding: 4px 10px; font-size: 11px; text-decoration: none;">
+                                <i class="bi bi-eye"></i> View Period
+                            </a>
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+        {% else %}
+        <div style="padding: 30px; text-align: center; color: var(--muted);">
+            No payroll records found for historical periods.
+        </div>
+        {% endif %}
+    </div>
+
+</div>
+
+<!-- ── RECORD PAYMENT MODAL ─────────────────────────────────────────── -->
+<div id="payment-modal" style="display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.6); z-index: 9999; align-items: center; justify-content: center; padding: 16px;">
+    <div style="background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius-md); max-width: 500px; width: 100%; padding: 24px; box-shadow: 0 16px 40px rgba(0,0,0,0.3);">
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px;">
+            <h3 style="font-size: 16px; font-weight: 700; color: var(--text); margin: 0;">
+                <i class="bi bi-wallet2" style="color: var(--primary);"></i> Record Salary Payment
+            </h3>
+            <button type="button" id="btn-close-modal" style="background: none; border: none; font-size: 20px; color: var(--muted); cursor: pointer;">&times;</button>
+        </div>
+
+        <form method="POST">
+            {% csrf_token %}
+            <input type="hidden" name="action" value="record_payment">
+            <input type="hidden" name="employee_id" id="modal-emp-id">
+
+            <div style="background: var(--surface-2); padding: 12px 14px; border-radius: var(--radius-sm); border: 1px solid var(--border); margin-bottom: 16px; font-size: 13px;">
+                <div style="display: flex; justify-content: space-between; margin-bottom: 4px;">
+                    <span style="color: var(--muted);">Employee:</span>
+                    <strong style="color: var(--text);" id="modal-emp-name"></strong>
+                </div>
+                <div style="display: flex; justify-content: space-between; margin-bottom: 4px;">
+                    <span style="color: var(--muted);">Period:</span>
+                    <strong style="color: var(--primary);">{{ selected_period_display }}</strong>
+                </div>
+                <div style="display: flex; justify-content: space-between;">
+                    <span style="color: var(--muted);">Base Salary:</span>
+                    <strong style="color: var(--text); font-family: var(--font-mono);" id="modal-emp-basic"></strong>
+                </div>
+            </div>
+
+            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-bottom: 12px;">
+                <div>
+                    <label style="display: block; font-size: 11px; font-weight: 700; color: var(--muted); text-transform: uppercase; margin-bottom: 4px;">Allowances (₹)</label>
+                    <input type="number" step="0.01" name="allowances" id="modal-allowances" value="0.00" style="width: 100%; padding: 8px 10px; background: var(--surface-2); border: 1px solid var(--border); border-radius: var(--radius-sm); color: var(--text);">
+                </div>
+                <div>
+                    <label style="display: block; font-size: 11px; font-weight: 700; color: var(--muted); text-transform: uppercase; margin-bottom: 4px;">Deductions (₹)</label>
+                    <input type="number" step="0.01" name="deductions" id="modal-deductions" value="0.00" style="width: 100%; padding: 8px 10px; background: var(--surface-2); border: 1px solid var(--border); border-radius: var(--radius-sm); color: var(--text);">
+                </div>
+            </div>
+
+            <div style="margin-bottom: 12px;">
+                <label style="display: block; font-size: 11px; font-weight: 700; color: var(--muted); text-transform: uppercase; margin-bottom: 4px;">Disbursed Amount (₹)</label>
+                <input type="number" step="0.01" name="paid_amount" id="modal-paid-amount" style="width: 100%; padding: 9px 12px; background: var(--surface-2); border: 1px solid var(--primary); border-radius: var(--radius-sm); color: var(--text); font-size: 15px; font-weight: 700; font-family: var(--font-mono);" required>
+            </div>
+
+            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-bottom: 12px;">
+                <div>
+                    <label style="display: block; font-size: 11px; font-weight: 700; color: var(--muted); text-transform: uppercase; margin-bottom: 4px;">Payment Method</label>
+                    <select name="payment_method" style="width: 100%; padding: 8px 10px; background: var(--surface-2); border: 1px solid var(--border); border-radius: var(--radius-sm); color: var(--text); font-size: 12px;">
+                        <option value="Bank Transfer">Bank Transfer (NEFT/RTGS)</option>
+                        <option value="UPI">UPI / GPay / PhonePe</option>
+                        <option value="Cash">Cash Voucher</option>
+                        <option value="Cheque">Bank Cheque</option>
+                    </select>
+                </div>
+                <div>
+                    <label style="display: block; font-size: 11px; font-weight: 700; color: var(--muted); text-transform: uppercase; margin-bottom: 4px;">Payment Date</label>
+                    <input type="date" name="payment_date" value="{{ today|date:'Y-m-d' }}" style="width: 100%; padding: 8px 10px; background: var(--surface-2); border: 1px solid var(--border); border-radius: var(--radius-sm); color: var(--text); font-size: 12px;">
+                </div>
+            </div>
+
+            <div style="margin-bottom: 16px;">
+                <label style="display: block; font-size: 11px; font-weight: 700; color: var(--muted); text-transform: uppercase; margin-bottom: 4px;">Transaction / UTR Reference</label>
+                <input type="text" name="payment_reference" placeholder="e.g. UTR-982348123 or Voucher #12" style="width: 100%; padding: 8px 10px; background: var(--surface-2); border: 1px solid var(--border); border-radius: var(--radius-sm); color: var(--text); font-size: 12px;">
+            </div>
+
+            <div style="display: flex; justify-content: flex-end; gap: 10px;">
+                <button type="button" id="btn-cancel-modal" class="btn btn-secondary" style="padding: 8px 16px; font-size: 12px;">Cancel</button>
+                <button type="submit" class="btn btn-primary" style="padding: 8px 20px; font-size: 12px;">
+                    <i class="bi bi-check2"></i> Save Salary Record
+                </button>
+            </div>
+        </form>
+    </div>
+</div>
+
+<script>
+document.addEventListener("DOMContentLoaded", () => {
+    const modal = document.getElementById("payment-modal");
+    const closeBtn = document.getElementById("btn-close-modal");
+    const cancelBtn = document.getElementById("btn-cancel-modal");
+
+    document.querySelectorAll(".btn-record-pay").forEach(btn => {
+        btn.addEventListener("click", () => {
+            const empId = btn.dataset.empId;
+            const empName = btn.dataset.empName;
+            const basic = parseFloat(btn.dataset.basic || 0);
+            const paid = parseFloat(btn.dataset.paid || 0);
+            const net = parseFloat(btn.dataset.net || basic);
+
+            document.getElementById("modal-emp-id").value = empId;
+            document.getElementById("modal-emp-name").textContent = `${empName} (${empId})`;
+            document.getElementById("modal-emp-basic").textContent = `₹${basic.toFixed(2)}`;
+            document.getElementById("modal-paid-amount").value = paid > 0 ? paid.toFixed(2) : net.toFixed(2);
+
+            modal.style.display = "flex";
+        });
+    });
+
+    const closeModal = () => { modal.style.display = "none"; };
+    if (closeBtn) closeBtn.addEventListener("click", closeModal);
+    if (cancelBtn) cancelBtn.addEventListener("click", closeModal);
+    modal.addEventListener("click", (e) => {
+        if (e.target === modal) closeModal();
+    });
+});
+</script>
+{% endblock content %}

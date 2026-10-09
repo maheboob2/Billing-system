@@ -1,147 +1,249 @@
+{% extends "dashboard/main_nav.html" %}
 {% load static %}
-<!DOCTYPE html>
-<html lang="en">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Document</title>
-</head>
-<body>
-    {% comment %} <h1>employee list</h1>
-    <h2>{{company.company_name}}</h2>
 
-    {% for employee in employees %}
-    {{ employee.user.username }}
-    {{ employee.company.company_name }}
-    {{ employee.Role }}
+{% block content %}
+<div class="team-page-container" style="max-width: 1400px; margin: 0 auto; padding: 22px 20px;">
     
-    
-    {% endfor %} {% endcomment %}
+    <!-- Header Block -->
+    <div style="display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 20px; flex-wrap: wrap; gap: 14px;">
+        <div>
+            <div style="display: flex; align-items: center; gap: 10px; margin-bottom: 4px;">
+                <h1 style="font-size: 22px; font-weight: 700; color: var(--text); margin: 0;">Team Management</h1>
+                <span style="font-size: 12px; background: var(--surface-2); border: 1px solid var(--border); padding: 3px 9px; border-radius: 14px; color: var(--muted); font-weight: 600;">
+                    {{ company.company_name }}
+                </span>
+            </div>
+            <p style="margin: 0; font-size: 13px; color: var(--muted);">
+                Oversee store personnel, operational roles, cashier permissions{% if is_owner %} and monthly payroll{% endif %}.
+            </p>
+        </div>
 
-    <h1>Employee Management</h1>
+        <div style="display: flex; gap: 10px; align-items: center;">
+            {% if is_owner %}
+            <a href="{% url 'payroll_history' %}" class="btn btn-secondary" style="font-size: 13px; padding: 8px 16px; text-decoration: none;">
+                <i class="bi bi-wallet2"></i> Payroll History & Reports
+            </a>
+            {% endif %}
+            <a href="{% url 'employee' %}" class="btn btn-primary" style="font-size: 13px; padding: 8px 16px; text-decoration: none;">
+                <i class="bi bi-person-plus-fill"></i> Add Team Member
+            </a>
+        </div>
+    </div>
 
-    <h2>Company: {{ company.company_name }}</h2>
-    <h2>Admin/owner's Username:{{company.owner.username}}</h2>
+    <!-- Statistics Overview Cards -->
+    <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 14px; margin-bottom: 20px;">
+        <div class="stat-card" style="padding: 16px;">
+            <div style="font-size: 11px; font-weight: 700; color: var(--muted); text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 6px;">Total Team</div>
+            <div style="font-size: 26px; font-weight: 700; font-family: var(--font-mono); color: var(--text);">{{ Total_Employees }}</div>
+            <div style="font-size: 11px; color: var(--muted); margin-top: 4px;">
+                <span style="color: var(--success); font-weight: 600;">{{ Active_Employees }} Active</span> &bull; {{ In_active_Employees }} Inactive
+            </div>
+        </div>
 
-    <hr>
+        <div class="stat-card" style="padding: 16px;">
+            <div style="font-size: 11px; font-weight: 700; color: var(--muted); text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 6px;">Cashiers</div>
+            <div style="font-size: 26px; font-weight: 700; font-family: var(--font-mono); color: #16a34a;">{{ cashiers_count }}</div>
+            <div style="font-size: 11px; color: var(--muted); margin-top: 4px;">Front Checkout Terminal</div>
+        </div>
 
-    <h2>Employee Summery</h2>
+        <div class="stat-card" style="padding: 16px;">
+            <div style="font-size: 11px; font-weight: 700; color: var(--muted); text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 6px;">Stock Team</div>
+            <div style="font-size: 26px; font-weight: 700; font-family: var(--font-mono); color: #0284c7;">{{ stock_count }}</div>
+            <div style="font-size: 11px; color: var(--muted); margin-top: 4px;">Inventory Staff (Headcount)</div>
+        </div>
 
-    <p>Total Employees :{{ Total_Employees}}</p>
+        <div class="stat-card" style="padding: 16px;">
+            <div style="font-size: 11px; font-weight: 700; color: var(--muted); text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 6px;">Store Managers</div>
+            <div style="font-size: 26px; font-weight: 700; font-family: var(--font-mono); color: #9333ea;">{{ managers_count }}</div>
+            <div style="font-size: 11px; color: var(--muted); margin-top: 4px;">Supervision & Operations</div>
+        </div>
 
-    <p>Active Employees :{{Active_Employees}}</p>
+        {% if is_owner %}
+        <!-- OWNER ONLY PAYROLL METRICS -->
+        <a href="{% url 'payroll_history' %}" class="stat-card" style="padding: 16px; border-left: 4px solid var(--primary); background: linear-gradient(135deg, var(--surface), var(--surface-2)); text-decoration: none; display: block;">
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px;">
+                <div style="font-size: 11px; font-weight: 700; color: var(--primary); text-transform: uppercase; letter-spacing: 0.5px;">Total Payroll (Mo)</div>
+                <i class="bi bi-arrow-right" style="color: var(--primary); font-size: 12px;"></i>
+            </div>
+            <div style="font-size: 24px; font-weight: 700; font-family: var(--font-mono); color: var(--text);">₹{{ Total_monthly_salary|floatformat:2 }}</div>
+            <div style="font-size: 11px; color: var(--muted); margin-top: 4px;">
+                <span style="color: var(--success); font-weight: 600;">₹{{ paid_monthly_salary|floatformat:2 }} Paid</span> &bull; 
+                <span style="color: var(--warning); font-weight: 600;">₹{{ pending_monthly_salary|floatformat:2 }} Due</span>
+            </div>
+        </a>
+        {% endif %}
+    </div>
 
-    <p>Inactive Employee :{{In_active_Employees}}</p>
+    <!-- Filters & Search Toolbar -->
+    <div style="background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius-md); padding: 12px 16px; margin-bottom: 16px; display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 12px;">
+        <form method="GET" style="display: flex; align-items: center; gap: 8px; flex: 1; max-width: 520px;">
+            <div style="position: relative; flex: 1; min-width: 180px;">
+                <i class="bi bi-search" style="position: absolute; left: 12px; top: 50%; transform: translateY(-50%); color: var(--muted); font-size: 13px;"></i>
+                <input type="text"
+                       name="search"
+                       value="{{ search }}"
+                       placeholder="Search by name, username, ID, phone..."
+                       style="padding-left: 34px; width: 100%; border-radius: var(--radius-sm); font-size: 13px;">
+            </div>
+            {% if role_filter %}<input type="hidden" name="role" value="{{ role_filter }}">{% endif %}
+            {% if status_filter %}<input type="hidden" name="status" value="{{ status_filter }}">{% endif %}
+            <button type="submit" class="btn btn-secondary" style="padding: 7px 14px; font-size: 13px; flex-shrink: 0; white-space: nowrap;">
+                <i class="bi bi-funnel"></i> Filter
+            </button>
+            {% if search or role_filter or status_filter %}
+                <a href="{% url 'view_employee' %}" class="btn btn-outline" style="padding: 7px 10px; font-size: 12px; text-decoration: none; flex-shrink: 0; white-space: nowrap;">Clear</a>
+            {% endif %}
+        </form>
 
-    <p>Total Monthly Salary:{{Total_monthly_salary}}</p>
+        <!-- Role Filter Chips -->
+        <div style="display: flex; align-items: center; gap: 6px; flex-wrap: wrap;">
+            <span style="font-size: 11px; font-weight: 700; color: var(--muted); text-transform: uppercase; margin-right: 4px;">Role:</span>
+            <a href="?{% if search %}search={{ search }}&{% endif %}"
+               class="btn {% if not role_filter %}btn-primary{% else %}btn-secondary{% endif %}"
+               style="padding: 4px 10px; font-size: 11px; border-radius: 14px; text-decoration: none;">All</a>
+            <a href="?role=Manager{% if search %}&search={{ search }}{% endif %}"
+               class="btn {% if role_filter == 'Manager' %}btn-primary{% else %}btn-secondary{% endif %}"
+               style="padding: 4px 10px; font-size: 11px; border-radius: 14px; text-decoration: none;">Managers</a>
+            <a href="?role=Cashier{% if search %}&search={{ search }}{% endif %}"
+               class="btn {% if role_filter == 'Cashier' %}btn-primary{% else %}btn-secondary{% endif %}"
+               style="padding: 4px 10px; font-size: 11px; border-radius: 14px; text-decoration: none;">Cashiers</a>
+            <a href="?role=Stock Manager{% if search %}&search={{ search }}{% endif %}"
+               class="btn {% if role_filter == 'Stock Manager' %}btn-primary{% else %}btn-secondary{% endif %}"
+               style="padding: 4px 10px; font-size: 11px; border-radius: 14px; text-decoration: none;">Stock Staff</a>
+            <a href="?role=Worker{% if search %}&search={{ search }}{% endif %}"
+               class="btn {% if role_filter == 'Worker' %}btn-primary{% else %}btn-secondary{% endif %}"
+               style="padding: 4px 10px; font-size: 11px; border-radius: 14px; text-decoration: none;">Workers</a>
+        </div>
+    </div>
 
-    <hr>
-    <form method="GET">
-        <input 
-        type="text"
-        name="search"
-        placeholder="search by name,ID or username"
-        value="{{search}}">
-        <button type="submit">Search</button>
-    </form>
+    <!-- Team Members Table -->
+    <div style="background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius-md); overflow: hidden;">
+        <table class="table-theme" style="width: 100%; border-collapse: collapse;">
+            <thead>
+                <tr>
+                    <th style="width: 50px; text-align: center;">#</th>
+                    <th>Team Member</th>
+                    <th>Emp ID</th>
+                    <th>Role</th>
+                    <th>Department</th>
+                    <th>Phone</th>
+                    <th>Joining Date</th>
+                    <th>Status</th>
+                    {% if is_owner %}
+                    <!-- OWNER ONLY PAYROLL COLUMNS -->
+                    <th>Monthly Salary</th>
+                    <th>Payroll Status</th>
+                    {% endif %}
+                    <th style="text-align: right; width: 140px;">Actions</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for employee in employees %}
+                <tr>
+                    <td style="text-align: center; font-family: var(--font-mono); color: var(--muted); font-size: 12px;">
+                        {{ forloop.counter }}
+                    </td>
 
-    {% if employees %}
+                    <td>
+                        <div style="display: flex; align-items: center; gap: 10px;">
+                            {% if employee.profile_pic %}
+                                <img src="{{ employee.profile_pic.url }}" alt="{{ employee.user.username }}" style="width: 34px; height: 34px; border-radius: 50%; object-fit: cover; border: 1px solid var(--border);">
+                            {% else %}
+                                <div style="width: 34px; height: 34px; border-radius: 50%; background: var(--surface-2); border: 1px solid var(--border); display: flex; align-items: center; justify-content: center; font-weight: 700; font-family: var(--font-mono); font-size: 12px; color: var(--primary);">
+                                    {{ employee.user.first_name|slice:":1"|default:employee.user.username|slice:":1"|upper }}{{ employee.user.last_name|slice:":1"|upper }}
+                                </div>
+                            {% endif %}
+                            <div>
+                                <div style="font-weight: 600; color: var(--text);">
+                                    {{ employee.user.first_name }} {{ employee.user.last_name }}
+                                    {% if not employee.user.first_name and not employee.user.last_name %}
+                                        {{ employee.user.username }}
+                                    {% endif %}
+                                </div>
+                                <div style="font-size: 11px; color: var(--muted); font-family: var(--font-mono);">
+                                    @{{ employee.user.username }} {% if employee.user.email %}&bull; {{ employee.user.email }}{% endif %}
+                                </div>
+                            </div>
+                        </div>
+                    </td>
 
-    <table border="1">
+                    <td style="font-family: var(--font-mono); font-weight: 600; font-size: 12px; color: var(--text);">
+                        {{ employee.employee_id }}
+                    </td>
 
-        <thead>
+                    <td>
+                        <span class="badge {% if employee.Role == 'Manager' %}badge-primary{% elif employee.Role == 'Cashier' %}badge-success{% elif employee.Role == 'Stock Manager' %}badge-warning{% else %}badge-primary{% endif %}" style="font-size: 11px;">
+                            {{ employee.Role }}
+                        </span>
+                    </td>
 
-            <tr>
-                <th>#</th>
-                <th>Username</th>
-                <th>Employee Name</th>
-                <th>Email</th>
-                <th>Employee ID</th>
-                <th>Phone</th>
-                <th>Role</th>
-                <th>Joining Date</th>
-                <th>Monthly Salary</th>
-                <th>Payment</th>
-                <th>Status</th>
-                <th>Action</th>
-            </tr>
+                    <td style="color: var(--muted); font-size: 12px;">
+                        {{ employee.department }}
+                    </td>
 
-        </thead>
+                    <td style="font-family: var(--font-mono); font-size: 12px;">
+                        {{ employee.Phone }}
+                    </td>
 
+                    <td style="font-size: 12px; color: var(--muted);">
+                        {{ employee.joining_date|date:"M d, Y"|default:employee.joining_date }}
+                    </td>
 
-        <tbody>
+                    <td>
+                        <span class="badge {% if employee.status == 'active' %}badge-success{% else %}badge-danger{% endif %}">
+                            {{ employee.status|title }}
+                        </span>
+                    </td>
 
-            {% for employee in employees %}
+                    {% if is_owner %}
+                    <!-- OWNER ONLY SALARY & PAYROLL STATUS -->
+                    <td style="font-family: var(--font-mono); font-weight: 700; color: var(--text);">
+                        ₹{{ employee.monthaly_salary|floatformat:2 }}
+                    </td>
 
-            <tr>
+                    <td>
+                        <span class="badge {% if employee.payment == 'Paid' %}badge-success{% elif employee.payment == 'Due' %}badge-warning{% else %}badge-danger{% endif %}">
+                            {{ employee.payment|default:"Unpaid" }}
+                        </span>
+                    </td>
+                    {% endif %}
 
-                <td>
-                    {{ forloop.counter }}
-                </td>
+                    <td style="text-align: right;">
+                        <div style="display: flex; align-items: center; justify-content: flex-end; gap: 6px;">
+                            <a href="{% url 'edit_employee' employee.employee_id %}"
+                               class="btn btn-secondary btn-sm"
+                               title="Edit Employee Information"
+                               style="text-decoration: none;">
+                                <i class="bi bi-pencil-square"></i> Edit
+                            </a>
 
-                <td>
-                    {{ employee.user.username }}
-                </td>
-
-                <td>
-                    {{ employee.user.first_name }}
-                    {{ employee.user.last_name }}
-                </td>
-
-                <td>
-                    {{ employee.user.email }}
-                </td>
-
-                <td>
-                    {{ employee.employee_id }}
-                </td>
-
-                <td>
-                    {{ employee.Phone }}
-                </td>
-
-                <td>
-                    {{ employee.Role }}
-                </td>
-
-                <td>
-                    {{ employee.joining_date }}
-                </td>
-
-                <td>
-                    ₹{{ employee.monthaly_salary }}
-                </td>
-
-                <td>
-                    {{ employee.payment }}
-                </td>
-
-                <td>
-                    {{ employee.status }}
-                </td>
-                <td>
-                    <a href="{% url "edit_employee" employee.employee_id %}">Edit</a>
-                    <a href="{% url "delete_employee" employee.employee_id %}">Delete</a>
-                </td>
-
-            </tr>
-
-            {% endfor %}
-
-        </tbody>
-
-    </table>
-
-
-    {% else %}
-
-        <p>No employees found.</p>
-
-    {% endif %}
-
-    <a href="{% url "dashboard" %}">Back to dashboard</a>
-
-
-
-</body>
-</html>
+                            {% if is_owner %}
+                            <a href="{% url 'delete_employee' employee.employee_id %}"
+                               class="btn btn-danger btn-sm"
+                               title="Delete Team Member"
+                               style="text-decoration: none; padding: 4px 7px;">
+                                <i class="bi bi-trash"></i>
+                            </a>
+                            {% endif %}
+                        </div>
+                    </td>
+                </tr>
+                {% empty %}
+                <tr>
+                    <td colspan="{% if is_owner %}11{% else %}9{% endif %}" style="text-align: center; padding: 48px 20px;">
+                        <div style="color: var(--muted); font-size: 32px; margin-bottom: 8px;">
+                            <i class="bi bi-people"></i>
+                        </div>
+                        <h4 style="color: var(--text); font-size: 15px; margin-bottom: 4px;">No team members found</h4>
+                        <p style="color: var(--muted); font-size: 13px; margin-bottom: 14px;">Try refining your search or add a new team member to your company.</p>
+                        <a href="{% url 'employee' %}" class="btn btn-primary" style="font-size: 12px; text-decoration: none;">
+                            <i class="bi bi-person-plus-fill"></i> Add First Member
+                        </a>
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</div>
+{% endblock content %}

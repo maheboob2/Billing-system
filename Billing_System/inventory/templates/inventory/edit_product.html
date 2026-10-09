@@ -1,18 +1,373 @@
-
-{% extends "Dashboard/main_nav.html" %}
+{% extends "dashboard/main_nav.html" %}
+{% load static %}
 
 {% block content %}
+<div style="max-width: 860px; margin: 32px auto; padding: 0 16px;">
+    <!-- Header -->
+    <div style="margin-bottom: 24px; display: flex; align-items: center; justify-content: space-between;">
+        <div>
+            <div style="display: flex; align-items: center; gap: 8px; margin-bottom: 4px;">
+                <a href="{% url 'product' %}" style="color: var(--muted); text-decoration: none; font-size: 13px;">
+                    <i class="bi bi-arrow-left"></i> Products
+                </a>
+                <span style="color: var(--muted);">&bull;</span>
+                <h2 style="font-size: 20px; font-weight: 700; color: var(--text); margin: 0;">Edit Product: {{ product.name }}</h2>
+            </div>
+            <p style="margin: 0; font-size: 13px; color: var(--muted);">Update inventory parameters, pricing, and barcode for SKU {{ product.product_code }}.</p>
+        </div>
+    </div>
 
-<h2>Edit Product</h2>
+    {% if form.errors %}
+    <div style="background: rgba(220, 38, 38, 0.12); border: 1px solid rgba(220, 38, 38, 0.3); color: var(--danger); padding: 12px 16px; border-radius: var(--radius-sm); margin-bottom: 20px; font-size: 13px;">
+        <div style="font-weight: 600; margin-bottom: 4px; display: flex; align-items: center; gap: 6px;">
+            <i class="bi bi-exclamation-triangle-fill"></i> Please correct the errors below:
+        </div>
+        <ul style="margin: 0; padding-left: 20px;">
+            {% for field, errors in form.errors.items %}
+                {% for err in errors %}
+                    <li><strong>{{ field|title }}:</strong> {{ err }}</li>
+                {% endfor %}
+            {% endfor %}
+        </ul>
+    </div>
+    {% endif %}
 
-<form method="POST">
-    {% csrf_token %}
+    <div style="background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius-md); padding: 28px; box-shadow: 0 2px 12px rgba(0,0,0,0.1);">
+        <form method="POST">
+            {% csrf_token %}
 
-    {{ form.as_p }}
+            <!-- Section 1: Identification -->
+            <div style="margin-bottom: 24px;">
+                <h4 style="font-size: 12px; font-weight: 700; color: var(--primary); text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 14px; border-bottom: 1px solid var(--border); padding-bottom: 6px;">
+                    <i class="bi bi-box-seam"></i> Product Identification
+                </h4>
+                <div style="margin-bottom: 14px;">
+                    <label style="display: block; font-size: 12px; font-weight: 600; color: var(--text); margin-bottom: 6px;">Product Name *</label>
+                    <input type="text" id="id_name" name="name" value="{{ form.name.value|default:product.name }}" required style="width: 100%; padding: 10px 12px; background: var(--surface-2); border: 1px solid var(--border); border-radius: var(--radius-sm); color: var(--text); font-size: 14px; outline: none;">
+                </div>
+                <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 14px;">
+                    <div>
+                        <label style="display: block; font-size: 12px; font-weight: 600; color: var(--text); margin-bottom: 6px;">Product Code / SKU *</label>
+                        <input type="text" id="id_product_code" name="product_code" value="{{ form.product_code.value|default:product.product_code }}" required style="width: 100%; padding: 10px 12px; background: var(--surface-2); border: 1px solid var(--border); border-radius: var(--radius-sm); color: var(--text); font-size: 14px; outline: none;">
+                    </div>
+                    <div>
+                        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px;">
+                            <label style="font-size: 12px; font-weight: 600; color: var(--text); margin: 0;">Barcode (Manufacturer / Internal)</label>
+                            <span id="barcode-scan-hint" style="font-size: 11px; color: #10b981; display: none; font-weight: 600;">
+                                <span class="pulse-dot" style="display:inline-block; width:6px; height:6px; border-radius:50%; background:#10b981; margin-right:4px;"></span> Ready to scan
+                            </span>
+                        </div>
+                        <input type="text" id="id_barcode" name="barcode" value="{{ form.barcode.value|default:product.barcode }}" placeholder="e.g. 8901262010052" style="width: 100%; padding: 10px 12px; background: var(--surface-2); border: 1px solid var(--border); border-radius: var(--radius-sm); color: var(--text); font-size: 14px; outline: none; transition: border-color 0.2s;">
+                        
+                        <!-- Actions Row -->
+                        <div style="display: flex; gap: 8px; margin-top: 8px; flex-wrap: wrap;">
+                            <button type="button" id="btn-scan-barcode" style="padding: 6px 12px; font-size: 11px; font-weight: 600; background: rgba(59, 130, 246, 0.15); border: 1px solid rgba(59, 130, 246, 0.35); color: #60a5fa; border-radius: 6px; cursor: pointer; display: inline-flex; align-items: center; gap: 6px;">
+                                <i class="bi bi-upc-scan"></i> Scan Barcode
+                            </button>
+                            <button type="button" id="btn-generate-barcode" style="padding: 6px 12px; font-size: 11px; font-weight: 600; background: rgba(16, 185, 129, 0.15); border: 1px solid rgba(16, 185, 129, 0.35); color: #34d399; border-radius: 6px; cursor: pointer; display: inline-flex; align-items: center; gap: 6px;">
+                                <i class="bi bi-lightning-charge-fill"></i> Generate Internal Barcode
+                            </button>
+                            <button type="button" id="btn-preview-label" style="padding: 6px 12px; font-size: 11px; font-weight: 600; background: rgba(245, 158, 11, 0.15); border: 1px solid rgba(245, 158, 11, 0.35); color: #fbbf24; border-radius: 6px; cursor: pointer; display: {% if product.barcode %}inline-flex{% else %}none{% endif %}; align-items: center; gap: 6px;">
+                                <i class="bi bi-printer"></i> Print Barcode Label
+                            </button>
+                        </div>
 
-    <button type="submit">Update Product</button>
+                        <!-- Barcode Validation Feedback -->
+                        <div id="barcode-validation-feedback" style="margin-top: 6px; font-size: 12px; display: none;"></div>
+                    </div>
+                </div>
+            </div>
 
-    <a href="{% url 'product' %}">Cancel</a>
-</form>
+            <!-- Section 2: Classification -->
+            <div style="margin-bottom: 24px;">
+                <h4 style="font-size: 12px; font-weight: 700; color: var(--primary); text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 14px; border-bottom: 1px solid var(--border); padding-bottom: 6px;">
+                    <i class="bi bi-diagram-3"></i> Classification & Sourcing
+                </h4>
+                <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 14px;">
+                    <div>
+                        <label style="display: block; font-size: 12px; font-weight: 600; color: var(--text); margin-bottom: 6px;">Category *</label>
+                        <select name="category" required style="width: 100%; padding: 10px 12px; background: var(--surface-2); border: 1px solid var(--border); border-radius: var(--radius-sm); color: var(--text); font-size: 14px; outline: none;">
+                            <option value="">-- Select Category --</option>
+                            {% for cat in form.fields.category.queryset %}
+                                <option value="{{ cat.id }}" {% if form.category.value|stringformat:"s" == cat.id|stringformat:"s" or product.category_id|stringformat:"s" == cat.id|stringformat:"s" %}selected{% endif %}>{{ cat.name }}</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                    <div>
+                        <label style="display: block; font-size: 12px; font-weight: 600; color: var(--text); margin-bottom: 6px;">Supplier *</label>
+                        <select name="supplier" required style="width: 100%; padding: 10px 12px; background: var(--surface-2); border: 1px solid var(--border); border-radius: var(--radius-sm); color: var(--text); font-size: 14px; outline: none;">
+                            <option value="">-- Select Supplier --</option>
+                            {% for sup in form.fields.supplier.queryset %}
+                                <option value="{{ sup.id }}" {% if form.supplier.value|stringformat:"s" == sup.id|stringformat:"s" or product.supplier_id|stringformat:"s" == sup.id|stringformat:"s" %}selected{% endif %}>{{ sup.name }}</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                </div>
+            </div>
 
-{% endblock %}
+            <!-- Section 3: Pricing & Tax -->
+            <div style="margin-bottom: 24px;">
+                <h4 style="font-size: 12px; font-weight: 700; color: var(--primary); text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 14px; border-bottom: 1px solid var(--border); padding-bottom: 6px;">
+                    <i class="bi bi-currency-rupee"></i> Pricing & Taxation
+                </h4>
+                <div style="display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 14px;">
+                    <div>
+                        <label style="display: block; font-size: 12px; font-weight: 600; color: var(--text); margin-bottom: 6px;">Purchase Cost (₹) *</label>
+                        <input type="number" step="0.01" name="purchase_price" value="{{ form.purchase_price.value|default:product.purchase_price }}" required style="width: 100%; padding: 10px 12px; background: var(--surface-2); border: 1px solid var(--border); border-radius: var(--radius-sm); color: var(--text); font-size: 14px; outline: none;">
+                    </div>
+                    <div>
+                        <label style="display: block; font-size: 12px; font-weight: 600; color: var(--text); margin-bottom: 6px;">Selling Price / MRP (₹) *</label>
+                        <input type="number" step="0.01" name="selling_price" value="{{ form.selling_price.value|default:product.selling_price }}" required style="width: 100%; padding: 10px 12px; background: var(--surface-2); border: 1px solid var(--border); border-radius: var(--radius-sm); color: var(--text); font-size: 14px; outline: none;">
+                    </div>
+                    <div>
+                        <label style="display: block; font-size: 12px; font-weight: 600; color: var(--text); margin-bottom: 6px;">GST Rate (%) *</label>
+                        <input type="number" step="0.01" name="gst_percentage" value="{{ form.gst_percentage.value|default:product.gst_percentage }}" required style="width: 100%; padding: 10px 12px; background: var(--surface-2); border: 1px solid var(--border); border-radius: var(--radius-sm); color: var(--text); font-size: 14px; outline: none;">
+                    </div>
+                </div>
+            </div>
+
+            <!-- Section 4: Inventory & Units -->
+            <div style="margin-bottom: 28px;">
+                <h4 style="font-size: 12px; font-weight: 700; color: var(--primary); text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 14px; border-bottom: 1px solid var(--border); padding-bottom: 6px;">
+                    <i class="bi bi-stack"></i> Stock & Measurement Units
+                </h4>
+                <div style="display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 14px; margin-bottom: 16px;">
+                    <div>
+                        <label style="display: block; font-size: 12px; font-weight: 600; color: var(--text); margin-bottom: 6px;">Current In-Stock *</label>
+                        <input type="number" step="0.01" name="current_stock" value="{{ form.current_stock.value|default:product.current_stock }}" required style="width: 100%; padding: 10px 12px; background: var(--surface-2); border: 1px solid var(--border); border-radius: var(--radius-sm); color: var(--text); font-size: 14px; outline: none;">
+                    </div>
+                    <div>
+                        <label style="display: block; font-size: 12px; font-weight: 600; color: var(--text); margin-bottom: 6px;">Minimum Alert Level *</label>
+                        <input type="number" step="0.01" name="minimum_stock" value="{{ form.minimum_stock.value|default:product.minimum_stock }}" required style="width: 100%; padding: 10px 12px; background: var(--surface-2); border: 1px solid var(--border); border-radius: var(--radius-sm); color: var(--text); font-size: 14px; outline: none;">
+                    </div>
+                    <div>
+                        <label style="display: block; font-size: 12px; font-weight: 600; color: var(--text); margin-bottom: 6px;">Unit of Measurement *</label>
+                        <input type="text" name="unit" value="{{ form.unit.value|default:product.unit }}" required style="width: 100%; padding: 10px 12px; background: var(--surface-2); border: 1px solid var(--border); border-radius: var(--radius-sm); color: var(--text); font-size: 14px; outline: none;">
+                    </div>
+                </div>
+
+                <div style="display: flex; align-items: center; gap: 10px; background: var(--surface-2); padding: 12px 16px; border-radius: var(--radius-sm); border: 1px solid var(--border);">
+                    <input type="checkbox" id="id_status" name="status" {% if form.status.value != False and product.status != False %}checked{% endif %} style="width: 18px; height: 18px; accent-color: var(--primary); cursor: pointer;">
+                    <label for="id_status" style="font-size: 13px; font-weight: 600; color: var(--text); cursor: pointer; margin: 0;">
+                        Active Product (available for sales and POS barcode scanning)
+                    </label>
+                </div>
+            </div>
+
+            <div style="display: flex; gap: 12px; justify-content: flex-end; padding-top: 16px; border-top: 1px solid var(--border);">
+                <a href="{% url 'product' %}" class="btn btn-secondary" style="text-decoration: none;">Cancel</a>
+                <button type="submit" id="btn-save-product" class="btn btn-primary" style="display: inline-flex; align-items: center; gap: 8px;">
+                    <i class="bi bi-check-lg"></i> Update Product
+                </button>
+            </div>
+        </form>
+    </div>
+</div>
+
+<!-- Print Barcode Label Modal -->
+<div id="print-label-modal" style="display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.7); z-index: 9999; align-items: center; justify-content: center; padding: 16px;">
+    <div style="background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius-md); max-width: 440px; width: 100%; padding: 24px; box-shadow: 0 12px 32px rgba(0,0,0,0.5);">
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px;">
+            <h3 style="font-size: 16px; font-weight: 700; color: var(--text); margin: 0; display: flex; align-items: center; gap: 8px;">
+                <i class="bi bi-printer" style="color: #fbbf24;"></i> Print Barcode Sticker Label
+            </h3>
+            <button type="button" id="btn-close-label-modal" style="background: none; border: none; font-size: 20px; color: var(--muted); cursor: pointer;">&times;</button>
+        </div>
+
+        <!-- Printable Label Card -->
+        <div id="printable-label-card" class="printable-barcode-card" style="background: #ffffff; color: #000000; padding: 14px 18px; border-radius: 6px; border: 1px solid #cbd5e1; text-align: center; margin-bottom: 20px;">
+            <div style="font-size: 13px; font-weight: 800; letter-spacing: 0.5px; text-transform: uppercase; color: #0f172a;" id="lbl-store-name">{{ company.company_name }}</div>
+            <div style="font-size: 14px; font-weight: 700; color: #1e293b; margin: 4px 0;" id="lbl-prod-name">{{ product.name }}</div>
+            <div style="font-size: 15px; font-weight: 800; color: #0f172a; margin-bottom: 6px;">
+                MRP: <span id="lbl-prod-price">₹{{ product.selling_price|floatformat:2 }}</span> <span style="font-size: 10px; font-weight: 500; color: #64748b;">(Incl. of all taxes)</span>
+            </div>
+            
+            <div style="display: flex; justify-content: center; margin: 6px 0;">
+                <svg id="barcode-svg" style="max-width: 100%; height: 60px;"></svg>
+            </div>
+            <div style="font-size: 13px; font-weight: 700; font-family: monospace; letter-spacing: 2px; color: #0f172a;" id="lbl-barcode-text">{{ product.barcode }}</div>
+        </div>
+
+        <div style="display: flex; justify-content: flex-end; gap: 10px;">
+            <button type="button" class="btn btn-secondary" id="btn-cancel-print">Close</button>
+            <button type="button" class="btn btn-primary" id="btn-do-print" style="background: #fbbf24; color: #000; border-color: #f59e0b; display: flex; align-items: center; gap: 6px;">
+                <i class="bi bi-printer-fill"></i> Print Label
+            </button>
+        </div>
+    </div>
+</div>
+
+<style>
+@media print {
+    body * { visibility: hidden !important; }
+    #printable-label-card, #printable-label-card * { visibility: visible !important; }
+    #printable-label-card {
+        position: fixed !important;
+        left: 0 !important;
+        top: 0 !important;
+        width: 60mm !important;
+        margin: 0 !important;
+        border: none !important;
+        box-shadow: none !important;
+    }
+}
+</style>
+
+<script src="https://cdn.jsdelivr.net/npm/jsbarcode@3.11.6/dist/JsBarcode.all.min.js"></script>
+<script>
+document.addEventListener('DOMContentLoaded', () => {
+    const productId = {{ product.id }};
+    const barcodeInput = document.getElementById('id_barcode');
+    const skuInput = document.getElementById('id_product_code');
+    const nameInput = document.getElementById('id_name');
+    const priceInput = document.querySelector('input[name="selling_price"]');
+    const scanBtn = document.getElementById('btn-scan-barcode');
+    const genBtn = document.getElementById('btn-generate-barcode');
+    const previewBtn = document.getElementById('btn-preview-label');
+    const scanHint = document.getElementById('barcode-scan-hint');
+    const feedback = document.getElementById('barcode-validation-feedback');
+    const printModal = document.getElementById('print-label-modal');
+    const saveBtn = document.getElementById('btn-save-product');
+
+    let debounceTimer = null;
+
+    function renderBarcodeSvg(code) {
+        if (!code) return;
+        if (window.JsBarcode) {
+            try {
+                JsBarcode("#barcode-svg", code, {
+                    format: "CODE128",
+                    width: 2,
+                    height: 50,
+                    displayValue: false,
+                    margin: 2
+                });
+                return;
+            } catch(e) {}
+        }
+        const svg = document.getElementById('barcode-svg');
+        svg.innerHTML = '<rect width="100%" height="100%" fill="#fff"/><text x="50%" y="50%" text-anchor="middle" font-family="monospace" font-size="16" fill="#000">' + code + '</text>';
+    }
+
+    function checkBarcodeAvailability(code) {
+        if (!code) {
+            feedback.style.display = 'none';
+            previewBtn.style.display = 'none';
+            saveBtn.disabled = false;
+            return;
+        }
+
+        fetch(`/api/products/check-barcode/?barcode=${encodeURIComponent(code)}&exclude_id=${productId}`)
+            .then(r => r.json())
+            .then(data => {
+                feedback.style.display = 'block';
+                if (data.available) {
+                    feedback.style.color = '#34d399';
+                    feedback.innerHTML = `<i class="bi bi-check-circle-fill"></i> Barcode available for this store catalog.`;
+                    barcodeInput.style.borderColor = '#10b981';
+                    previewBtn.style.display = 'inline-flex';
+                    saveBtn.disabled = false;
+                } else {
+                    feedback.style.color = '#f87171';
+                    feedback.innerHTML = `<i class="bi bi-x-circle-fill"></i> Duplicate Barcode! Already assigned to: <strong>${data.conflict_product || 'another product'}</strong>.`;
+                    barcodeInput.style.borderColor = '#ef4444';
+                    previewBtn.style.display = 'none';
+                    saveBtn.disabled = true;
+                }
+            })
+            .catch(() => {
+                feedback.style.display = 'none';
+                saveBtn.disabled = false;
+            });
+    }
+
+    barcodeInput.addEventListener('input', () => {
+        clearTimeout(debounceTimer);
+        const code = barcodeInput.value.trim();
+        debounceTimer = setTimeout(() => checkBarcodeAvailability(code), 250);
+    });
+
+    scanBtn.addEventListener('click', () => {
+        barcodeInput.focus();
+        barcodeInput.select();
+        barcodeInput.style.borderColor = '#60a5fa';
+        barcodeInput.style.boxShadow = '0 0 0 3px rgba(59, 130, 246, 0.25)';
+        scanHint.style.display = 'inline-block';
+        setTimeout(() => {
+            barcodeInput.style.boxShadow = 'none';
+            scanHint.style.display = 'none';
+        }, 5000);
+    });
+
+    let hidBuffer = '';
+    let lastKeyTime = 0;
+    document.addEventListener('keydown', (e) => {
+        const now = Date.now();
+        if (e.key === 'Enter') {
+            if (hidBuffer.length >= 3 && now - lastKeyTime < 80) {
+                e.preventDefault();
+                barcodeInput.value = hidBuffer.trim();
+                hidBuffer = '';
+                checkBarcodeAvailability(barcodeInput.value);
+            }
+            hidBuffer = '';
+            return;
+        }
+        if (e.key.length === 1 && !e.ctrlKey && !e.altKey && !e.metaKey) {
+            if (now - lastKeyTime > 80) {
+                hidBuffer = e.key;
+            } else {
+                hidBuffer += e.key;
+            }
+            lastKeyTime = now;
+        }
+    });
+
+    genBtn.addEventListener('click', () => {
+        genBtn.disabled = true;
+        genBtn.innerHTML = '<i class="bi bi-hourglass-split"></i> Generating...';
+
+        fetch('/api/products/generate-barcode/', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'X-CSRFToken': document.querySelector('[name=csrfmiddlewaretoken]').value
+            }
+        })
+        .then(r => r.json())
+        .then(data => {
+            genBtn.disabled = false;
+            genBtn.innerHTML = '<i class="bi bi-lightning-charge-fill"></i> Generate Internal Barcode';
+            if (data.success && data.barcode) {
+                barcodeInput.value = data.barcode;
+                checkBarcodeAvailability(data.barcode);
+            }
+        })
+        .catch(() => {
+            genBtn.disabled = false;
+            genBtn.innerHTML = '<i class="bi bi-lightning-charge-fill"></i> Generate Internal Barcode';
+            alert('Failed to generate internal barcode. Please retry.');
+        });
+    });
+
+    previewBtn.addEventListener('click', () => {
+        const code = barcodeInput.value.trim();
+        if (!code) return;
+        document.getElementById('lbl-prod-name').textContent = nameInput.value.trim() || '{{ product.name }}';
+        const priceVal = parseFloat(priceInput ? priceInput.value : {{ product.selling_price }}) || 0;
+        document.getElementById('lbl-prod-price').textContent = '₹' + priceVal.toFixed(2);
+        document.getElementById('lbl-barcode-text').textContent = code;
+        renderBarcodeSvg(code);
+        printModal.style.display = 'flex';
+    });
+
+    document.getElementById('btn-close-label-modal').addEventListener('click', () => { printModal.style.display = 'none'; });
+    document.getElementById('btn-cancel-print').addEventListener('click', () => { printModal.style.display = 'none'; });
+    document.getElementById('btn-do-print').addEventListener('click', () => { window.print(); });
+
+    if (barcodeInput.value.trim()) {
+        renderBarcodeSvg(barcodeInput.value.trim());
+    }
+});
+</script>
+{% endblock content %}

@@ -1,0 +1,95 @@
+<div class="global-search-panel" id="global-search-panel" data-open="false" aria-label="Search routes and settings (F2)" title="Search (F2)">
+    <i class="bi bi-search search-icon" id="global-search-toggle-icon" aria-hidden="true"></i>
+    <input type="text" id="global-search-input" placeholder="Search routes, settings..." autocomplete="off" aria-label="Search routes and settings">
+    <span class="search-kbd-hint"><kbd>F2</kbd></span>
+    <button type="button" class="search-close-btn" id="global-search-close-btn" aria-label="Close Search">
+        <i class="bi bi-x"></i>
+    </button>
+
+    <!-- Quick navigation & search results dropdown -->
+    <div class="global-search-dropdown" id="global-search-dropdown" style="display:none;">
+        <div class="search-results-section">Quick Navigation</div>
+        <div id="search-nav-items">
+            {% if user_role != "Cashier" %}
+            <a href="{% if user_role == 'Manager' %}{% url 'manager_dashboard' %}{% else %}{% url 'dashboard' %}{% endif %}" class="search-result-item" data-keywords="dashboard overview home analytics">
+                <i class="bi bi-speedometer2"></i>
+                <span>Dashboard Overview</span>
+                <span class="search-result-sub">Workspace</span>
+            </a>
+            {% endif %}
+            <a href="{% url 'cart' %}" class="search-result-item" data-keywords="pos checkout cart counter billing register">
+                <i class="bi bi-upc-scan"></i>
+                <span>POS Checkout Terminal</span>
+                <span class="search-result-sub">Workspace</span>
+            </a>
+            <a href="{% url 'sales' %}" class="search-result-item" data-keywords="sales invoices receipts orders history">
+                <i class="bi bi-receipt"></i>
+                <span>Sales & Invoices</span>
+                <span class="search-result-sub">Records</span>
+            </a>
+            <a href="{% url 'returns' %}" class="search-result-item" data-keywords="returns refunds credit note">
+                <i class="bi bi-arrow-counterclockwise"></i>
+                <span>Returns & Refunds</span>
+                <span class="search-result-sub">Records</span>
+            </a>
+            {% if user_role != "Cashier" %}
+            <a href="{% url 'product' %}" class="search-result-item" data-keywords="products inventory items catalog stock">
+                <i class="bi bi-box-seam"></i>
+                <span>Products & Stock</span>
+                <span class="search-result-sub">Operations</span>
+            </a>
+            <a href="{% url 'category' %}" class="search-result-item" data-keywords="categories classification tags">
+                <i class="bi bi-tags"></i>
+                <span>Categories</span>
+                <span class="search-result-sub">Operations</span>
+            </a>
+            <a href="{% url 'purchase_list' %}" class="search-result-item" data-keywords="purchases stock in procurement orders">
+                <i class="bi bi-bag-check"></i>
+                <span>Purchases</span>
+                <span class="search-result-sub">Operations</span>
+            </a>
+            <a href="{% url 'supplier' %}" class="search-result-item" data-keywords="suppliers vendors contacts">
+                <i class="bi bi-truck"></i>
+                <span>Suppliers</span>
+                <span class="search-result-sub">Operations</span>
+            </a>
+            <a href="{% url 'reports' %}" class="search-result-item" data-keywords="reports financial gst tax analytics profit">
+                <i class="bi bi-bar-chart-line"></i>
+                <span>Reports & Analytics</span>
+                <span class="search-result-sub">Records</span>
+            </a>
+            <a href="{% url 'view_employee' %}" class="search-result-item" data-keywords="employees team staff cashiers workers users">
+                <i class="bi bi-people"></i>
+                <span>Employees & Team</span>
+                <span class="search-result-sub">Admin</span>
+            </a>
+            <a href="{% url 'settings_appearance' %}" class="search-result-item" data-keywords="settings appearance theme dark light mode colors">
+                <i class="bi bi-palette"></i>
+                <span>Appearance & Theme</span>
+                <span class="search-result-sub">Settings</span>
+            </a>
+            <a href="{% url 'settings_scanner' %}" class="search-result-item" data-keywords="scanner barcode hid camera phone devices bluetooth">
+                <i class="bi bi-upc-scan"></i>
+                <span>Scanner & POS Devices</span>
+                <span class="search-result-sub">Settings</span>
+            </a>
+            {% if is_owner or user_role == 'Admin' %}
+            <a href="{% url 'settings_telegram' %}" class="search-result-item" data-keywords="telegram bot owner reports mobile alerts">
+                <i class="bi bi-telegram"></i>
+                <span>Telegram Bot Integration</span>
+                <span class="search-result-sub">Settings</span>
+            </a>
+            <a href="{% url 'settings_company' %}" class="search-result-item" data-keywords="company profile business address gstin">
+                <i class="bi bi-building"></i>
+                <span>Company Profile</span>
+                <span class="search-result-sub">Settings</span>
+            </a>
+            {% endif %}
+            {% endif %}
+        </div>
+        <div id="search-product-results" style="display:none;">
+            <div class="search-results-section">Products Matching Query</div>
+            <div id="search-product-list"></div>
+        </div>
+    </div>
+</div>

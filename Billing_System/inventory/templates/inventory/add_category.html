@@ -1,30 +1,67 @@
+{% extends "dashboard/main_nav.html" %}
 {% load static %}
-<!DOCTYPE html>
-<html lang="en">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Add Category</title>
-</head>
-<body>
-      <h1>Add Category</h1>
 
-    <form method="POST">
+{% block content %}
+<div style="max-width: 680px; margin: 32px auto; padding: 0 16px;">
+    <!-- Header -->
+    <div style="margin-bottom: 24px; display: flex; align-items: center; justify-content: space-between;">
+        <div>
+            <div style="display: flex; align-items: center; gap: 8px; margin-bottom: 4px;">
+                <a href="{% url 'category' %}" style="color: var(--muted); text-decoration: none; font-size: 13px;">
+                    <i class="bi bi-arrow-left"></i> Categories
+                </a>
+                <span style="color: var(--muted);">&bull;</span>
+                <h2 style="font-size: 20px; font-weight: 700; color: var(--text); margin: 0;">Add Product Category</h2>
+            </div>
+            <p style="margin: 0; font-size: 13px; color: var(--muted);">Create a new classification category for products in {{ company.company_name }}.</p>
+        </div>
+    </div>
 
-        {% csrf_token %}
+    {% if form.errors %}
+    <div style="background: rgba(220, 38, 38, 0.12); border: 1px solid rgba(220, 38, 38, 0.3); color: var(--danger); padding: 12px 16px; border-radius: var(--radius-sm); margin-bottom: 20px; font-size: 13px;">
+        <div style="font-weight: 600; margin-bottom: 4px; display: flex; align-items: center; gap: 6px;">
+            <i class="bi bi-exclamation-triangle-fill"></i> Please correct the errors below:
+        </div>
+        <ul style="margin: 0; padding-left: 20px;">
+            {% for field, errors in form.errors.items %}
+                {% for err in errors %}
+                    <li><strong>{{ field|title }}:</strong> {{ err }}</li>
+                {% endfor %}
+            {% endfor %}
+        </ul>
+    </div>
+    {% endif %}
 
-        {{ form.as_p }}
+    <div style="background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius-md); padding: 28px; box-shadow: 0 2px 12px rgba(0,0,0,0.1);">
+        <form method="POST">
+            {% csrf_token %}
 
-        <button type="submit">
-            Save Category
-        </button>
+            <div style="margin-bottom: 20px;">
+                <label style="display: block; font-size: 13px; font-weight: 600; color: var(--text); margin-bottom: 6px;">Category Name *</label>
+                <div style="position: relative;">
+                    <input type="text" name="name" value="{{ form.name.value|default:'' }}" required placeholder="e.g. Beverages, Bakery, Electronics" style="width: 100%; padding: 10px 12px; background: var(--surface-2); border: 1px solid var(--border); border-radius: var(--radius-sm); color: var(--text); font-size: 14px; outline: none;">
+                </div>
+            </div>
 
-    </form>
+            <div style="margin-bottom: 20px;">
+                <label style="display: block; font-size: 13px; font-weight: 600; color: var(--text); margin-bottom: 6px;">Description</label>
+                <textarea name="description" rows="3" placeholder="Brief description of items included in this category" style="width: 100%; padding: 10px 12px; background: var(--surface-2); border: 1px solid var(--border); border-radius: var(--radius-sm); color: var(--text); font-size: 14px; outline: none;">{{ form.description.value|default:'' }}</textarea>
+            </div>
 
-    <br>
+            <div style="margin-bottom: 28px; display: flex; align-items: center; gap: 10px; background: var(--surface-2); padding: 12px 16px; border-radius: var(--radius-sm); border: 1px solid var(--border);">
+                <input type="checkbox" id="id_status" name="status" {% if form.status.value != False %}checked{% endif %} style="width: 18px; height: 18px; accent-color: var(--primary); cursor: pointer;">
+                <label for="id_status" style="font-size: 13px; font-weight: 600; color: var(--text); cursor: pointer; margin: 0;">
+                    Active Category (visible in POS and product catalog)
+                </label>
+            </div>
 
-    <a href="{% url 'category' %}">
-        Back to Categories
-    </a>
-</body>
-</html>
+            <div style="display: flex; gap: 12px; justify-content: flex-end; padding-top: 16px; border-top: 1px solid var(--border);">
+                <a href="{% url 'category' %}" class="btn btn-secondary" style="text-decoration: none;">Cancel</a>
+                <button type="submit" class="btn btn-primary" style="display: inline-flex; align-items: center; gap: 8px;">
+                    <i class="bi bi-check-lg"></i> Save Category
+                </button>
+            </div>
+        </form>
+    </div>
+</div>
+{% endblock content %}

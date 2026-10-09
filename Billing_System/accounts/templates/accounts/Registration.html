@@ -1,81 +1,785 @@
 {% load static %}
 <!DOCTYPE html>
-<html lang="en">
+<html lang="en" data-mode="light">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Document</title>
+    <title>Business Registration — Retail POS & Billing System</title>
+    <meta name="description" content="Register your merchant company and configure your store owner terminal account.">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@500;600&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css">
+    <link rel="stylesheet" href="{% static 'dashboard/css/theme.css' %}">
+    <script>
+    (function() {
+        try {
+            var saved = localStorage.getItem('pos_theme_mode');
+            if (saved === 'dark' || saved === 'light') {
+                document.documentElement.setAttribute('data-mode', saved);
+            } else {
+                document.documentElement.setAttribute('data-mode', 'light');
+            }
+        } catch(e) {
+            document.documentElement.setAttribute('data-mode', 'light');
+        }
+    })();
+    </script>
+    <style>
+        *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+        
+        :root {
+            --auth-bg: #f8fafc;
+            --auth-surface: #ffffff;
+            --auth-text: #0f172a;
+            --auth-muted: #64748b;
+            --auth-border: #e2e8f0;
+            --auth-input-bg: #f8fafc;
+            --auth-btn-bg: #09090b;
+            --auth-btn-hover: #27272a;
+            --auth-btn-text: #ffffff;
+            --auth-accent: #16a34a;
+        }
+
+        [data-mode="dark"] {
+            --auth-bg: #090d16;
+            --auth-surface: #111827;
+            --auth-text: #f8fafc;
+            --auth-muted: #94a3b8;
+            --auth-border: #1f293d;
+            --auth-input-bg: #162032;
+            --auth-btn-bg: #f8fafc;
+            --auth-btn-hover: #e2e8f0;
+            --auth-btn-text: #09090b;
+            --auth-accent: #22c55e;
+        }
+
+        body {
+            font-family: 'Inter', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+            background: var(--auth-bg);
+            color: var(--auth-text);
+            min-height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 32px 16px;
+        }
+
+        .auth-container {
+            width: 100%;
+            max-width: 1140px;
+            background: var(--auth-surface);
+            border: 1px solid var(--auth-border);
+            border-radius: 20px;
+            display: grid;
+            grid-template-columns: 1.35fr 1fr;
+            overflow: hidden;
+            box-shadow: 0 20px 45px -10px rgba(0, 0, 0, 0.08), 0 8px 18px -6px rgba(0, 0, 0, 0.04);
+            animation: authFadeIn 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+            transition: transform 0.28s cubic-bezier(0.4, 0, 0.2, 1), opacity 0.28s ease;
+        }
+
+        @keyframes authFadeIn {
+            from { opacity: 0; transform: translateY(12px) scale(0.99); }
+            to { opacity: 1; transform: translateY(0) scale(1); }
+        }
+
+        @keyframes panelSlideInLeft {
+            from { opacity: 0; transform: translateX(-30px); }
+            to { opacity: 1; transform: translateX(0); }
+        }
+
+        @keyframes panelSlideInRight {
+            from { opacity: 0; transform: translateX(30px); }
+            to { opacity: 1; transform: translateX(0); }
+        }
+
+        .auth-container.is-swapping-panel .auth-form-side {
+            transform: translateX(-36px);
+            opacity: 0;
+        }
+
+        .auth-container.is-swapping-panel .auth-aside-panel {
+            transform: translateX(36px);
+            opacity: 0;
+        }
+
+        @media (prefers-reduced-motion: reduce) {
+            .auth-container, .auth-form-side, .auth-aside-panel { animation: none !important; transition: none !important; }
+            * { transition: none !important; }
+        }
+
+        /* ── Form Side ────────────────────────────────────────────────────── */
+        .auth-form-side {
+            padding: 44px 40px;
+            display: flex;
+            flex-direction: column;
+            justify-content: space-between;
+            background: var(--auth-surface);
+            overflow-y: auto;
+            max-height: 90vh;
+            animation: panelSlideInLeft 0.35s cubic-bezier(0.16, 1, 0.3, 1);
+            transition: transform 0.28s cubic-bezier(0.4, 0, 0.2, 1), opacity 0.28s ease;
+        }
+
+        .auth-brand {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            margin-bottom: 24px;
+        }
+
+        .auth-brand-logo {
+            width: 40px;
+            height: 40px;
+            border-radius: 10px;
+            background: #09090b;
+            color: #ffffff;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 19px;
+            box-shadow: 0 4px 10px rgba(0, 0, 0, 0.15);
+        }
+
+        [data-mode="dark"] .auth-brand-logo {
+            background: #ffffff;
+            color: #09090b;
+        }
+
+        .auth-brand-title {
+            font-size: 17px;
+            font-weight: 800;
+            letter-spacing: -0.3px;
+            color: var(--auth-text);
+        }
+
+        .auth-brand-subtitle {
+            font-size: 11px;
+            color: var(--auth-muted);
+            text-transform: uppercase;
+            letter-spacing: 0.6px;
+            font-weight: 600;
+        }
+
+        .auth-heading {
+            margin-bottom: 24px;
+        }
+
+        .auth-heading h1 {
+            font-size: 22px;
+            font-weight: 800;
+            letter-spacing: -0.4px;
+            color: var(--auth-text);
+            margin-bottom: 6px;
+        }
+
+        .auth-heading p {
+            font-size: 13px;
+            color: var(--auth-muted);
+            line-height: 1.5;
+        }
+
+        .role-notice-box {
+            background: rgba(22, 163, 74, 0.08);
+            border: 1px solid rgba(22, 163, 74, 0.25);
+            border-radius: 10px;
+            padding: 12px 14px;
+            font-size: 12px;
+            color: var(--auth-text);
+            display: flex;
+            align-items: flex-start;
+            gap: 10px;
+            margin-bottom: 24px;
+            line-height: 1.45;
+        }
+
+        .role-notice-box i {
+            color: #16a34a;
+            font-size: 16px;
+            flex-shrink: 0;
+            margin-top: 1px;
+        }
+
+        .form-section-header {
+            font-size: 11px;
+            font-weight: 800;
+            color: var(--auth-muted);
+            text-transform: uppercase;
+            letter-spacing: 0.8px;
+            margin-top: 20px;
+            margin-bottom: 14px;
+            padding-bottom: 6px;
+            border-bottom: 1px solid var(--auth-border);
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .form-grid-2 {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 14px;
+            margin-bottom: 14px;
+        }
+
+        .form-grid-3 {
+            display: grid;
+            grid-template-columns: 1fr 1fr 1fr;
+            gap: 14px;
+            margin-bottom: 14px;
+        }
+
+        .form-group {
+            display: flex;
+            flex-direction: column;
+        }
+
+        .form-label {
+            font-size: 12px;
+            font-weight: 600;
+            color: var(--auth-text);
+            margin-bottom: 6px;
+            letter-spacing: 0.1px;
+        }
+
+        .input-box {
+            position: relative;
+            display: flex;
+            align-items: center;
+        }
+
+        .input-box input, .input-box textarea {
+            width: 100%;
+            height: 44px;
+            padding: 0 14px;
+            background: var(--auth-input-bg);
+            border: 1px solid var(--auth-border);
+            border-radius: 9px;
+            color: var(--auth-text);
+            font-size: 13px;
+            font-family: inherit;
+            outline: none;
+            transition: border-color 0.18s ease, box-shadow 0.18s ease;
+        }
+
+        .input-box textarea {
+            height: auto;
+            padding: 10px 14px;
+            resize: vertical;
+        }
+
+        .input-box input:focus, .input-box textarea:focus {
+            border-color: #09090b;
+            background: var(--auth-surface);
+            box-shadow: 0 0 0 3px rgba(9, 9, 11, 0.08);
+        }
+
+        [data-mode="dark"] .input-box input:focus,
+        [data-mode="dark"] .input-box textarea:focus {
+            border-color: #ffffff;
+            box-shadow: 0 0 0 3px rgba(255, 255, 255, 0.12);
+        }
+
+        .btn-toggle-eye {
+            position: absolute;
+            right: 8px;
+            width: 32px;
+            height: 32px;
+            border-radius: 6px;
+            border: none;
+            background: transparent;
+            color: var(--auth-muted);
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 14px;
+        }
+
+        .btn-toggle-eye:hover {
+            color: var(--auth-text);
+        }
+
+        .btn-black-primary {
+            width: 100%;
+            height: 48px;
+            background: var(--auth-btn-bg);
+            color: var(--auth-btn-text);
+            border: none;
+            border-radius: 10px;
+            font-size: 14px;
+            font-weight: 700;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 8px;
+            margin-top: 24px;
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.12);
+            transition: background-color 0.18s ease, transform 0.08s ease, opacity 0.18s ease;
+        }
+
+        .btn-black-primary:hover:not(:disabled) {
+            background: var(--auth-btn-hover);
+        }
+
+        .btn-black-primary:disabled {
+            opacity: 0.65;
+            cursor: not-allowed;
+        }
+
+        .alert-error {
+            background: rgba(239, 68, 68, 0.08);
+            border: 1px solid rgba(239, 68, 68, 0.25);
+            color: #dc2626;
+            padding: 12px 14px;
+            border-radius: 10px;
+            font-size: 13px;
+            margin-bottom: 20px;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            line-height: 1.4;
+        }
+
+        .auth-footer {
+            margin-top: 24px;
+            padding-top: 18px;
+            border-top: 1px solid var(--auth-border);
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            font-size: 13px;
+            color: var(--auth-muted);
+            flex-wrap: wrap;
+            gap: 10px;
+        }
+
+        .auth-footer a {
+            color: var(--auth-text);
+            text-decoration: none;
+            font-weight: 700;
+        }
+
+        .auth-footer a:hover {
+            text-decoration: underline;
+        }
+
+        /* ── Aside Panel ──────────────────────────────────────────────────── */
+        .auth-aside-panel {
+            background: linear-gradient(145deg, #090d16 0%, #0f172a 100%);
+            color: #ffffff;
+            padding: 48px 40px;
+            display: flex;
+            flex-direction: column;
+            justify-content: space-between;
+            position: relative;
+            overflow: hidden;
+            border-left: 1px solid rgba(255, 255, 255, 0.08);
+            animation: panelSlideInRight 0.35s cubic-bezier(0.16, 1, 0.3, 1);
+            transition: transform 0.28s cubic-bezier(0.4, 0, 0.2, 1), opacity 0.28s ease;
+        }
+
+        .aside-badge {
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            padding: 4px 10px;
+            border-radius: 20px;
+            background: rgba(255, 255, 255, 0.08);
+            border: 1px solid rgba(255, 255, 255, 0.15);
+            font-size: 10px;
+            font-weight: 700;
+            letter-spacing: 0.8px;
+            text-transform: uppercase;
+            color: #4ade80;
+            width: fit-content;
+            margin-bottom: 20px;
+        }
+
+        .aside-hero h2 {
+            font-size: 24px;
+            font-weight: 800;
+            line-height: 1.3;
+            letter-spacing: -0.4px;
+            margin-bottom: 12px;
+            color: #f8fafc;
+        }
+
+        .aside-hero p {
+            font-size: 13px;
+            color: #94a3b8;
+            line-height: 1.6;
+            margin-bottom: 28px;
+        }
+
+        .aside-card {
+            background: rgba(15, 23, 42, 0.7);
+            border: 1px solid rgba(255, 255, 255, 0.12);
+            border-radius: 14px;
+            padding: 18px;
+            backdrop-filter: blur(10px);
+            margin-bottom: 24px;
+        }
+
+        .aside-card-title {
+            font-size: 12px;
+            font-weight: 700;
+            color: #4ade80;
+            text-transform: uppercase;
+            letter-spacing: 0.6px;
+            margin-bottom: 8px;
+        }
+
+        .aside-card p {
+            font-size: 12px;
+            color: #cbd5e1;
+            line-height: 1.5;
+            margin: 0;
+        }
+
+        .aside-feature-list {
+            display: grid;
+            gap: 14px;
+        }
+
+        .aside-feature-item {
+            display: flex;
+            align-items: flex-start;
+            gap: 10px;
+            font-size: 12px;
+            color: #cbd5e1;
+        }
+
+        .aside-feature-item i {
+            color: #22c55e;
+            font-size: 14px;
+            margin-top: 1px;
+        }
+
+        .spin-icon {
+            animation: spin 0.9s linear infinite;
+        }
+        @keyframes spin {
+            from { transform: rotate(0deg); }
+            to { transform: rotate(360deg); }
+        }
+
+        /* ── Responsive Mobile ────────────────────────────────────────────── */
+        @media (max-width: 959px) {
+            .auth-container {
+                grid-template-columns: 1fr;
+                max-width: 600px;
+            }
+            .auth-aside-panel {
+                display: none;
+            }
+            .auth-form-side {
+                padding: 32px 20px;
+                max-height: none;
+            }
+            .form-grid-2, .form-grid-3 {
+                grid-template-columns: 1fr;
+            }
+        }
+    </style>
 </head>
 <body>
-    <h1>Registatrion</h1>
-    <form method="POST">
-        {% csrf_token %}
-        <h1>Admin registration</h1>
-         <label>First Name</label><br>
-         <input type="text" name="admin_first_name" placeholder="Enter First Name" required><br><br>
+    <div class="auth-container">
+        <!-- Main Registration Form -->
+        <div class="auth-form-side">
+            <div>
+                <div class="auth-brand">
+                    <div class="auth-brand-logo">
+                        <i class="bi bi-shop-window"></i>
+                    </div>
+                    <div>
+                        <div class="auth-brand-title">Retail POS & Billing</div>
+                        <div class="auth-brand-subtitle">Commercial Terminal Edition</div>
+                    </div>
+                </div>
 
-          <label>Last Name</label><br>
-         <input type="text" name="admin_last_name" required><br><br>
+                <div class="auth-heading">
+                    <h1>Register Business & Owner Profile</h1>
+                    <p>Create your store tenant environment with statutory billing details and administrator credentials.</p>
+                </div>
 
-          <label>Username</label><br>
-         <input type="text" name="username" required><br><br>
+                <div class="role-notice-box">
+                    <i class="bi bi-info-circle-fill"></i>
+                    <div>
+                        <strong>Store Owner Account Creation</strong><br>
+                        This form provisions the primary store owner and company tenant. Cashiers, managers, and stock staff are added subsequently inside the dashboard via Employee Management.
+                    </div>
+                </div>
 
-          <label>Password</label><br>
-          <input type="password" name="password" required><br><br>
+                {% if error %}
+                <div class="alert-error" role="alert">
+                    <i class="bi bi-exclamation-triangle-fill"></i>
+                    <span>{{ error }}</span>
+                </div>
+                {% endif %}
 
-          <label>Confirm Password</label><br>
-          <input type="password" name="confirm_pass" required><br><br>
+                <form method="POST" id="reg-form">
+                    {% csrf_token %}
 
-          <label>Email</label><br>
-         <input type="email" name="email" required><br><br>
+                    <!-- SECTION 1: OWNER ACCOUNT -->
+                    <div class="form-section-header">
+                        <i class="bi bi-person-badge"></i> 1. Store Owner Account
+                    </div>
 
-         <h1>Business Registatrion</h1>
+                    <div class="form-grid-2">
+                        <div class="form-group">
+                            <label class="form-label">First Name *</label>
+                            <div class="input-box">
+                                <input type="text" name="admin_first_name" placeholder="Owner First Name" required autocomplete="given-name">
+                            </div>
+                        </div>
+                        <div class="form-group">
+                            <label class="form-label">Last Name</label>
+                            <div class="input-box">
+                                <input type="text" name="admin_last_name" placeholder="Owner Last Name" autocomplete="family-name">
+                            </div>
+                        </div>
+                    </div>
 
-         <label>Business/Company Name</label><br>
-         <input type="text" name="company_name" placeholder="" required><br><br>
+                    <div class="form-grid-2">
+                        <div class="form-group">
+                            <label class="form-label">Username *</label>
+                            <div class="input-box">
+                                <input type="text" name="username" placeholder="Unique login username" required autocomplete="username">
+                            </div>
+                        </div>
+                        <div class="form-group">
+                            <label class="form-label">Owner Email *</label>
+                            <div class="input-box">
+                                <input type="email" name="email" placeholder="owner@store.com" required autocomplete="email">
+                            </div>
+                        </div>
+                    </div>
 
-         <label>Address</label><br>
-         <input type="text" name="address_line" placeholder="" required><br><br>
+                    <div class="form-grid-2">
+                        <div class="form-group">
+                            <label class="form-label">Password *</label>
+                            <div class="input-box">
+                                <input type="password" id="id_reg_password" name="password" placeholder="••••••••" required autocomplete="new-password">
+                                <button type="button" class="btn-toggle-eye" id="btn-toggle-reg-pwd" title="Toggle password">
+                                    <i class="bi bi-eye" id="reg-eye-icon"></i>
+                                </button>
+                            </div>
+                        </div>
+                        <div class="form-group">
+                            <label class="form-label">Confirm Password *</label>
+                            <div class="input-box">
+                                <input type="password" id="id_reg_confirm" name="confirm_pass" placeholder="••••••••" required autocomplete="new-password">
+                                <button type="button" class="btn-toggle-eye" id="btn-toggle-reg-confirm" title="Toggle password">
+                                    <i class="bi bi-eye" id="reg-confirm-eye-icon"></i>
+                                </button>
+                            </div>
+                        </div>
+                    </div>
 
-         <label>City</label><br>
-         <input type="text" name="city" placeholder="" required><br><br>
+                    <!-- SECTION 2: BUSINESS & COMPANY DETAILS -->
+                    <div class="form-section-header">
+                        <i class="bi bi-building"></i> 2. Company & Statutory Details
+                    </div>
 
-         <label>State</label><br>
-         <input type="text" name="state" placeholder="" required><br><br> 
-         
-         <label>Country</label><br>
-         <input type="text" name="country" required><br><br>
+                    <div class="form-grid-2">
+                        <div class="form-group">
+                            <label class="form-label">Business / Company Name *</label>
+                            <div class="input-box">
+                                <input type="text" name="company_name" placeholder="e.g. Apex Hypermarket Pvt Ltd" required>
+                            </div>
+                        </div>
+                        <div class="form-group">
+                            <label class="form-label">Store Contact Email *</label>
+                            <div class="input-box">
+                                <input type="email" name="company_email" placeholder="contact@apexstore.com" required>
+                            </div>
+                        </div>
+                    </div>
 
-         <label>Pincode</label><br>
-         <input type="text" name="pincode" placeholder="" required><br><br>
+                    <div class="form-grid-2">
+                        <div class="form-group">
+                            <label class="form-label">Primary Store Phone *</label>
+                            <div class="input-box">
+                                <input type="text" name="phone" placeholder="e.g. +91 9876543210" required>
+                            </div>
+                        </div>
+                        <div class="form-group">
+                            <label class="form-label">Alternate Phone</label>
+                            <div class="input-box">
+                                <input type="text" name="alternate_phone" placeholder="Optional phone">
+                            </div>
+                        </div>
+                    </div>
 
-         <label>Email(Business/Company)</label><br>
-         <input type="email" name="company_email" placeholder="" required><br><br>
+                    <div class="form-group" style="margin-bottom: 14px;">
+                        <label class="form-label">Street Address *</label>
+                        <div class="input-box">
+                            <input type="text" name="address_line" placeholder="Shop / Building, Road, Landmark" required>
+                        </div>
+                    </div>
 
-         <label>Phone</label><br>
-         <input type="text" name="phone" placeholder="" required><br><br>
+                    <div class="form-grid-3">
+                        <div class="form-group">
+                            <label class="form-label">City *</label>
+                            <div class="input-box">
+                                <input type="text" name="city" placeholder="City" required>
+                            </div>
+                        </div>
+                        <div class="form-group">
+                            <label class="form-label">State *</label>
+                            <div class="input-box">
+                                <input type="text" name="state" placeholder="State" required>
+                            </div>
+                        </div>
+                        <div class="form-group">
+                            <label class="form-label">Pincode *</label>
+                            <div class="input-box">
+                                <input type="text" name="pincode" placeholder="Postal code" required>
+                            </div>
+                        </div>
+                    </div>
 
-         <label>Phone(optional)</label><br>
-         <input type="text" name="alternate_phone" placeholder=""><br><br>
+                    <div class="form-grid-3">
+                        <div class="form-group">
+                            <label class="form-label">Country *</label>
+                            <div class="input-box">
+                                <input type="text" name="country" value="India" required>
+                            </div>
+                        </div>
+                        <div class="form-group">
+                            <label class="form-label">GSTIN *</label>
+                            <div class="input-box">
+                                <input type="text" name="gst_number" placeholder="29ABCDE1234F1Z5" required>
+                            </div>
+                        </div>
+                        <div class="form-group">
+                            <label class="form-label">PAN Number *</label>
+                            <div class="input-box">
+                                <input type="text" name="pan_number" placeholder="ABCDE1234F" required>
+                            </div>
+                        </div>
+                    </div>
 
-         <label>GST</label><br>
-         <input type="text" name="gst_number" placeholder="" required><br><br>
+                    <div class="form-group" style="margin-bottom: 14px;">
+                        <label class="form-label">Business Info / Tagline *</label>
+                        <div class="input-box">
+                            <textarea name="business_info" rows="2" placeholder="Brief description of store products & retail operations" required></textarea>
+                        </div>
+                    </div>
 
-         <label>Pan</label><br>
-         <input type="text" name="pan_number" placeholder="" required><br><br>
+                    <button type="submit" class="btn-black-primary" id="btn-reg-submit">
+                        <i class="bi bi-check-circle-fill" id="reg-btn-icon"></i>
+                        <span id="reg-btn-label">Create Store & Owner Account</span>
+                    </button>
+                </form>
+            </div>
 
-         <label>About (business/Company)</label><br>
-         <input type="text" name="business_info" placeholder="" required><br><br>
+            <div class="auth-footer">
+                <span>Already registered?</span>
+                <a href="{% url 'accounts' %}">Sign in to Terminal →</a>
+            </div>
+        </div>
 
+        <!-- Aside Showcase Panel (Visible on Desktop) -->
+        <div class="auth-aside-panel" aria-hidden="true">
+            <div>
+                <div class="aside-badge">
+                    <i class="bi bi-shop"></i> Store Registration
+                </div>
 
+                <div class="aside-hero">
+                    <h2>Start with a clear view of your store.</h2>
+                    <p>Manage products, customers, billing and staff in one place.</p>
+                </div>
 
+                <div class="aside-card">
+                    <div class="aside-card-title">Tenant Data Isolation</div>
+                    <p>Every registered business has its own secure workspace. Your inventory, invoices, customer records, and employee payroll remain private to your store.</p>
+                </div>
 
-         <button type="submit">Submit</button>
+                <div class="aside-feature-list">
+                    <div class="aside-feature-item">
+                        <i class="bi bi-check-circle-fill"></i>
+                        <span>Quick POS billing with GST calculation and invoice printing</span>
+                    </div>
+                    <div class="aside-feature-item">
+                        <i class="bi bi-check-circle-fill"></i>
+                        <span>Role-based access control to keep terminal operations secure</span>
+                    </div>
+                    <div class="aside-feature-item">
+                        <i class="bi bi-check-circle-fill"></i>
+                        <span>Monthly salary history from April 2025 onwards and employee payslip records</span>
+                    </div>
+                    <div class="aside-feature-item">
+                        <i class="bi bi-check-circle-fill"></i>
+                        <span>Safe Telegram notifications for daily sales and inventory alerts</span>
+                    </div>
+                </div>
+            </div>
 
-        <hr>
-        
+            <div style="font-size: 11px; color: #64748b; padding-top: 18px; border-top: 1px solid rgba(255, 255, 255, 0.08);">
+                <span>Commercial Retail POS · Multi-Branch Architecture</span>
+            </div>
+        </div>
+    </div>
 
-        
-    </form>
+    <script>
+    (function() {
+        // Password toggles
+        function setupToggle(btnId, inputId, iconId) {
+            var btn = document.getElementById(btnId);
+            var input = document.getElementById(inputId);
+            var icon = document.getElementById(iconId);
+            if (btn && input && icon) {
+                btn.addEventListener('click', function() {
+                    var isPassword = input.type === 'password';
+                    input.type = isPassword ? 'text' : 'password';
+                    icon.className = isPassword ? 'bi bi-eye-slash' : 'bi bi-eye';
+                });
+            }
+        }
+        setupToggle('btn-toggle-reg-pwd', 'id_reg_password', 'reg-eye-icon');
+        setupToggle('btn-toggle-reg-confirm', 'id_reg_confirm', 'reg-confirm-eye-icon');
+
+        // Form submit loading
+        var form = document.getElementById('reg-form');
+        var submitBtn = document.getElementById('btn-reg-submit');
+        var btnIcon = document.getElementById('reg-btn-icon');
+        var btnLabel = document.getElementById('reg-btn-label');
+
+        if (form && submitBtn) {
+            form.addEventListener('submit', function() {
+                submitBtn.disabled = true;
+                if (btnIcon) btnIcon.className = 'bi bi-arrow-repeat spin-icon';
+                if (btnLabel) btnLabel.textContent = 'Provisioning Business Account...';
+            });
+        }
+
+        // Smooth panel swap animation when switching to login
+        var switchLink = document.querySelector('.auth-footer a');
+        if (switchLink) {
+            switchLink.addEventListener('click', function(e) {
+                if (window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches) {
+                    return;
+                }
+                e.preventDefault();
+                var targetUrl = this.getAttribute('href');
+                var container = document.querySelector('.auth-container');
+                if (container) {
+                    container.classList.add('is-swapping-panel');
+                    setTimeout(function() {
+                        window.location.href = targetUrl;
+                    }, 220);
+                } else {
+                    window.location.href = targetUrl;
+                }
+            });
+        }
+    })();
+    </script>
+    {% include "dashboard/form_submit_protection.html" %}
 </body>
 </html>

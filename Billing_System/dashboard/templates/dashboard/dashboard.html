@@ -1,281 +1,374 @@
-
-
-{% extends "Dashboard/main_nav.html" %}
+{% extends "dashboard/main_nav.html" %}
+{% load static %}
 
 {% block content %}
-
-<style>
-    .dashboard-container {
-        padding: 20px;
-    }
-
-    .dashboard-header {
-        margin-bottom: 25px;
-    }
-
-    .dashboard-links {
-        display: flex;
-        flex-wrap: wrap;
-        gap: 12px;
-        margin-top: 15px;
-    }
-
-    .dashboard-links a {
-        text-decoration: none;
-        padding: 10px 16px;
-        border-radius: 6px;
-        background: #2563eb;
-        color: white;
-    }
-
-    .dashboard-section {
-        margin-top: 30px;
-    }
-
-    .dashboard-cards {
-        display: grid;
-        grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
-        gap: 18px;
-        margin-top: 18px;
-    }
-
-    .dashboard-cards .card {
-        padding: 20px;
-        border-radius: 10px;
-        background: #ffffff;
-        box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
-        border-left: 4px solid #2563eb;
-    }
-
-    .dashboard-cards .card h4 {
-        margin: 0 0 12px;
-        font-size: 15px;
-        color: #555;
-    }
-
-    .dashboard-cards .card p {
-        margin: 0;
-        font-size: 26px;
-        font-weight: bold;
-        color: #111827;
-    }
-
-    .placeholder {
-        color: #888;
-        font-size: 14px !important;
-        font-weight: normal !important;
-    }
-</style>
-
-<div class="dashboard-container">
-
-    <div class="dashboard-header">
-        <h3>Navbar</h3>
-
-        <div class="dashboard-links">
-            <a href="">Home</a>
-            <a href="">Dashboard</a>
-            <a href="">About Us</a>
-            <a href="{% url 'logout' %}">Logout</a>
+<div class="dashboard-wrap" style="max-width: 1400px; margin: 0 auto; padding: 22px 20px;">
+    
+    <!-- Hero / Welcome Toolbar -->
+    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 22px; flex-wrap: wrap; gap: 14px;">
+        <div>
+            <div style="display: flex; align-items: center; gap: 10px; margin-bottom: 4px;">
+                <h1 style="font-size: 22px; font-weight: 700; color: var(--text); margin: 0;">
+                    {% if is_owner %}Owner & Executive Dashboard{% else %}Store Manager Operations{% endif %}
+                </h1>
+                <span class="badge {% if is_owner %}badge-warning{% else %}badge-primary{% endif %}" style="font-size: 11px;">
+                    <i class="bi bi-shield-check"></i> {{ user_role }}
+                </span>
+            </div>
+            <p style="margin: 0; font-size: 13px; color: var(--muted);">
+                Live metrics for <strong>{{ company.company_name }}</strong> &bull; Updated real-time.
+            </p>
         </div>
 
-        <hr>
-
-        <h1>Admin Dashboard</h1>
-
-        <div class="dashboard-links">
-            <a href="{% url 'view_employee' %}">View Employees</a>
-            <a href="{% url 'employee' %}">Add Employee</a>
+        <div style="display: flex; gap: 10px; align-items: center;">
+            <a href="{% url 'cart' %}" class="btn btn-primary" style="font-size: 13px; padding: 8px 16px; text-decoration: none;">
+                <i class="bi bi-upc-scan"></i> Open POS Checkout
+            </a>
+            <a href="{% url 'reports' %}" class="btn btn-secondary" style="font-size: 13px; padding: 8px 14px; text-decoration: none;">
+                <i class="bi bi-bar-chart-line-fill"></i> Analytics
+            </a>
         </div>
     </div>
 
-    <hr>
-
-    <!-- Inventory Overview -->
-    <div class="dashboard-section">
-        <h3>Inventory Overview</h3>
-
-        <div class="dashboard-cards">
-
-            <div class="card">
-                <h4>Total Products</h4>
-                <p>{{ total_products }}</p>
+    <!-- ── KPI METRICS CARDS ─────────────────────────────────────────── -->
+    <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 14px; margin-bottom: 22px;">
+        <div class="stat-card" style="padding: 16px; border-left: 4px solid var(--primary);">
+            <div style="font-size: 11px; font-weight: 700; color: var(--muted); text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 6px;">Today's Sales</div>
+            <div style="font-size: 24px; font-weight: 700; font-family: var(--font-mono); color: var(--text);">₹{{ today_sales_amount|floatformat:2 }}</div>
+            <div style="font-size: 11px; color: var(--muted); margin-top: 4px;">
+                <strong style="color: var(--primary);">{{ today_sales_count }}</strong> completed bills
             </div>
+        </div>
 
-            <div class="card">
-                <h4>Low Stock Products</h4>
-                <p>{{ low_stock_products }}</p>
+        <div class="stat-card" style="padding: 16px;">
+            <div style="font-size: 11px; font-weight: 700; color: var(--muted); text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 6px;">This Month Sales</div>
+            <div style="font-size: 24px; font-weight: 700; font-family: var(--font-mono); color: var(--text);">₹{{ this_month_sales_amount|floatformat:2 }}</div>
+            <div style="font-size: 11px; color: var(--muted); margin-top: 4px;">Monthly Revenue</div>
+        </div>
+
+        <div class="stat-card" style="padding: 16px;">
+            <div style="font-size: 11px; font-weight: 700; color: var(--muted); text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 6px;">Gross Profit</div>
+            <div style="font-size: 24px; font-weight: 700; font-family: var(--font-mono); color: var(--success);">₹{{ total_profit|floatformat:2 }}</div>
+            <div style="font-size: 11px; color: var(--muted); margin-top: 4px;">Revenue - COGS</div>
+        </div>
+
+        <div class="stat-card" style="padding: 16px;">
+            <div style="font-size: 11px; font-weight: 700; color: var(--muted); text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 6px;">Stock Status</div>
+            <div style="font-size: 24px; font-weight: 700; font-family: var(--font-mono); color: var(--text);">{{ total_products }}</div>
+            <div style="font-size: 11px; margin-top: 4px;">
+                {% if out_of_stock_products > 0 %}
+                    <span style="color: var(--danger); font-weight: 600;">{{ out_of_stock_products }} Out of Stock</span> &bull; 
+                {% endif %}
+                <span style="color: var(--warning); font-weight: 600;">{{ low_stock_products }} Low Stock</span>
             </div>
+        </div>
 
-            <div class="card">
-                <h4>Out of Stock</h4>
-                <p>{{ out_of_stock_products }}</p>
+        <div class="stat-card" style="padding: 16px;">
+            <div style="font-size: 11px; font-weight: 700; color: var(--muted); text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 6px;">Customers & Suppliers</div>
+            <div style="font-size: 24px; font-weight: 700; font-family: var(--font-mono); color: var(--text);">{{ total_customers }}</div>
+            <div style="font-size: 11px; color: var(--muted); margin-top: 4px;">
+                {{ total_suppliers }} Registered Suppliers
             </div>
-
-            <div class="card">
-                <h4>Total Suppliers</h4>
-                <p>{{ total_suppliers }}</p>
-            </div>
-
         </div>
     </div>
 
-    <!-- Sales Overview -->
-    <div class="dashboard-section">
-        <h3>Sales Overview</h3>
-
-        <div class="dashboard-cards">
-
-            <div class="card">
-                <h4>Today's Sales</h4>
-                <p class="placeholder">Coming soon</p>
+    <!-- ── 2. DASHBOARD TEAM BAR (Section 2) ─────────────────────────── -->
+    <div class="team-bar-card">
+        <div class="team-bar-header">
+            <div class="team-bar-title-wrap">
+                <i class="bi bi-people-fill" style="color: var(--primary); font-size: 20px;"></i>
+                <span class="title">Store Team</span>
+                <span class="count-pill">{{ total_team }} Members</span>
             </div>
 
-            <div class="card">
-                <h4>Total Sales</h4>
-                <p class="placeholder">Coming soon</p>
+            <div style="display: flex; gap: 8px;">
+                <a href="{% url 'view_employee' %}" class="btn btn-secondary btn-sm" style="text-decoration: none;">
+                    <i class="bi bi-people"></i> View Team
+                </a>
+                <a href="{% url 'employee' %}" class="btn btn-primary btn-sm" style="text-decoration: none;">
+                    <i class="bi bi-person-plus-fill"></i> Add Team Member
+                </a>
+            </div>
+        </div>
+
+        <div class="team-stat-pills">
+            <div class="team-stat-item">
+                <span class="lbl">Cashiers</span>
+                <span class="val" style="color: #16a34a;">{{ cashiers_count }}</span>
+            </div>
+            <div class="team-stat-item">
+                <span class="lbl">Stock Team</span>
+                <span class="val" style="color: #0284c7;">{{ stock_team_count }}</span>
+            </div>
+            <div class="team-stat-item">
+                <span class="lbl">Managers</span>
+                <span class="val" style="color: #9333ea;">{{ managers_count }}</span>
+            </div>
+            <div class="team-stat-item">
+                <span class="lbl">Other Staff</span>
+                <span class="val">{{ other_staff_count }}</span>
+            </div>
+            <div class="team-stat-item" style="margin-left: auto;">
+                <span class="lbl">Active Status</span>
+                <span class="val" style="color: var(--success);">{{ active_team_count }} Active</span>
+                <span style="color: var(--muted); font-size: 11px;">/ {{ inactive_team_count }} Inactive</span>
+            </div>
+        </div>
+
+        {% if is_owner and payroll_data %}
+        <!-- OWNER ONLY PAYROLL THIS MONTH SECTION -->
+        <div class="payroll-highlight-card" style="margin-top: 8px;">
+            <div style="display: flex; align-items: center; gap: 10px;">
+                <i class="bi bi-cash-stack" style="color: var(--primary); font-size: 22px;"></i>
+                <div>
+                    <div style="font-size: 13px; font-weight: 700; color: var(--text);">PAYROLL THIS MONTH</div>
+                    <div style="font-size: 11px; color: var(--muted);">Owner Confidential Compensation Overview</div>
+                </div>
             </div>
 
-            <div class="card">
-                <h4>This Month's Sales</h4>
-                <p class="placeholder">Coming soon</p>
+            <div style="display: flex; gap: 24px; align-items: center; flex-wrap: wrap;">
+                <div class="payroll-stat-col">
+                    <span class="lbl">Total Payroll</span>
+                    <span class="val">₹{{ payroll_data.total|floatformat:2 }}</span>
+                </div>
+                <div class="payroll-stat-col">
+                    <span class="lbl">Disbursed (Paid)</span>
+                    <span class="val green">₹{{ payroll_data.paid|floatformat:2 }}</span>
+                </div>
+                <div class="payroll-stat-col">
+                    <span class="lbl">Pending (Due)</span>
+                    <span class="val amber">₹{{ payroll_data.pending|floatformat:2 }}</span>
+                </div>
+
+                <a href="{% url 'payroll_history' %}" class="btn btn-outline btn-sm" style="text-decoration: none;">
+                    <i class="bi bi-wallet2"></i> Payroll & Payslips
+                </a>
+            </div>
+        </div>
+        {% endif %}
+    </div>
+
+    <!-- ── 3. AI BUSINESS INSIGHTS & INVENTORY INTELLIGENCE ──────────────── -->
+    <div style="background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius-md); padding: 20px; margin-bottom: 22px;">
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px; flex-wrap: wrap; gap: 10px;">
+            <div style="display: flex; align-items: center; gap: 10px;">
+                <div style="width: 36px; height: 36px; border-radius: 8px; background: rgba(147, 51, 234, 0.15); display: flex; align-items: center; justify-content: center; color: #a855f7; font-size: 18px;">
+                    <i class="bi bi-stars"></i>
+                </div>
+                <div>
+                    <h3 style="font-size: 15px; font-weight: 700; color: var(--text); margin: 0;">AI Business Insights & Inventory Intelligence</h3>
+                    <div style="font-size: 12px; color: var(--muted);">Data-backed recommendations powered by sales velocity & historical run rates</div>
+                </div>
+            </div>
+            <span style="background: rgba(147, 51, 234, 0.12); color: #c084fc; border: 1px solid rgba(147, 51, 234, 0.25); font-size: 11px; font-weight: 600; padding: 3px 10px; border-radius: 9999px;">
+                <i class="bi bi-shield-check"></i> Read-Only Verified Engine
+            </span>
+        </div>
+
+        <!-- Insights Grid -->
+        <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(320px, 1fr)); gap: 16px; margin-bottom: 18px;">
+            <!-- Sales Trends Column -->
+            <div style="background: var(--surface-2); border: 1px solid var(--border); border-radius: var(--radius-sm); padding: 16px;">
+                <div style="font-size: 12px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.5px; color: var(--muted); margin-bottom: 12px; display: flex; align-items: center; gap: 6px;">
+                    <i class="bi bi-graph-up" style="color: var(--primary);"></i> Revenue & Velocity Insights
+                </div>
+                {% if ai_sales_insights.insights %}
+                    <div style="display: flex; flex-direction: column; gap: 10px;">
+                        {% for ins in ai_sales_insights.insights %}
+                        <div style="padding: 10px 12px; background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius-sm);">
+                            <div style="font-size: 13px; font-weight: 600; color: var(--text); margin-bottom: 3px; display: flex; align-items: center; gap: 6px;">
+                                <i class="bi {{ ins.icon }}" style="color: var(--primary);"></i>
+                                {{ ins.title }}
+                            </div>
+                            <div style="font-size: 12px; color: var(--muted); line-height: 1.4;">
+                                {{ ins.text }}
+                            </div>
+                        </div>
+                        {% endfor %}
+                    </div>
+                {% else %}
+                    <p style="font-size: 12px; color: var(--muted); margin: 0;">Record more sales transactions to unlock trend analysis.</p>
+                {% endif %}
             </div>
 
-            <div class="card">
-                <h4>Total Customers</h4>
-                <p class="placeholder">Coming soon</p>
+            <!-- Inventory Intelligence & Demand Runway -->
+            <div style="background: var(--surface-2); border: 1px solid var(--border); border-radius: var(--radius-sm); padding: 16px;">
+                <div style="font-size: 12px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.5px; color: var(--muted); margin-bottom: 12px; display: flex; align-items: center; gap: 6px;">
+                    <i class="bi bi-box-seam" style="color: var(--warning, #f59e0b);"></i> Inventory Demand & Reorder Forecast
+                </div>
+                {% if ai_inventory_intelligence %}
+                    <div style="display: flex; flex-direction: column; gap: 8px;">
+                        {% for item in ai_inventory_intelligence|slice:":4" %}
+                        <div style="padding: 9px 12px; background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius-sm); display: flex; justify-content: space-between; align-items: center; gap: 10px;">
+                            <div style="min-width: 0;">
+                                <div style="font-size: 12px; font-weight: 600; color: var(--text); white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">
+                                    {{ item.product_name }} <span style="color: var(--muted); font-size: 11px;">({{ item.sku }})</span>
+                                </div>
+                                <div style="font-size: 11px; color: var(--muted);">
+                                    {{ item.reason }}
+                                </div>
+                            </div>
+                            <div style="text-align: right; white-space: nowrap;">
+                                <span style="background: {% if item.urgency == 'CRITICAL' %}rgba(239, 68, 68, 0.15){% else %}rgba(245, 158, 11, 0.15){% endif %}; color: {% if item.urgency == 'CRITICAL' %}#ef4444{% else %}#f59e0b{% endif %}; font-size: 10px; font-weight: 700; padding: 2px 6px; border-radius: 4px;">
+                                    Order {{ item.suggested_order }} units
+                                </span>
+                            </div>
+                        </div>
+                        {% endfor %}
+                    </div>
+                {% else %}
+                    <p style="font-size: 12px; color: var(--muted); margin: 0;">✅ All stock levels healthy. No urgent reorders forecasted.</p>
+                {% endif %}
+            </div>
+        </div>
+
+        <!-- Natural Language Assistant Query Box -->
+        <div style="background: var(--surface-2); border: 1px solid var(--border); border-radius: var(--radius-sm); padding: 14px;">
+            <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 10px; flex-wrap: wrap; gap: 8px;">
+                <span style="font-size: 12px; font-weight: 700; color: var(--text);">
+                    <i class="bi bi-chat-left-dots-fill" style="color: #a855f7;"></i> Ask Business Assistant:
+                </span>
+                <div style="display: flex; gap: 6px; flex-wrap: wrap;">
+                    <button type="button" onclick="setAiQuery('How much did we sell today?')" style="background: var(--surface); border: 1px solid var(--border); font-size: 11px; padding: 3px 8px; border-radius: 12px; color: var(--muted); cursor: pointer;">
+                        Today's sales
+                    </button>
+                    <button type="button" onclick="setAiQuery('What are our top products?')" style="background: var(--surface); border: 1px solid var(--border); font-size: 11px; padding: 3px 8px; border-radius: 12px; color: var(--muted); cursor: pointer;">
+                        Top products
+                    </button>
+                    <button type="button" onclick="setAiQuery('Which products are low on stock?')" style="background: var(--surface); border: 1px solid var(--border); font-size: 11px; padding: 3px 8px; border-radius: 12px; color: var(--muted); cursor: pointer;">
+                        Low stock
+                    </button>
+                    <button type="button" onclick="setAiQuery('Compare this week with last week.')" style="background: var(--surface); border: 1px solid var(--border); font-size: 11px; padding: 3px 8px; border-radius: 12px; color: var(--muted); cursor: pointer;">
+                        Week comparison
+                    </button>
+                </div>
             </div>
 
+            <div style="display: flex; gap: 8px;">
+                <input type="text" id="ai-query-input" placeholder="e.g. How much did we sell today? Or Compare this week with last week." style="flex: 1; font-size: 13px; padding: 8px 12px; background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius-sm); color: var(--text);" onkeydown="if(event.key==='Enter') submitAiQuery();">
+                <button type="button" class="btn btn-primary" onclick="submitAiQuery()" style="padding: 8px 16px; font-size: 12px; white-space: nowrap;">
+                    <i class="bi bi-send-fill"></i> Ask
+                </button>
+            </div>
+
+            <div id="ai-response-box" style="display: none; margin-top: 12px; padding: 12px; background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius-sm); font-size: 12px; line-height: 1.5; color: var(--text); white-space: pre-wrap;"></div>
         </div>
     </div>
 
-    <!-- Financial Overview -->
-    <div class="dashboard-section">
-        <h3>Financial Overview</h3>
+    <script>
+    function setAiQuery(text) {
+        document.getElementById('ai-query-input').value = text;
+        submitAiQuery();
+    }
 
-        <div class="dashboard-cards">
+    async function submitAiQuery() {
+        const input = document.getElementById('ai-query-input');
+        const box = document.getElementById('ai-response-box');
+        const query = input.value.trim();
+        if (!query) return;
 
-    <div class="card">
-       <h4>Today's Purchases</h4>
-       <p>{{ today_purchase_count }}</p>
-       <small>Value: ₹{{ today_purchase_value|floatformat:2 }}</small>
-    </div>
+        box.style.display = 'block';
+        box.innerHTML = '<span style="color: var(--muted);"><i class="bi bi-hourglass-split"></i> Querying business engine...</span>';
 
-            <div class="card">
-                <h4>Revenue</h4>
-                <p class="placeholder">Coming soon</p>
+        try {
+            const resp = await fetch('/api/ai/ask/', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'X-CSRFToken': '{{ csrf_token }}'
+                },
+                body: JSON.stringify({ question: query })
+            });
+            const data = await resp.json();
+            if (resp.ok && data.status === 'success') {
+                box.innerHTML = data.answer.replace(/\\*\\*(.*?)\\*\\*/g, '<strong>$1</strong>').replace(/\\*(.*?)\\*/g, '<em>$1</em>').replace(/\\n/g, '<br>');
+            } else {
+                box.innerHTML = '<span style="color: var(--danger);">' + (data.error || 'Unable to process query.') + '</span>';
+            }
+        } catch (err) {
+            box.innerHTML = '<span style="color: var(--danger);">Network error communicating with AI assistant API.</span>';
+        }
+    }
+    </script>
+
+    <!-- ── RECENT SALES LEDGER ──────────────────────────────────────── -->
+    <div style="background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius-md); padding: 18px 20px;">
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 14px;">
+            <div>
+                <h3 style="font-size: 14px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.5px; color: var(--muted); margin: 0 0 2px 0;">
+                    Recent Completed Transactions
+                </h3>
+                <span style="font-size: 12px; color: var(--muted);">Latest customer orders and cashier tenders</span>
             </div>
-
-            <div class="card">
-                <h4>Profit</h4>
-                <p class="placeholder">Coming soon</p>
-            </div>
-
+            <a href="{% url 'sales' %}" class="btn btn-secondary btn-sm" style="text-decoration: none;">
+                View All Sales & Invoices <i class="bi bi-arrow-right"></i>
+            </a>
         </div>
-    </div>
 
-    <!-- Recent Activity -->
-    <div class="dashboard-section">
-        <h3>Recent Activity</h3>
-
-        
-<!-- Low Stock Alerts -->
-<div class="dashboard-section">
-    <h3>Low Stock Alerts</h3>
-
-    {% if low_stock_items %}
         <div style="overflow-x: auto;">
-            <table style="width: 100%; border-collapse: collapse; background: white;">
+            <table class="table-theme" style="width: 100%;">
                 <thead>
-                    <tr style="background: #f3f4f6;">
-                        <th style="padding: 12px; text-align: left;">Product</th>
-                        <th style="padding: 12px; text-align: left;">Current Stock</th>
-                        <th style="padding: 12px; text-align: left;">Minimum Stock</th>
-                        <th style="padding: 12px; text-align: left;">Status</th>
+                    <tr>
+                        <th>Invoice / ID</th>
+                        <th>Date & Time</th>
+                        <th>Customer</th>
+                        <th>Cashier</th>
+                        <th>Payment Mode</th>
+                        <th style="text-align: right;">Grand Total</th>
+                        <th style="text-align: center;">Action</th>
                     </tr>
                 </thead>
                 <tbody>
-                    {% for product in low_stock_items %}
-                        <tr style="border-bottom: 1px solid #ddd;">
-                            <td style="padding: 12px;">{{ product.name }}</td>
-                            <td style="padding: 12px;">
-                                {{ product.current_stock }} {{ product.unit }}
-                            </td>
-                            <td style="padding: 12px;">
-                                {{ product.minimum_stock }} {{ product.unit }}
-                            </td>
-                            <td style="padding: 12px; color: #d97706; font-weight: bold;">
-                                Low Stock
-                            </td>
-                        </tr>
+                    {% for s in recent_sales %}
+                    <tr>
+                        <td style="font-family: var(--font-mono); font-weight: 600;">
+                            {% if s.invoice and s.invoice.invoice_number %}
+                            <a href="{% url 'invoice_detail' s.invoice.invoice_number %}" style="color: var(--primary); text-decoration: none;">
+                                {{ s.invoice.invoice_number }}
+                            </a>
+                            {% else %}
+                            <span style="color: var(--muted);">#{{ s.id }}</span>
+                            {% endif %}
+                        </td>
+                        <td style="font-size: 12px; color: var(--muted);">
+                            {{ s.created_at|date:"M d, Y H:i" }}
+                        </td>
+                        <td>
+                            {% if s.customer %}
+                                <strong>{{ s.customer.name }}</strong>
+                            {% else %}
+                                <span style="color: var(--muted);">Walk-in Customer</span>
+                            {% endif %}
+                        </td>
+                        <td style="font-size: 12px; color: var(--muted);">
+                            {{ s.cashier.username|default:"System" }}
+                        </td>
+                        <td>
+                            <span class="badge badge-primary" style="font-size: 11px;">
+                                {{ s.payment_method }}
+                            </span>
+                        </td>
+                        <td style="text-align: right; font-family: var(--font-mono); font-weight: 700; color: var(--text);">
+                            ₹{{ s.grand_total|floatformat:2 }}
+                        </td>
+                        <td style="text-align: center;">
+                            {% if s.invoice and s.invoice.invoice_number %}
+                            <a href="{% url 'invoice_detail' s.invoice.invoice_number %}" class="btn btn-secondary btn-sm" style="text-decoration: none; padding: 3px 8px;">
+                                <i class="bi bi-printer"></i> Invoice
+                            </a>
+                            {% endif %}
+                        </td>
+                    </tr>
+                    {% empty %}
+                    <tr>
+                        <td colspan="7" style="text-align: center; padding: 30px; color: var(--muted); font-size: 13px;">
+                            No recent sales records found.
+                        </td>
+                    </tr>
                     {% endfor %}
                 </tbody>
             </table>
         </div>
-    {% else %}
-        <p>No low-stock products at the moment.</p>
-    {% endif %}
-
-
-<!-- Recent Purchases -->
-<div class="dashboard-section">
-    <h3>Recent Purchases</h3>
-
-    {% if recent_purchases %}
-        <div style="overflow-x: auto;">
-            <table style="width: 100%; border-collapse: collapse; background: white;">
-                <thead>
-                    <tr style="background: #f3f4f6;">
-                        <th style="padding: 12px; text-align: left;">Invoice No.</th>
-                        <th style="padding: 12px; text-align: left;">Supplier</th>
-                        <th style="padding: 12px; text-align: left;">Date</th>
-                        <th style="padding: 12px; text-align: left;">Status</th>
-                        <th style="padding: 12px; text-align: left;">Action</th>
-                    </tr>
-                </thead>
-                <tbody>
-                    {% for purchase in recent_purchases %}
-                        <tr style="border-bottom: 1px solid #ddd;">
-                            <td style="padding: 12px;">
-                                {{ purchase.invoice_number }}
-                            </td>
-                            <td style="padding: 12px;">
-                                {{ purchase.supplier.name }}
-                            </td>
-                            <td style="padding: 12px;">
-                                {{ purchase.purchase_date }}
-                            </td>
-                            <td style="padding: 12px;">
-                                {{ purchase.get_status_display }}
-                            </td>
-                            <td style="padding: 12px;">
-                                <a href="{% url 'purchase_detail' purchase.id %}">
-                                    View Details
-                                </a>
-                            </td>
-                        </tr>
-                    {% endfor %}
-                </tbody>
-            </table>
-        </div>
-    {% else %}
-        <p>No purchases available yet.</p>
-    {% endif %}
-</div>
-</div>
-
-
     </div>
-
-    <!-- Sales Calendar -->
-    <div class="dashboard-section">
-        <h3>Sales Calendar</h3>
-        <p>
-            A date and month filter will be added here to view sales
-            for a selected day or month.
-        </p>
-    </div>
-
 </div>
-
 {% endblock content %}
