@@ -4,13 +4,176 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Document</title>
+    <title>Retail Billing & POS Management Platform</title>
+    <meta name="description" content="Next-generation multi-tenant retail billing, inventory management, and POS checkout platform.">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@500;600&display=swap" rel="stylesheet">
+    <script>
+    (function() {
+        try {
+            var m = localStorage.getItem('pos_mode');
+            var t = localStorage.getItem('pos_theme') || localStorage.getItem('alpha-theme') || 'forest';
+            if (m !== 'dark') m = 'light';
+            document.documentElement.setAttribute('data-mode', m);
+            document.documentElement.setAttribute('data-theme', t);
+            document.documentElement.dataset.mode = m;
+            document.documentElement.dataset.theme = t;
+        } catch (e) {
+            document.documentElement.setAttribute('data-mode', 'light');
+            document.documentElement.setAttribute('data-theme', 'forest');
+        }
+    })();
+    </script>
+    <link rel="stylesheet" href="{% static 'dashboard/css/theme.css' %}">
+    <script src="{% static 'dashboard/js/theme.js' %}"></script>
+    <style>
+        *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+        body {
+            font-family: 'Inter', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+            background: var(--bg);
+            color: var(--text);
+            min-height: 100vh;
+            display: flex;
+            flex-direction: column;
+        }
+        .hero-navbar {
+            height: 64px;
+            background: var(--surface);
+            border-bottom: 1px solid var(--border);
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 0 32px;
+        }
+        .brand-logo {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            font-weight: 800;
+            font-size: 16px;
+            color: var(--text);
+        }
+        .brand-logo i {
+            color: var(--primary);
+            font-size: 22px;
+        }
+        .nav-actions {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+        }
+        .btn-link {
+            padding: 8px 16px;
+            color: var(--text);
+            text-decoration: none;
+            font-size: 13px;
+            font-weight: 600;
+            border-radius: var(--radius-sm);
+            transition: background 0.15s ease;
+        }
+        .btn-link:hover {
+            background: var(--surface-2);
+        }
+        .btn-primary-action {
+            padding: 8px 18px;
+            background: var(--primary);
+            color: #ffffff;
+            text-decoration: none;
+            font-size: 13px;
+            font-weight: 600;
+            border-radius: var(--radius-sm);
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            transition: background 0.15s ease;
+        }
+        .btn-primary-action:hover {
+            background: var(--primary-strong);
+        }
+        .hero-content {
+            flex: 1;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 48px 24px;
+            text-align: center;
+        }
+        .hero-inner {
+            max-width: 720px;
+        }
+        .badge-pill {
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+            background: var(--surface-2);
+            border: 1px solid var(--border);
+            padding: 6px 14px;
+            border-radius: 20px;
+            font-size: 12px;
+            font-weight: 600;
+            color: var(--primary);
+            margin-bottom: 24px;
+        }
+        .hero-title {
+            font-size: 42px;
+            font-weight: 800;
+            letter-spacing: -0.8px;
+            line-height: 1.15;
+            margin-bottom: 18px;
+            color: var(--text);
+        }
+        .hero-title span {
+            color: var(--primary);
+        }
+        .hero-sub {
+            font-size: 16px;
+            color: var(--muted);
+            line-height: 1.6;
+            margin-bottom: 32px;
+        }
+        .hero-buttons {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 16px;
+        }
+    </style>
 </head>
 <body>
-    <h1>This is our home page</h1>
-    <a href="{% url "accounts" %}">Login</a>
-    <a href="{% url "registration" %}">Registration</a>
+    <header class="hero-navbar">
+        <div class="brand-logo">
+            <i class="bi bi-cart3"></i>
+            <span>Alpha Retail POS</span>
+        </div>
+        <div class="nav-actions">
+            <a href="{% url 'accounts' %}" class="btn-link">Sign In</a>
+            <a href="{% url 'registration' %}" class="btn-primary-action">
+                <i class="bi bi-rocket-takeoff"></i> Register Store
+            </a>
+        </div>
+    </header>
 
-
+    <main class="hero-content">
+        <div class="hero-inner">
+            <div class="badge-pill">
+                <i class="bi bi-shield-check"></i> Enterprise Grade Retail POS & Stock Platform
+            </div>
+            <h1 class="hero-title">
+                Intelligent Retail Billing & <span>Hypermarket POS</span>
+            </h1>
+            <p class="hero-sub">
+                Complete multi-tenant solution with barcode checkout, phone camera scanning, real-time inventory ledger, audit trails, and owner intelligence.
+            </p>
+            <div class="hero-buttons">
+                <a href="{% url 'accounts' %}" class="btn-primary-action" style="padding: 12px 28px; font-size: 15px;">
+                    <i class="bi bi-box-arrow-in-right"></i> Launch POS Terminal
+                </a>
+                <a href="{% url 'registration' %}" class="btn-link" style="padding: 12px 24px; font-size: 15px; border: 1px solid var(--border);">
+                    <i class="bi bi-building"></i> Register Business
+                </a>
+            </div>
+        </div>
+    </main>
 </body>
 </html>

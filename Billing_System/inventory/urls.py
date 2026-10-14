@@ -4,7 +4,8 @@ from . import views
 
 urlpatterns = [
     path("category/",views.category_list,name="category"),
-    path("category/add",views.add_category,name="add_category"),
+    path("category/add/",views.add_category,name="add_category"),
+    path("category/add",views.add_category),
     path(
     "category/edit/<int:id>/",
     views.edit_category,
@@ -31,7 +32,9 @@ path(
 ),
 
 path("product/add/", views.add_product, name="add_product"),
+path("products/add/", views.add_product, name="add_product_alias"),
 path("product/", views.product_list, name="product"),
+path("products/", views.product_list, name="product_alias"),
 path(
     "product/edit/<int:id>/",
     views.edit_product,

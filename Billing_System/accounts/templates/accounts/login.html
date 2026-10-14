@@ -1,30 +1,1224 @@
 {% load static %}
 <!DOCTYPE html>
-<html lang="en">
+<html lang="en" data-mode="light">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Document</title>
+    <title>Terminal Authentication — Retail POS & Billing System</title>
+    <meta name="description" content="Secure POS terminal login and merchant registration portal.">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@500;600;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css">
+    <link rel="stylesheet" href="{% static 'dashboard/css/theme.css' %}">
+    <script>
+    (function() {
+        try {
+            var saved = localStorage.getItem('pos_theme_mode');
+            if (saved === 'dark' || saved === 'light') {
+                document.documentElement.setAttribute('data-mode', saved);
+            } else {
+                document.documentElement.setAttribute('data-mode', 'light');
+            }
+        } catch(e) {
+            document.documentElement.setAttribute('data-mode', 'light');
+        }
+    })();
+    </script>
+    <style>
+        *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+        
+        :root {
+            --auth-bg: #f8fafc;
+            --auth-surface: #ffffff;
+            --auth-text: #0f172a;
+            --auth-muted: #64748b;
+            --auth-border: #e2e8f0;
+            --auth-input-bg: #f8fafc;
+            --auth-btn-bg: #09090b;
+            --auth-btn-hover: #27272a;
+            --auth-btn-text: #ffffff;
+            --auth-accent: #16a34a;
+        }
+
+        [data-mode="dark"] {
+            --auth-bg: #090d16;
+            --auth-surface: #111827;
+            --auth-text: #f8fafc;
+            --auth-muted: #94a3b8;
+            --auth-border: #1f293d;
+            --auth-input-bg: #162032;
+            --auth-btn-bg: #f8fafc;
+            --auth-btn-hover: #e2e8f0;
+            --auth-btn-text: #09090b;
+            --auth-accent: #22c55e;
+        }
+
+        body {
+            font-family: 'Inter', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+            background: var(--auth-bg);
+            color: var(--auth-text);
+            min-height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 16px;
+        }
+
+        /* ── 3D Book Viewport & Container ────────────────────────────────── */
+        .auth-viewport {
+            width: 100%;
+            max-width: 1120px;
+            perspective: 2400px;
+        }
+
+        .auth-book {
+            position: relative;
+            width: 100%;
+            min-height: 540px;
+            max-height: min(720px, calc(100vh - 32px));
+            height: min(720px, calc(100vh - 32px));
+            background: var(--auth-surface);
+            border: 1px solid var(--auth-border);
+            border-radius: 18px;
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            box-shadow: 0 20px 45px -12px rgba(0, 0, 0, 0.15), 0 0 0 1px rgba(0, 0, 0, 0.02);
+            transform-style: preserve-3d;
+        }
+
+        /* Central Book Spine Shadow */
+        .auth-book::after {
+            content: "";
+            position: absolute;
+            top: 0;
+            bottom: 0;
+            left: 50%;
+            width: 2px;
+            transform: translateX(-50%);
+            background: linear-gradient(to bottom, transparent, rgba(0,0,0,0.1) 20%, rgba(0,0,0,0.1) 80%, transparent);
+            z-index: 5;
+            pointer-events: none;
+        }
+
+        [data-mode="dark"] .auth-book::after {
+            background: linear-gradient(to bottom, transparent, rgba(255,255,255,0.08) 20%, rgba(255,255,255,0.08) 80%, transparent);
+        }
+
+        /* ── Wings (Static Sides) ────────────────────────────────────────── */
+        .book-wing {
+            width: 100%;
+            height: 100%;
+            overflow-y: auto;
+            overflow-x: hidden;
+            position: relative;
+            z-index: 1;
+            display: flex;
+            flex-direction: column;
+            background: var(--auth-surface);
+        }
+
+        .book-wing-left {
+            border-radius: 18px 0 0 18px;
+            border-right: 1px solid var(--auth-border);
+        }
+
+        .book-wing-right {
+            border-radius: 0 18px 18px 0;
+            border-left: 1px solid var(--auth-border);
+        }
+
+        .book-leaf {
+            position: absolute;
+            top: 0;
+            right: 0;
+            width: 50%;
+            height: 100%;
+            transform-origin: left center;
+            transform-style: preserve-3d;
+            transition: transform 750ms cubic-bezier(0.4, 0.0, 0.2, 1), box-shadow 750ms cubic-bezier(0.4, 0.0, 0.2, 1);
+            z-index: 10;
+            box-shadow: -8px 0 30px rgba(0, 0, 0, 0.18);
+            pointer-events: auto;
+            will-change: transform;
+        }
+
+        /* State: Registration Mode (Leaf flips over from Right to Left) */
+        .auth-book[data-state="register"] .book-leaf {
+            transform: rotateY(-180deg);
+            box-shadow: 8px 0 30px rgba(0, 0, 0, 0.18);
+        }
+
+        /* Leaf Faces (Front: Login info, Back: Register info) */
+        .leaf-face {
+            position: absolute;
+            inset: 0;
+            width: 100%;
+            height: 100%;
+            backface-visibility: hidden;
+            -webkit-backface-visibility: hidden;
+            display: flex;
+            flex-direction: column;
+        }
+
+        .leaf-face-front {
+            transform: rotateY(0deg);
+            border-radius: 0 18px 18px 0;
+        }
+
+        .leaf-face-back {
+            transform: rotateY(180deg);
+            border-radius: 18px 0 0 18px;
+        }
+
+        /* Visual Book Edge Border on Leaf */
+        .book-leaf::before {
+            content: "";
+            position: absolute;
+            top: 0;
+            bottom: 0;
+            right: 0;
+            width: 3px;
+            background: rgba(255, 255, 255, 0.12);
+            z-index: 15;
+            pointer-events: none;
+        }
+
+        /* ── Form Styles ─────────────────────────────────────────────────── */
+        .auth-form-side {
+            padding: 28px 32px;
+            display: flex;
+            flex-direction: column;
+            justify-content: space-between;
+            min-height: 100%;
+        }
+
+        .auth-brand {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            margin-bottom: 16px;
+        }
+
+        .auth-brand-logo {
+            width: 38px;
+            height: 38px;
+            border-radius: 9px;
+            background: #09090b;
+            color: #ffffff;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 18px;
+            box-shadow: 0 4px 10px rgba(0, 0, 0, 0.15);
+        }
+
+        [data-mode="dark"] .auth-brand-logo {
+            background: #ffffff;
+            color: #09090b;
+        }
+
+        .auth-brand-title {
+            font-size: 16px;
+            font-weight: 800;
+            letter-spacing: -0.3px;
+            color: var(--auth-text);
+        }
+
+        .auth-brand-subtitle {
+            font-size: 10px;
+            color: var(--auth-muted);
+            text-transform: uppercase;
+            letter-spacing: 0.6px;
+            font-weight: 600;
+        }
+
+        .auth-heading {
+            margin-bottom: 18px;
+        }
+
+        .auth-heading h1 {
+            font-size: 21px;
+            font-weight: 800;
+            letter-spacing: -0.4px;
+            color: var(--auth-text);
+            margin-bottom: 4px;
+        }
+
+        .auth-heading p {
+            font-size: 12.5px;
+            color: var(--auth-muted);
+            line-height: 1.45;
+        }
+
+        .form-group {
+            margin-bottom: 14px;
+        }
+
+        .form-label {
+            display: block;
+            font-size: 11.5px;
+            font-weight: 600;
+            color: var(--auth-text);
+            margin-bottom: 6px;
+            letter-spacing: 0.2px;
+        }
+
+        .form-grid-2 {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 12px;
+        }
+
+        .form-grid-3 {
+            display: grid;
+            grid-template-columns: 1fr 1fr 1fr;
+            gap: 10px;
+        }
+
+        .form-section-header {
+            font-size: 11px;
+            font-weight: 700;
+            text-transform: uppercase;
+            letter-spacing: 0.8px;
+            color: var(--auth-muted);
+            margin: 18px 0 10px 0;
+            padding-bottom: 5px;
+            border-bottom: 1px solid var(--auth-border);
+            display: flex;
+            align-items: center;
+            gap: 6px;
+        }
+
+        .input-box {
+            position: relative;
+            display: flex;
+            align-items: center;
+        }
+
+        .input-box i.input-icon {
+            position: absolute;
+            left: 14px;
+            color: var(--auth-muted);
+            font-size: 15px;
+            pointer-events: none;
+        }
+
+        .input-box input,
+        .input-box textarea {
+            width: 100%;
+            padding: 0 14px;
+            height: 42px;
+            background: var(--auth-input-bg);
+            border: 1px solid var(--auth-border);
+            border-radius: 9px;
+            color: var(--auth-text);
+            font-size: 13px;
+            font-family: inherit;
+            outline: none;
+            transition: border-color 0.18s ease, box-shadow 0.18s ease;
+        }
+
+        .input-box input.has-icon {
+            padding-left: 38px;
+            padding-right: 40px;
+        }
+
+        .input-box textarea {
+            height: auto;
+            padding: 8px 12px;
+            resize: vertical;
+        }
+
+        .input-box input:focus,
+        .input-box textarea:focus {
+            border-color: #09090b;
+            background: var(--auth-surface);
+            box-shadow: 0 0 0 3px rgba(9, 9, 11, 0.08);
+        }
+
+        [data-mode="dark"] .input-box input:focus,
+        [data-mode="dark"] .input-box textarea:focus {
+            border-color: #ffffff;
+            box-shadow: 0 0 0 3px rgba(255, 255, 255, 0.12);
+        }
+
+        .btn-toggle-eye {
+            position: absolute;
+            right: 6px;
+            width: 32px;
+            height: 32px;
+            border-radius: 7px;
+            border: none;
+            background: transparent;
+            color: var(--auth-muted);
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 14px;
+            transition: color 0.15s, background-color 0.15s;
+        }
+
+        .btn-toggle-eye:hover {
+            color: var(--auth-text);
+            background: var(--auth-border);
+        }
+
+        .btn-black-primary {
+            width: 100%;
+            height: 46px;
+            background: var(--auth-btn-bg);
+            color: var(--auth-btn-text);
+            border: none;
+            border-radius: 9px;
+            font-size: 13.5px;
+            font-weight: 700;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 8px;
+            margin-top: 18px;
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.12);
+            transition: background-color 0.18s ease, transform 0.08s ease, opacity 0.18s ease;
+        }
+
+        .btn-black-primary:hover:not(:disabled) {
+            background: var(--auth-btn-hover);
+        }
+
+        .btn-black-primary:active:not(:disabled) {
+            transform: scale(0.99);
+        }
+
+        .btn-black-primary:disabled {
+            opacity: 0.65;
+            cursor: not-allowed;
+        }
+
+        .alert-error {
+            background: rgba(239, 68, 68, 0.08);
+            border: 1px solid rgba(239, 68, 68, 0.25);
+            color: #dc2626;
+            padding: 10px 12px;
+            border-radius: 9px;
+            font-size: 12.5px;
+            margin-bottom: 16px;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            line-height: 1.4;
+        }
+
+        .auth-footer {
+            margin-top: 24px;
+            padding-top: 16px;
+            border-top: 1px solid var(--auth-border);
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            font-size: 12px;
+            color: var(--auth-muted);
+            flex-wrap: wrap;
+            gap: 8px;
+        }
+
+        .auth-toggle-btn {
+            background: none;
+            border: none;
+            color: var(--auth-text);
+            font-weight: 700;
+            font-size: 12.5px;
+            cursor: pointer;
+            display: inline-flex;
+            align-items: center;
+            gap: 5px;
+            padding: 4px 8px;
+            border-radius: 6px;
+            transition: background-color 0.15s, color 0.15s;
+            font-family: inherit;
+        }
+
+        .auth-toggle-btn:hover {
+            background: var(--auth-input-bg);
+            color: var(--auth-accent);
+            text-decoration: underline;
+        }
+
+        .role-hint-pill {
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            padding: 5px 10px;
+            border-radius: 20px;
+            background: var(--auth-input-bg);
+            border: 1px solid var(--auth-border);
+            font-size: 11px;
+            color: var(--auth-muted);
+            margin-top: 8px;
+        }
+
+        /* ── Dark Decorative Aside Panels (Inside Leaf) ──────────────────── */
+        .auth-aside-panel {
+            background: linear-gradient(145deg, #090d16 0%, #0f172a 100%);
+            color: #ffffff;
+            padding: 28px 30px;
+            display: flex;
+            flex-direction: column;
+            justify-content: space-between;
+            height: 100%;
+            position: relative;
+            overflow-y: auto;
+            overflow-x: hidden;
+        }
+
+        .leaf-face-front .auth-aside-panel {
+            border-radius: 0 18px 18px 0;
+            border-left: 1px solid rgba(255, 255, 255, 0.08);
+        }
+
+        .leaf-face-back .auth-aside-panel {
+            border-radius: 18px 0 0 18px;
+            border-right: 1px solid rgba(255, 255, 255, 0.08);
+            background: linear-gradient(145deg, #0b1120 0%, #020617 100%);
+        }
+
+        .auth-aside-panel::before {
+            content: "";
+            position: absolute;
+            top: -60px;
+            right: -60px;
+            width: 220px;
+            height: 220px;
+            border-radius: 50%;
+            background: radial-gradient(circle, rgba(22, 163, 74, 0.25) 0%, transparent 70%);
+            pointer-events: none;
+        }
+
+        .aside-badge {
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            padding: 3px 9px;
+            border-radius: 20px;
+            background: rgba(255, 255, 255, 0.08);
+            border: 1px solid rgba(255, 255, 255, 0.15);
+            font-size: 9.5px;
+            font-weight: 700;
+            letter-spacing: 0.8px;
+            text-transform: uppercase;
+            color: #4ade80;
+            width: fit-content;
+            margin-bottom: 12px;
+        }
+
+        .auth-aside-body {
+            margin: auto 0;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+        }
+
+        .aside-hero h2 {
+            font-size: 24px;
+            font-weight: 800;
+            line-height: 1.25;
+            letter-spacing: -0.4px;
+            margin-bottom: 8px;
+            color: #f8fafc;
+        }
+
+        .aside-hero p {
+            font-size: 12px;
+            color: #94a3b8;
+            line-height: 1.5;
+            margin-bottom: 16px;
+        }
+
+        .aside-feature-list {
+            display: grid;
+            gap: 12px;
+            margin-bottom: 18px;
+        }
+
+        .aside-feature-item {
+            display: flex;
+            align-items: flex-start;
+            gap: 10px;
+            font-size: 12.5px;
+            color: #cbd5e1;
+            line-height: 1.4;
+        }
+
+        .aside-feature-item i {
+            color: #22c55e;
+            font-size: 13px;
+            margin-top: 2px;
+            flex-shrink: 0;
+        }
+
+        .aside-footer {
+            margin-top: 20px;
+            padding-top: 14px;
+            border-top: 1px solid rgba(255, 255, 255, 0.08);
+            font-size: 11.5px;
+            color: #64748b;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+        }
+
+        .compact-reg-link {
+            background: none;
+            border: none;
+            color: #4ade80;
+            font-size: 12px;
+            font-weight: 600;
+            cursor: pointer;
+            display: inline-flex;
+            align-items: center;
+            gap: 4px;
+            padding: 4px 8px;
+            border-radius: 6px;
+            transition: color 0.15s ease, background-color 0.15s ease;
+            font-family: inherit;
+            text-decoration: none;
+        }
+
+        .compact-reg-link:hover {
+            color: #86efac;
+            background: rgba(255, 255, 255, 0.06);
+            text-decoration: underline;
+        }
+
+        .leaf-face-back .compact-reg-link {
+            color: #94a3b8;
+        }
+
+        .leaf-face-back .compact-reg-link:hover {
+            color: #f8fafc;
+        }
+
+        .spin-icon {
+            animation: spin 0.9s linear infinite;
+        }
+        @keyframes spin {
+            from { transform: rotate(0deg); }
+            to { transform: rotate(360deg); }
+        }
+
+        .mobile-only {
+            display: none !important;
+        }
+        .desktop-only {
+            display: inline-block !important;
+        }
+
+        /* ── Responsive Mobile & Tablet Layout ───────────────────────────── */
+        @media (max-width: 959px) {
+            .mobile-only {
+                display: inline-block !important;
+            }
+            .desktop-only {
+                display: none !important;
+            }
+            .auth-book {
+                grid-template-columns: 1fr;
+                max-width: 520px;
+                min-height: auto;
+                height: auto;
+            }
+            .book-leaf {
+                display: none !important;
+            }
+            .auth-book::after {
+                display: none;
+            }
+            .auth-book[data-state="login"] #wing-reg {
+                display: none !important;
+            }
+            .auth-book[data-state="register"] #wing-login {
+                display: none !important;
+            }
+            .book-wing-left, .book-wing-right {
+                border: none;
+                border-radius: 18px;
+            }
+            .auth-form-side {
+                padding: 32px 22px;
+            }
+        }
+
+        /* ── Reduced Motion Preference ───────────────────────────────────── */
+        @media (prefers-reduced-motion: reduce) {
+            .book-leaf {
+                transition: none !important;
+            }
+            * {
+                animation: none !important;
+                transition: none !important;
+            }
+        }
+    </style>
 </head>
 <body>
-    <h1>Login and Log out</h1>
+    <div class="auth-viewport">
+        <div class="auth-book" id="auth-book" data-state="login">
 
-    <form method="post">
-        {% csrf_token %}
-        <label>Username:</label>
-        <input type="text" name="username" placeholder="username">
+            <!-- ── LEFT WING: Login Form (Visible on Left in Login Mode) ────── -->
+            <div class="book-wing book-wing-left" id="wing-login" aria-label="Terminal Login Section">
+                <div class="auth-form-side">
+                    <div>
+                        <div class="auth-brand">
+                            <div class="auth-brand-logo">
+                                <i class="bi bi-shop-window"></i>
+                            </div>
+                            <div>
+                                <div class="auth-brand-title">Retail POS & Billing</div>
+                                <div class="auth-brand-subtitle">Commercial Terminal Edition</div>
+                            </div>
+                        </div>
 
-        <br><br>
+                        <div class="auth-heading">
+                            <h1>Sign In to Terminal</h1>
+                            <p>Enter your assigned store credentials to access your terminal, inventory catalog, or checkout counter.</p>
+                        </div>
 
-        <label>Password:</label>
-        <input type="password" name="password" placeholder="*****">
+                        {% if error and not is_register_error %}
+                        <div class="alert-error" role="alert" id="login-error-alert">
+                            <i class="bi bi-exclamation-triangle-fill"></i>
+                            <span>{{ error }}</span>
+                        </div>
+                        {% endif %}
 
-        <button type="submit">Submit</button>
+                        <form method="POST" action="{% url 'accounts' %}" id="login-form">
+                            {% csrf_token %}
+                            <div class="form-group">
+                                <label for="id_username" class="form-label">Operator Username / Employee ID / Email</label>
+                                <div class="input-box">
+                                    <i class="bi bi-person input-icon"></i>
+                                    <input type="text"
+                                           id="id_username"
+                                           name="username"
+                                           class="has-icon"
+                                           placeholder="cashier, manager, or owner"
+                                           required
+                                           autofocus
+                                           autocomplete="username">
+                                </div>
+                            </div>
 
-        <a href="{% url "logout" %}">logout</a>
-       
+                            <div class="form-group">
+                                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px;">
+                                    <label for="id_password" class="form-label" style="margin-bottom: 0;">Terminal Password</label>
+                                </div>
+                                <div class="input-box">
+                                    <i class="bi bi-lock input-icon"></i>
+                                    <input type="password"
+                                           id="id_password"
+                                           name="password"
+                                           class="has-icon"
+                                           placeholder="••••••••"
+                                           required
+                                           autocomplete="current-password">
+                                    <button type="button"
+                                            class="btn-toggle-eye"
+                                            id="btn-toggle-pwd"
+                                            title="Toggle password visibility"
+                                            aria-label="Toggle password visibility">
+                                        <i class="bi bi-eye" id="pwd-eye-icon"></i>
+                                    </button>
+                                </div>
+                            </div>
 
-    </form>
-    {% include "dashboard/form_submit_protection.html" %}
+                            <div class="role-hint-pill">
+                                <i class="bi bi-shield-check" style="color: var(--auth-accent);"></i>
+                                <span>Role auto-routing: Cashier, Manager & Owner supported</span>
+                            </div>
+
+                            <button type="submit" class="btn-black-primary" id="btn-login-submit">
+                                <i class="bi bi-box-arrow-in-right" id="login-btn-icon"></i>
+                                <span id="login-btn-label">Sign In to Terminal</span>
+                            </button>
+                        </form>
+                    </div>
+
+                    <div class="auth-footer">
+                        <span>Terminal operator session</span>
+                        <span class="mobile-only">
+                            <button type="button" class="auth-toggle-btn" id="btn-mobile-to-register" aria-label="Go to store registration form">
+                                <span>Register store →</span>
+                            </button>
+                        </span>
+                        <span class="desktop-only" style="color: var(--auth-muted); font-size: 11.5px;">Commercial POS Edition</span>
+                    </div>
+                </div>
+            </div>
+
+            <!-- ── RIGHT WING: Registration Form (Revealed on Right in Register Mode) ── -->
+            <div class="book-wing book-wing-right" id="wing-reg" aria-label="Store Registration Section">
+                <div class="auth-form-side">
+                    <div>
+                        <div class="auth-brand">
+                            <div class="auth-brand-logo">
+                                <i class="bi bi-shop"></i>
+                            </div>
+                            <div>
+                                <div class="auth-brand-title">Retail POS & Billing</div>
+                                <div class="auth-brand-subtitle">New Store Provisioning</div>
+                            </div>
+                        </div>
+
+                        <div class="auth-heading">
+                            <h1>Register Store & Owner</h1>
+                            <p>Provision your merchant tenant environment with statutory billing details and administrator credentials.</p>
+                        </div>
+
+                        {% if error and is_register_error %}
+                        <div class="alert-error" role="alert" id="reg-error-alert">
+                            <i class="bi bi-exclamation-triangle-fill"></i>
+                            <span>{{ error }}</span>
+                        </div>
+                        {% endif %}
+
+                        <form method="POST" action="{% url 'registration' %}" id="reg-form">
+                            {% csrf_token %}
+
+                            <!-- SECTION 1: OWNER ACCOUNT -->
+                            <div class="form-section-header">
+                                <i class="bi bi-person-badge"></i> 1. Store Owner Account
+                            </div>
+
+                            <div class="form-grid-2">
+                                <div class="form-group">
+                                    <label class="form-label">First Name *</label>
+                                    <div class="input-box">
+                                        <input type="text" id="reg_first_name" name="admin_first_name" placeholder="Owner First Name" required autocomplete="given-name">
+                                    </div>
+                                </div>
+                                <div class="form-group">
+                                    <label class="form-label">Last Name</label>
+                                    <div class="input-box">
+                                        <input type="text" name="admin_last_name" placeholder="Owner Last Name" autocomplete="family-name">
+                                    </div>
+                                </div>
+                            </div>
+
+                            <div class="form-grid-2">
+                                <div class="form-group">
+                                    <label class="form-label">Username *</label>
+                                    <div class="input-box">
+                                        <input type="text" name="username" placeholder="Login username" required autocomplete="username">
+                                    </div>
+                                </div>
+                                <div class="form-group">
+                                    <label class="form-label">Owner Email *</label>
+                                    <div class="input-box">
+                                        <input type="email" name="email" placeholder="owner@store.com" required autocomplete="email">
+                                    </div>
+                                </div>
+                            </div>
+
+                            <div class="form-grid-2">
+                                <div class="form-group">
+                                    <label class="form-label">Password *</label>
+                                    <div class="input-box">
+                                        <input type="password" id="id_reg_password" name="password" placeholder="••••••••" required autocomplete="new-password">
+                                        <button type="button" class="btn-toggle-eye" id="btn-toggle-reg-pwd" title="Toggle password">
+                                            <i class="bi bi-eye" id="reg-eye-icon"></i>
+                                        </button>
+                                    </div>
+                                </div>
+                                <div class="form-group">
+                                    <label class="form-label">Confirm Password *</label>
+                                    <div class="input-box">
+                                        <input type="password" id="id_reg_confirm" name="confirm_pass" placeholder="••••••••" required autocomplete="new-password">
+                                        <button type="button" class="btn-toggle-eye" id="btn-toggle-reg-confirm" title="Toggle password">
+                                            <i class="bi bi-eye" id="reg-confirm-eye-icon"></i>
+                                        </button>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <!-- SECTION 2: BUSINESS & COMPANY DETAILS -->
+                            <div class="form-section-header">
+                                <i class="bi bi-building"></i> 2. Company & Statutory Details
+                            </div>
+
+                            <div class="form-grid-2">
+                                <div class="form-group">
+                                    <label class="form-label">Store / Company Name *</label>
+                                    <div class="input-box">
+                                        <input type="text" name="company_name" placeholder="e.g. Apex Hypermarket" required>
+                                    </div>
+                                </div>
+                                <div class="form-group">
+                                    <label class="form-label">Store Contact Email *</label>
+                                    <div class="input-box">
+                                        <input type="email" name="company_email" placeholder="contact@apexstore.com" required>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <div class="form-grid-2">
+                                <div class="form-group">
+                                    <label class="form-label">Store Phone *</label>
+                                    <div class="input-box">
+                                        <input type="text" name="phone" placeholder="+91 9876543210" required>
+                                    </div>
+                                </div>
+                                <div class="form-group">
+                                    <label class="form-label">Alternate Phone</label>
+                                    <div class="input-box">
+                                        <input type="text" name="alternate_phone" placeholder="Optional phone">
+                                    </div>
+                                </div>
+                            </div>
+
+                            <div class="form-group">
+                                <label class="form-label">Street Address *</label>
+                                <div class="input-box">
+                                    <input type="text" name="address_line" placeholder="Shop / Building, Road, Landmark" required>
+                                </div>
+                            </div>
+
+                            <div class="form-grid-3">
+                                <div class="form-group">
+                                    <label class="form-label">City *</label>
+                                    <div class="input-box">
+                                        <input type="text" name="city" placeholder="City" required>
+                                    </div>
+                                </div>
+                                <div class="form-group">
+                                    <label class="form-label">State *</label>
+                                    <div class="input-box">
+                                        <input type="text" name="state" placeholder="State" required>
+                                    </div>
+                                </div>
+                                <div class="form-group">
+                                    <label class="form-label">Pincode *</label>
+                                    <div class="input-box">
+                                        <input type="text" name="pincode" placeholder="Postal code" required>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <div class="form-grid-3">
+                                <div class="form-group">
+                                    <label class="form-label">Country *</label>
+                                    <div class="input-box">
+                                        <input type="text" name="country" value="India" required>
+                                    </div>
+                                </div>
+                                <div class="form-group">
+                                    <label class="form-label">GSTIN *</label>
+                                    <div class="input-box">
+                                        <input type="text" name="gst_number" placeholder="29ABCDE1234F1Z5" required>
+                                    </div>
+                                </div>
+                                <div class="form-group">
+                                    <label class="form-label">PAN Number *</label>
+                                    <div class="input-box">
+                                        <input type="text" name="pan_number" placeholder="ABCDE1234F" required>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <div class="form-group">
+                                <label class="form-label">Business Info / Description *</label>
+                                <div class="input-box">
+                                    <textarea name="business_info" rows="2" placeholder="Brief description of store retail operations" required></textarea>
+                                </div>
+                            </div>
+
+                            <button type="submit" class="btn-black-primary" id="btn-reg-submit">
+                                <i class="bi bi-check-circle-fill" id="reg-btn-icon"></i>
+                                <span id="reg-btn-label">Create Store & Owner Account</span>
+                            </button>
+                        </form>
+                    </div>
+
+                    <div class="auth-footer">
+                        <span>Store registration portal</span>
+                        <span class="mobile-only">
+                            <button type="button" class="auth-toggle-btn" id="btn-mobile-to-login" aria-label="Return to terminal sign in form">
+                                <span>← Back to Sign In</span>
+                            </button>
+                        </span>
+                        <span class="desktop-only" style="color: var(--auth-muted); font-size: 11.5px;">Statutory & Tax Ready</span>
+                    </div>
+                </div>
+            </div>
+
+            <!-- ── FLIPPING LEAF (The Dark Decorative Panel that flips 180° like a book page) ── -->
+            <div class="book-leaf" id="book-leaf" aria-hidden="true">
+                
+                <!-- FRONT FACE: Visible on RIGHT during Login Mode -->
+                <div class="leaf-face leaf-face-front">
+                    <div class="auth-aside-panel">
+                        <div class="auth-aside-body">
+                            <div class="aside-badge">
+                                <i class="bi bi-shield-check"></i> Retail POS & Billing
+                            </div>
+
+                            <div class="aside-hero">
+                                <h2>Welcome Back</h2>
+                                <p>Fast checkout, real-time stock control, and reliable accounting for modern retail.</p>
+                            </div>
+
+                            <div class="aside-feature-list">
+                                <div class="aside-feature-item">
+                                    <i class="bi bi-check-circle-fill"></i>
+                                    <span>Faster barcode checkout.</span>
+                                </div>
+                                <div class="aside-feature-item">
+                                    <i class="bi bi-check-circle-fill"></i>
+                                    <span>Inventory and stock movement tracking.</span>
+                                </div>
+                                <div class="aside-feature-item">
+                                    <i class="bi bi-check-circle-fill"></i>
+                                    <span>GST-aware invoices and reports.</span>
+                                </div>
+                                <div class="aside-feature-item">
+                                    <i class="bi bi-check-circle-fill"></i>
+                                    <span>Role-based staff management.</span>
+                                </div>
+                                <div class="aside-feature-item">
+                                    <i class="bi bi-check-circle-fill"></i>
+                                    <span>Payroll and payslips.</span>
+                                </div>
+                                <div class="aside-feature-item">
+                                    <i class="bi bi-check-circle-fill"></i>
+                                    <span>Sales returns and payment tracking.</span>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="aside-footer">
+                            <span>Encrypted POS Session</span>
+                            <button type="button" class="compact-reg-link" id="btn-aside-to-register" aria-label="Register new store">
+                                <span>New here? Register your store →</span>
+                            </button>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- BACK FACE: Visible on LEFT during Registration Mode -->
+                <div class="leaf-face leaf-face-back">
+                    <div class="auth-aside-panel">
+                        <div class="auth-aside-body">
+                            <div class="aside-badge">
+                                <i class="bi bi-shop"></i> Store Registration
+                            </div>
+
+                            <div class="aside-hero">
+                                <h2>Build Your Store on a Smarter POS</h2>
+                                <p>Set up your store terminal and begin trading with verified data isolation.</p>
+                            </div>
+
+                            <div class="aside-feature-list">
+                                <div class="aside-feature-item">
+                                    <i class="bi bi-check-circle-fill"></i>
+                                    <span>Faster barcode checkout.</span>
+                                </div>
+                                <div class="aside-feature-item">
+                                    <i class="bi bi-check-circle-fill"></i>
+                                    <span>Inventory and stock movement tracking.</span>
+                                </div>
+                                <div class="aside-feature-item">
+                                    <i class="bi bi-check-circle-fill"></i>
+                                    <span>GST-aware invoices and reports.</span>
+                                </div>
+                                <div class="aside-feature-item">
+                                    <i class="bi bi-check-circle-fill"></i>
+                                    <span>Role-based staff management.</span>
+                                </div>
+                                <div class="aside-feature-item">
+                                    <i class="bi bi-check-circle-fill"></i>
+                                    <span>Payroll and payslips.</span>
+                                </div>
+                                <div class="aside-feature-item">
+                                    <i class="bi bi-check-circle-fill"></i>
+                                    <span>Sales returns and payment tracking.</span>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="aside-footer">
+                            <span>Multi-Tenant Architecture</span>
+                            <button type="button" class="compact-reg-link" id="btn-aside-to-login" aria-label="Back to sign in">
+                                <span>Already registered? Sign in →</span>
+                            </button>
+                        </div>
+                    </div>
+                </div>
+
+            </div>
+
+        </div>
+    </div>
+
+    <script>
+    (function() {
+        var book = document.getElementById('auth-book');
+        var leaf = document.getElementById('book-leaf');
+        var wingLogin = document.getElementById('wing-login');
+        var wingReg = document.getElementById('wing-reg');
+        var btnMobileToRegister = document.getElementById('btn-mobile-to-register');
+        var btnMobileToLogin = document.getElementById('btn-mobile-to-login');
+        var btnAsideToRegister = document.getElementById('btn-aside-to-register');
+        var btnAsideToLogin = document.getElementById('btn-aside-to-login');
+
+        // Check if initial state should be registration
+        var urlParams = new URLSearchParams(window.location.search);
+        var initialRegister = window.location.hash === '#register' || 
+                              urlParams.get('action') === 'register' || 
+                              urlParams.get('mode') === 'register' ||
+                              document.getElementById('reg-error-alert') !== null;
+
+        function updateAccessibility(state) {
+            if (state === 'register') {
+                if (wingLogin) {
+                    wingLogin.setAttribute('aria-hidden', 'true');
+                    var loginInputs = wingLogin.querySelectorAll('input, button');
+                    loginInputs.forEach(function(el) { el.setAttribute('tabindex', '-1'); });
+                }
+                if (wingReg) {
+                    wingReg.removeAttribute('aria-hidden');
+                    var regInputs = wingReg.querySelectorAll('input, textarea, button');
+                    regInputs.forEach(function(el) { el.removeAttribute('tabindex'); });
+                }
+            } else {
+                if (wingReg) {
+                    wingReg.setAttribute('aria-hidden', 'true');
+                    var regInputs = wingReg.querySelectorAll('input, textarea, button');
+                    regInputs.forEach(function(el) { el.setAttribute('tabindex', '-1'); });
+                }
+                if (wingLogin) {
+                    wingLogin.removeAttribute('aria-hidden');
+                    var loginInputs = wingLogin.querySelectorAll('input, button');
+                    loginInputs.forEach(function(el) { el.removeAttribute('tabindex'); });
+                }
+            }
+        }
+
+        var isFlipping = false;
+        function setBookState(state, animate) {
+            if (!book) return;
+            if (animate && isFlipping) return;
+            if (animate) {
+                isFlipping = true;
+                setTimeout(function() { isFlipping = false; }, 760);
+            }
+            book.setAttribute('data-state', state);
+            updateAccessibility(state);
+
+            if (state === 'register') {
+                try { history.replaceState(null, '', '#register'); } catch(e) {}
+                setTimeout(function() {
+                    var firstInput = document.getElementById('reg_first_name');
+                    if (firstInput && animate) firstInput.focus();
+                }, animate ? 600 : 50);
+            } else {
+                try { history.replaceState(null, '', window.location.pathname); } catch(e) {}
+                setTimeout(function() {
+                    var usernameInput = document.getElementById('id_username');
+                    if (usernameInput && animate) usernameInput.focus();
+                }, animate ? 600 : 50);
+            }
+        }
+
+        // Initialize state
+        setBookState(initialRegister ? 'register' : 'login', false);
+
+        // Flip to Register click
+        [btnMobileToRegister, btnAsideToRegister].forEach(function(btn) {
+            if (btn) {
+                btn.addEventListener('click', function(e) {
+                    e.preventDefault();
+                    setBookState('register', true);
+                });
+            }
+        });
+
+        // Flip back to Login click
+        [btnMobileToLogin, btnAsideToLogin].forEach(function(btn) {
+            if (btn) {
+                btn.addEventListener('click', function(e) {
+                    e.preventDefault();
+                    setBookState('login', true);
+                });
+            }
+        });
+
+        // Handle browser back/forward buttons
+        window.addEventListener('popstate', function() {
+            var isReg = window.location.hash === '#register';
+            setBookState(isReg ? 'register' : 'login', true);
+        });
+
+        // Toggle Login password visibility
+        var togglePwd = document.getElementById('btn-toggle-pwd');
+        var pwdInput = document.getElementById('id_password');
+        var eyeIcon = document.getElementById('pwd-eye-icon');
+        if (togglePwd && pwdInput && eyeIcon) {
+            togglePwd.addEventListener('click', function() {
+                var isPwd = pwdInput.type === 'password';
+                pwdInput.type = isPwd ? 'text' : 'password';
+                eyeIcon.className = isPwd ? 'bi bi-eye-slash' : 'bi bi-eye';
+            });
+        }
+
+        // Toggle Reg password visibility
+        var toggleRegPwd = document.getElementById('btn-toggle-reg-pwd');
+        var regPwdInput = document.getElementById('id_reg_password');
+        var regEyeIcon = document.getElementById('reg-eye-icon');
+        if (toggleRegPwd && regPwdInput && regEyeIcon) {
+            toggleRegPwd.addEventListener('click', function() {
+                var isPwd = regPwdInput.type === 'password';
+                regPwdInput.type = isPwd ? 'text' : 'password';
+                regEyeIcon.className = isPwd ? 'bi bi-eye-slash' : 'bi bi-eye';
+            });
+        }
+
+        // Toggle Reg confirm password visibility
+        var toggleRegConfirm = document.getElementById('btn-toggle-reg-confirm');
+        var regConfirmInput = document.getElementById('id_reg_confirm');
+        var regConfirmEye = document.getElementById('reg-confirm-eye-icon');
+        if (toggleRegConfirm && regConfirmInput && regConfirmEye) {
+            toggleRegConfirm.addEventListener('click', function() {
+                var isPwd = regConfirmInput.type === 'password';
+                regConfirmInput.type = isPwd ? 'text' : 'password';
+                regConfirmEye.className = isPwd ? 'bi bi-eye-slash' : 'bi bi-eye';
+            });
+        }
+
+        // Form submit loading states
+        var loginForm = document.getElementById('login-form');
+        var loginSubmitBtn = document.getElementById('btn-login-submit');
+        var loginBtnIcon = document.getElementById('login-btn-icon');
+        var loginBtnLabel = document.getElementById('login-btn-label');
+        if (loginForm && loginSubmitBtn) {
+            loginForm.addEventListener('submit', function() {
+                loginSubmitBtn.disabled = true;
+                if (loginBtnIcon) loginBtnIcon.className = 'bi bi-arrow-repeat spin-icon';
+                if (loginBtnLabel) loginBtnLabel.textContent = 'Authenticating Terminal...';
+            });
+        }
+
+        var regForm = document.getElementById('reg-form');
+        var regSubmitBtn = document.getElementById('btn-reg-submit');
+        var regBtnIcon = document.getElementById('reg-btn-icon');
+        var regBtnLabel = document.getElementById('reg-btn-label');
+        if (regForm && regSubmitBtn) {
+            regForm.addEventListener('submit', function() {
+                regSubmitBtn.disabled = true;
+                if (regBtnIcon) regBtnIcon.className = 'bi bi-arrow-repeat spin-icon';
+                if (regBtnLabel) regBtnLabel.textContent = 'Provisioning Tenant...';
+            });
+        }
+    })();
+    </script>
 </body>
 </html>

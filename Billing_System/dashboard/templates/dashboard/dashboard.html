@@ -1,222 +1,643 @@
-
-
 {% extends "dashboard/main_nav.html" %}
+{% load static %}
 
 {% block content %}
-
-<style>
-    .dashboard-container {
-        padding: 20px;
-    }
-
-    .dashboard-header {
-        margin-bottom: 25px;
-    }
-
-    .dashboard-links {
-        display: flex;
-        flex-wrap: wrap;
-        gap: 12px;
-        margin-top: 15px;
-    }
-
-    .dashboard-links a {
-        text-decoration: none;
-        padding: 10px 16px;
-        border-radius: 6px;
-        background: #2563eb;
-        color: white;
-    }
-
-    .dashboard-section {
-        margin-top: 30px;
-    }
-
-    .dashboard-cards {
-        display: grid;
-        grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
-        gap: 18px;
-        margin-top: 18px;
-    }
-
-    .dashboard-cards .card {
-        padding: 20px;
-        border-radius: 10px;
-        background: #ffffff;
-        box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
-        border-left: 4px solid #2563eb;
-    }
-
-    .dashboard-cards .card h4 {
-        margin: 0 0 12px;
-        font-size: 15px;
-        color: #555;
-    }
-
-    .dashboard-cards .card p {
-        margin: 0;
-        font-size: 26px;
-        font-weight: bold;
-        color: #111827;
-    }
-
-    .placeholder {
-        color: #888;
-        font-size: 14px !important;
-        font-weight: normal !important;
-    }
-</style>
-
-<div class="dashboard-container">
-
-    <div class="dashboard-header">
-        <h3>Navbar</h3>
-
-        <div class="dashboard-links">
-            <a href="">Home</a>
-            <a href="">Dashboard</a>
-            <a href="">About Us</a>
-            <a href="{% url 'logout' %}">Logout</a>
+<div class="dashboard-wrap" style="max-width: 1400px; margin: 0 auto; padding: 22px 20px;">
+    
+    <!-- Hero / Welcome Toolbar -->
+    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 22px; flex-wrap: wrap; gap: 14px;">
+        <div>
+            <div style="display: flex; align-items: center; gap: 10px; margin-bottom: 4px;">
+                <h1 style="font-size: 22px; font-weight: 700; color: var(--text); margin: 0;">
+                    {% if is_owner %}Owner & Executive Dashboard{% else %}Store Manager Operations{% endif %}
+                </h1>
+                <span class="badge {% if is_owner %}badge-warning{% else %}badge-primary{% endif %}" style="font-size: 11px;">
+                    <i class="bi bi-shield-check"></i> {{ user_role }}
+                </span>
+            </div>
+            <p style="margin: 0; font-size: 13px; color: var(--muted);">
+                Live metrics for <strong>{{ company.company_name }}</strong> &bull; Updated real-time.
+            </p>
         </div>
 
-        <hr>
-
-        <h1>Admin Dashboard</h1>
-
-        <div class="dashboard-links">
-            <a href="{% url 'view_employee' %}">View Employees</a>
-            <a href="{% url 'employee' %}">Add Employee</a>
+        <div style="display: flex; gap: 10px; align-items: center;">
+            <a href="{% url 'cart' %}" class="btn btn-primary" style="font-size: 13px; padding: 8px 16px; text-decoration: none;">
+                <i class="bi bi-upc-scan"></i> Open POS Checkout
+            </a>
+            <a href="{% url 'reports' %}" class="btn btn-secondary" style="font-size: 13px; padding: 8px 14px; text-decoration: none;">
+                <i class="bi bi-bar-chart-line-fill"></i> Analytics
+            </a>
         </div>
     </div>
 
-    <hr>
-
-    <!-- Inventory Overview -->
-    <div class="dashboard-section">
-        <h3>Inventory Overview</h3>
-
-        <div class="dashboard-cards">
-
-            <div class="card">
-                <h4>Total Products</h4>
-                <p>{{ total_products }}</p>
+    {% if is_owner and telegram_onboarding %}
+    <!-- ── TELEGRAM ONBOARDING & STATUS CARD ──────────────────────────── -->
+    <div class="card" style="margin-bottom: 22px; padding: 18px 20px; background: {% if telegram_onboarding.is_connected %}rgba(16, 185, 129, 0.06){% else %}rgba(56, 189, 248, 0.06){% endif %}; border: 1px solid {% if telegram_onboarding.is_connected %}rgba(16, 185, 129, 0.25){% else %}rgba(56, 189, 248, 0.25){% endif %}; border-radius: 12px;">
+        <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 12px;">
+            <div style="display: flex; align-items: center; gap: 14px;">
+                <div style="width: 44px; height: 44px; border-radius: 10px; background: {% if telegram_onboarding.is_connected %}rgba(16, 185, 129, 0.15){% else %}rgba(56, 189, 248, 0.15){% endif %}; display: flex; align-items: center; justify-content: center; font-size: 22px; color: {% if telegram_onboarding.is_connected %}#10b981{% else %}#0ea5e9{% endif %};">
+                    <i class="bi bi-telegram"></i>
+                </div>
+                <div>
+                    <div style="display: flex; align-items: center; gap: 8px;">
+                        <h2 style="font-size: 16px; font-weight: 700; color: var(--text); margin: 0;">Telegram Executive Assistant</h2>
+                        {% if telegram_onboarding.is_connected %}
+                            <span class="badge badge-success" style="font-size: 11px;"><i class="bi bi-check-circle-fill"></i> Connected</span>
+                        {% elif not telegram_onboarding.bot_configured %}
+                            <span class="badge badge-secondary" style="font-size: 11px;"><i class="bi bi-exclamation-circle"></i> Not Configured</span>
+                        {% else %}
+                            <span class="badge badge-warning" style="font-size: 11px;"><i class="bi bi-arrow-repeat"></i> Ready to Connect</span>
+                        {% endif %}
+                    </div>
+                    <p style="margin: 2px 0 0 0; font-size: 12px; color: var(--muted);">
+                        {% if telegram_onboarding.is_connected %}
+                            Linked to chat ID <code>{{ telegram_onboarding.linked_chat_id }}</code>. Get live sales &amp; inventory reports on your phone anywhere.
+                        {% elif not telegram_onboarding.bot_configured %}
+                            Telegram Bot Token is not configured. Set <code>TELEGRAM_BOT_TOKEN</code> in your environment or settings.
+                        {% else %}
+                            Receive instant daily sales, tender breakdowns, and stock alerts on Telegram.
+                        {% endif %}
+                    </p>
+                </div>
             </div>
 
-            <div class="card">
-                <h4>Low Stock Products</h4>
-                <p>{{ low_stock_products }}</p>
+            <div style="display: flex; gap: 10px; align-items: center;">
+                {% if telegram_onboarding.is_connected %}
+                    <a href="{% url 'settings_telegram' %}" class="btn btn-secondary" style="font-size: 12px; padding: 7px 14px; text-decoration: none;">
+                        <i class="bi bi-gear"></i> Manage Bot
+                    </a>
+                {% elif telegram_onboarding.bot_configured %}
+                    {% if telegram_onboarding.pairing_code %}
+                    <div style="display: flex; align-items: center; gap: 8px; background: rgba(0,0,0,0.2); padding: 6px 12px; border-radius: 8px; border: 1px dashed rgba(56, 189, 248, 0.4);">
+                        <span style="font-size: 11px; color: var(--muted);">Linking Code:</span>
+                        <strong style="font-size: 15px; font-family: var(--font-mono); letter-spacing: 1px; color: #38bdf8;">{{ telegram_onboarding.pairing_code }}</strong>
+                    </div>
+                    {% endif %}
+                    <a href="{{ telegram_onboarding.bot_link }}" target="_blank" rel="noopener noreferrer" class="btn btn-primary" style="font-size: 12px; padding: 7px 14px; text-decoration: none;">
+                        <i class="bi bi-box-arrow-up-right"></i> Open Bot &amp; Connect
+                    </a>
+                    <a href="{% url 'settings_telegram' %}" class="btn btn-secondary" style="font-size: 12px; padding: 7px 12px; text-decoration: none;">
+                        Setup Steps
+                    </a>
+                {% else %}
+                    <a href="{% url 'settings_telegram' %}" class="btn btn-secondary" style="font-size: 12px; padding: 7px 12px; text-decoration: none;">
+                        <i class="bi bi-info-circle"></i> Setup Instructions
+                    </a>
+                {% endif %}
             </div>
+        </div>
 
-            <div class="card">
-                <h4>Out of Stock</h4>
-                <p>{{ out_of_stock_products }}</p>
+        {% if not telegram_onboarding.is_connected and telegram_onboarding.bot_configured %}
+        <div style="margin-top: 14px; padding-top: 12px; border-top: 1px solid rgba(255,255,255,0.08); display: flex; gap: 18px; flex-wrap: wrap; font-size: 12px; color: var(--muted);">
+            <div><strong>Step 1:</strong> Open <a href="{{ telegram_onboarding.bot_link }}" target="_blank" style="color: #38bdf8; text-decoration: underline;">@{{ telegram_onboarding.bot_username }}</a> on Telegram</div>
+            <div><strong>Step 2:</strong> Press <em>Start</em> or send <code>/link {{ telegram_onboarding.pairing_code }}</code></div>
+            <div><strong>Step 3:</strong> Ask <em>"today's report"</em> or <code>/report</code> anytime!</div>
+        </div>
+        {% endif %}
+    </div>
+    {% endif %}
+
+    <!-- ── KPI METRICS CARDS ─────────────────────────────────────────── -->
+    <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 14px; margin-bottom: 22px;">
+        <div class="stat-card" style="padding: 16px; border-left: 4px solid var(--primary);">
+            <div style="font-size: 11px; font-weight: 700; color: var(--muted); text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 6px;">Today's Sales</div>
+            <div style="font-size: 24px; font-weight: 700; font-family: var(--font-mono); color: var(--text);">₹{{ today_sales_amount|floatformat:2 }}</div>
+            <div style="font-size: 11px; color: var(--muted); margin-top: 4px;">
+                <strong style="color: var(--primary);">{{ today_sales_count }}</strong> completed bills
             </div>
+        </div>
 
-            <div class="card">
-                <h4>Total Suppliers</h4>
-                <p>{{ total_suppliers }}</p>
+        <div class="stat-card" style="padding: 16px;">
+            <div style="font-size: 11px; font-weight: 700; color: var(--muted); text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 6px;">This Month Sales</div>
+            <div style="font-size: 24px; font-weight: 700; font-family: var(--font-mono); color: var(--text);">₹{{ this_month_sales_amount|floatformat:2 }}</div>
+            <div style="font-size: 11px; color: var(--muted); margin-top: 4px;">Monthly Revenue</div>
+        </div>
+
+        <div class="stat-card" style="padding: 16px;">
+            <div style="font-size: 11px; font-weight: 700; color: var(--muted); text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 6px;">Gross Profit</div>
+            <div style="font-size: 24px; font-weight: 700; font-family: var(--font-mono); color: var(--success);">₹{{ total_profit|floatformat:2 }}</div>
+            <div style="font-size: 11px; color: var(--muted); margin-top: 4px;">Revenue - COGS</div>
+        </div>
+
+        <div class="stat-card" style="padding: 16px;">
+            <div style="font-size: 11px; font-weight: 700; color: var(--muted); text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 6px;">Stock Status</div>
+            <div style="font-size: 24px; font-weight: 700; font-family: var(--font-mono); color: var(--text);">{{ total_products }}</div>
+            <div style="font-size: 11px; margin-top: 4px;">
+                {% if out_of_stock_products > 0 %}
+                    <span style="color: var(--danger); font-weight: 600;">{{ out_of_stock_products }} Out of Stock</span> &bull; 
+                {% endif %}
+                <span style="color: var(--warning); font-weight: 600;">{{ low_stock_products }} Low Stock</span>
             </div>
+        </div>
 
+        <div class="stat-card" style="padding: 16px;">
+            <div style="font-size: 11px; font-weight: 700; color: var(--muted); text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 6px;">Customers & Suppliers</div>
+            <div style="font-size: 24px; font-weight: 700; font-family: var(--font-mono); color: var(--text);">{{ total_customers }}</div>
+            <div style="font-size: 11px; color: var(--muted); margin-top: 4px;">
+                {{ total_suppliers }} Registered Suppliers
+            </div>
         </div>
     </div>
 
-    <!-- Sales Overview -->
-    <div class="dashboard-section">
-        <h3>Sales Overview</h3>
-
-        <div class="dashboard-cards">
-
-            <div class="card">
-                <h4>Today's Sales</h4>
-                <p>₹{{ today_sales_amount|floatformat:2 }}</p>
-                <small style="color: #666;">{{ today_sales_count }} transactions</small>
+    <!-- ── 2. DASHBOARD TEAM BAR (Section 2) ─────────────────────────── -->
+    <div class="team-bar-card">
+        <div class="team-bar-header">
+            <div class="team-bar-title-wrap">
+                <i class="bi bi-people-fill" style="color: var(--primary); font-size: 20px;"></i>
+                <span class="title">Store Team</span>
+                <span class="count-pill">{{ total_team }} Members</span>
             </div>
 
-            <div class="card">
-                <h4>Total Sales</h4>
-                <p>₹{{ total_sales_amount|floatformat:2 }}</p>
-                <small style="color: #666;">{{ total_sales_count }} transactions</small>
+            <div style="display: flex; gap: 8px;">
+                <a href="{% url 'view_employee' %}" class="btn btn-secondary btn-sm" style="text-decoration: none;">
+                    <i class="bi bi-people"></i> View Team
+                </a>
+                <a href="{% url 'employee' %}" class="btn btn-primary btn-sm" style="text-decoration: none;">
+                    <i class="bi bi-person-plus-fill"></i> Add Team Member
+                </a>
+            </div>
+        </div>
+
+        <div class="team-stat-pills">
+            <div class="team-stat-item">
+                <span class="lbl">Cashiers</span>
+                <span class="val" style="color: #16a34a;">{{ cashiers_count }}</span>
+            </div>
+            <div class="team-stat-item">
+                <span class="lbl">Stock Team</span>
+                <span class="val" style="color: #0284c7;">{{ stock_team_count }}</span>
+            </div>
+            <div class="team-stat-item">
+                <span class="lbl">Managers</span>
+                <span class="val" style="color: #9333ea;">{{ managers_count }}</span>
+            </div>
+            <div class="team-stat-item">
+                <span class="lbl">Other Staff</span>
+                <span class="val">{{ other_staff_count }}</span>
+            </div>
+            <div class="team-stat-item" style="margin-left: auto;">
+                <span class="lbl">Active Status</span>
+                <span class="val" style="color: var(--success);">{{ active_team_count }} Active</span>
+                <span style="color: var(--muted); font-size: 11px;">/ {{ inactive_team_count }} Inactive</span>
+            </div>
+        </div>
+
+        {% if is_owner and payroll_data %}
+        <!-- OWNER ONLY PAYROLL THIS MONTH SECTION -->
+        <div class="payroll-highlight-card" style="margin-top: 8px;">
+            <div style="display: flex; align-items: center; gap: 10px;">
+                <i class="bi bi-cash-stack" style="color: var(--primary); font-size: 22px;"></i>
+                <div>
+                    <div style="font-size: 13px; font-weight: 700; color: var(--text);">PAYROLL THIS MONTH</div>
+                    <div style="font-size: 11px; color: var(--muted);">Owner Confidential Compensation Overview</div>
+                </div>
             </div>
 
-            <div class="card">
-                <h4>This Month's Sales</h4>
-                <p>₹{{ this_month_sales_amount|floatformat:2 }}</p>
+            <div style="display: flex; gap: 24px; align-items: center; flex-wrap: wrap;">
+                <div class="payroll-stat-col">
+                    <span class="lbl">Total Payroll</span>
+                    <span class="val">₹{{ payroll_data.total|floatformat:2 }}</span>
+                </div>
+                <div class="payroll-stat-col">
+                    <span class="lbl">Disbursed (Paid)</span>
+                    <span class="val green">₹{{ payroll_data.paid|floatformat:2 }}</span>
+                </div>
+                <div class="payroll-stat-col">
+                    <span class="lbl">Pending (Due)</span>
+                    <span class="val amber">₹{{ payroll_data.pending|floatformat:2 }}</span>
+                </div>
+
+                <a href="{% url 'payroll_history' %}" class="btn btn-outline btn-sm" style="text-decoration: none;">
+                    <i class="bi bi-wallet2"></i> Payroll & Payslips
+                </a>
+            </div>
+        </div>
+        {% endif %}
+    </div>
+
+    <!-- ── 3. AI BUSINESS INSIGHTS & INVENTORY INTELLIGENCE ──────────────── -->
+    <div style="background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius-md); padding: 20px; margin-bottom: 22px;">
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px; flex-wrap: wrap; gap: 10px;">
+            <div style="display: flex; align-items: center; gap: 10px;">
+                <div style="width: 36px; height: 36px; border-radius: 8px; background: rgba(147, 51, 234, 0.15); display: flex; align-items: center; justify-content: center; color: #a855f7; font-size: 18px;">
+                    <i class="bi bi-stars"></i>
+                </div>
+                <div>
+                    <h3 style="font-size: 15px; font-weight: 700; color: var(--text); margin: 0;">AI Business Insights & Inventory Intelligence</h3>
+                    <div style="font-size: 12px; color: var(--muted);">Data-backed recommendations powered by sales velocity & historical run rates</div>
+                </div>
+            </div>
+            <span style="background: rgba(147, 51, 234, 0.12); color: #c084fc; border: 1px solid rgba(147, 51, 234, 0.25); font-size: 11px; font-weight: 600; padding: 3px 10px; border-radius: 9999px;">
+                <i class="bi bi-shield-check"></i> Read-Only Verified Engine
+            </span>
+        </div>
+
+        <!-- Insights Grid -->
+        <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(320px, 1fr)); gap: 16px; margin-bottom: 18px;">
+            <!-- Sales Trends Column -->
+            <div style="background: var(--surface-2); border: 1px solid var(--border); border-radius: var(--radius-sm); padding: 16px;">
+                <div style="font-size: 12px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.5px; color: var(--muted); margin-bottom: 12px; display: flex; align-items: center; gap: 6px;">
+                    <i class="bi bi-graph-up" style="color: var(--primary);"></i> Revenue & Velocity Insights
+                </div>
+                {% if ai_sales_insights.insights %}
+                    <div style="display: flex; flex-direction: column; gap: 10px;">
+                        {% for ins in ai_sales_insights.insights %}
+                        <div style="padding: 10px 12px; background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius-sm);">
+                            <div style="font-size: 13px; font-weight: 600; color: var(--text); margin-bottom: 3px; display: flex; align-items: center; gap: 6px;">
+                                <i class="bi {{ ins.icon }}" style="color: var(--primary);"></i>
+                                {{ ins.title }}
+                            </div>
+                            <div style="font-size: 12px; color: var(--muted); line-height: 1.4;">
+                                {{ ins.text }}
+                            </div>
+                        </div>
+                        {% endfor %}
+                    </div>
+                {% else %}
+                    <p style="font-size: 12px; color: var(--muted); margin: 0;">Record more sales transactions to unlock trend analysis.</p>
+                {% endif %}
             </div>
 
-            <div class="card">
-                <h4>Total Customers</h4>
-                <p>{{ total_customers }}</p>
+            <!-- Inventory Intelligence & Demand Runway -->
+            <div style="background: var(--surface-2); border: 1px solid var(--border); border-radius: var(--radius-sm); padding: 16px;">
+                <div style="font-size: 12px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.5px; color: var(--muted); margin-bottom: 12px; display: flex; align-items: center; gap: 6px;">
+                    <i class="bi bi-box-seam" style="color: var(--warning, #f59e0b);"></i> Inventory Demand & Reorder Forecast
+                </div>
+                {% if ai_inventory_intelligence %}
+                    <div style="display: flex; flex-direction: column; gap: 8px;">
+                        {% for item in ai_inventory_intelligence|slice:":4" %}
+                        <div style="padding: 9px 12px; background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius-sm); display: flex; justify-content: space-between; align-items: center; gap: 10px;">
+                            <div style="min-width: 0;">
+                                <div style="font-size: 12px; font-weight: 600; color: var(--text); white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">
+                                    {{ item.product_name }} <span style="color: var(--muted); font-size: 11px;">({{ item.sku }})</span>
+                                </div>
+                                <div style="font-size: 11px; color: var(--muted);">
+                                    {{ item.reason }}
+                                </div>
+                            </div>
+                            <div style="text-align: right; white-space: nowrap;">
+                                <span style="background: {% if item.urgency == 'CRITICAL' %}rgba(239, 68, 68, 0.15){% else %}rgba(245, 158, 11, 0.15){% endif %}; color: {% if item.urgency == 'CRITICAL' %}#ef4444{% else %}#f59e0b{% endif %}; font-size: 10px; font-weight: 700; padding: 2px 6px; border-radius: 4px;">
+                                    Order {{ item.suggested_order }} units
+                                </span>
+                            </div>
+                        </div>
+                        {% endfor %}
+                    </div>
+                {% else %}
+                    <p style="font-size: 12px; color: var(--muted); margin: 0;">✅ All stock levels healthy. No urgent reorders forecasted.</p>
+                {% endif %}
+            </div>
+        </div>
+
+        <!-- Natural Language Assistant Conversational Chat Box -->
+        <div style="background: var(--surface-2); border: 1px solid var(--border); border-radius: var(--radius-sm); padding: 16px;">
+            <!-- Chat Header -->
+            <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 12px; flex-wrap: wrap; gap: 8px;">
+                <div style="display: flex; align-items: center; gap: 8px;">
+                    <div style="width: 28px; height: 28px; border-radius: 50%; background: rgba(168, 85, 247, 0.15); color: #a855f7; display: flex; align-items: center; justify-content: center; font-size: 15px;">
+                        <i class="bi bi-robot"></i>
+                    </div>
+                    <div>
+                        <span style="font-size: 13px; font-weight: 700; color: var(--text);">Retail Business Assistant</span>
+                        <span style="font-size: 10px; color: var(--success); font-weight: 600; margin-left: 6px;">● Online</span>
+                    </div>
+                </div>
+
+                <div style="display: flex; align-items: center; gap: 6px;">
+                    <button type="button" onclick="clearAiChat()" style="background: transparent; border: 1px solid var(--border); font-size: 11px; padding: 4px 9px; border-radius: 6px; color: var(--muted); cursor: pointer; transition: all 0.15s ease;" title="Clear conversation history">
+                        <i class="bi bi-trash3"></i> Clear Chat
+                    </button>
+                </div>
             </div>
 
+            <!-- Quick Suggestions Row -->
+            <div style="display: flex; gap: 6px; flex-wrap: wrap; margin-bottom: 12px;">
+                <button type="button" onclick="setAiQuery('How much did we sell today?')" style="background: var(--surface); border: 1px solid var(--border); font-size: 11px; padding: 4px 10px; border-radius: 12px; color: var(--muted); cursor: pointer; transition: all 0.15s ease;">
+                    Today's sales
+                </button>
+                <button type="button" onclick="setAiQuery('Show UPI collections')" style="background: var(--surface); border: 1px solid var(--border); font-size: 11px; padding: 4px 10px; border-radius: 12px; color: var(--muted); cursor: pointer; transition: all 0.15s ease;">
+                    UPI collections
+                </button>
+                <button type="button" onclick="setAiQuery('Who is our best-selling product?')" style="background: var(--surface); border: 1px solid var(--border); font-size: 11px; padding: 4px 10px; border-radius: 12px; color: var(--muted); cursor: pointer; transition: all 0.15s ease;">
+                    Best-selling product
+                </button>
+                <button type="button" onclick="setAiQuery('Tell me today\'s returns')" style="background: var(--surface); border: 1px solid var(--border); font-size: 11px; padding: 4px 10px; border-radius: 12px; color: var(--muted); cursor: pointer; transition: all 0.15s ease;">
+                    Today's returns
+                </button>
+                <button type="button" onclick="setAiQuery('Low stock')" style="background: var(--surface); border: 1px solid var(--border); font-size: 11px; padding: 4px 10px; border-radius: 12px; color: var(--muted); cursor: pointer; transition: all 0.15s ease;">
+                    Low stock
+                </button>
+                <button type="button" onclick="setAiQuery('Tell cashier to speak to me in the office.')" style="background: var(--surface); border: 1px solid var(--border); font-size: 11px; padding: 4px 10px; border-radius: 12px; color: var(--primary); font-weight: 600; cursor: pointer; transition: all 0.15s ease;">
+                    <i class="bi bi-chat-dots"></i> Message cashier
+                </button>
+            </div>
+
+            <!-- Chat Messages Log Container -->
+            <div id="ai-chat-thread" style="max-height: 360px; min-height: 180px; overflow-y: auto; background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius-sm); padding: 14px; margin-bottom: 12px; display: flex; flex-direction: column; gap: 12px;">
+                <!-- Initial Assistant Message Bubble -->
+                <div class="ai-msg-assistant" style="display: flex; gap: 10px; align-items: flex-start;">
+                    <div style="width: 28px; height: 28px; border-radius: 50%; background: rgba(168, 85, 247, 0.15); color: #a855f7; display: flex; align-items: center; justify-content: center; font-size: 14px; flex-shrink: 0; margin-top: 2px;">
+                        <i class="bi bi-robot"></i>
+                    </div>
+                    <div style="max-width: 82%;">
+                        <div style="background: var(--surface-2); border: 1px solid var(--border); border-radius: 12px 12px 12px 2px; padding: 10px 14px; font-size: 12.5px; line-height: 1.55; color: var(--text);">
+                            👋 Hello! I am your store's <strong>Retail Business Assistant</strong>. You can ask me about sales figures, UPI/cash collections, best-selling products, today's returns, or ask me to message store employees.
+                        </div>
+                        <span style="font-size: 10px; color: var(--muted); margin-top: 3px; display: block; padding-left: 2px;">Just now</span>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Input & Send Controls -->
+            <div style="display: flex; gap: 8px; align-items: flex-end;">
+                <textarea id="ai-query-input" rows="1" placeholder="Ask a business question or send staff message (e.g. 'Tell cashier to speak to me in the office'). Enter to send..." style="flex: 1; font-size: 13px; padding: 10px 14px; background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius-sm); color: var(--text); resize: none; min-height: 40px; max-height: 90px; line-height: 1.4; font-family: inherit;"></textarea>
+                <button type="button" class="btn btn-primary" id="btn-ask-ai" onclick="submitAiQuery()" style="padding: 10px 18px; font-size: 12.5px; white-space: nowrap; display: inline-flex; align-items: center; gap: 6px; height: 40px;">
+                    <i class="bi bi-send-fill" id="ai-btn-icon"></i> <span id="ai-btn-text">Send</span>
+                </button>
+            </div>
         </div>
     </div>
 
-    <!-- Financial Overview -->
-    <div class="dashboard-section">
-        <h3>Financial Overview</h3>
+    <script>
+    (function() {
+        const input = document.getElementById('ai-query-input');
+        if (input) {
+            input.addEventListener('keydown', function(e) {
+                if (e.key === 'Enter' && !e.shiftKey) {
+                    e.preventDefault();
+                    submitAiQuery();
+                }
+            });
+            // Auto resize height
+            input.addEventListener('input', function() {
+                this.style.height = 'auto';
+                this.style.height = Math.min(this.scrollHeight, 90) + 'px';
+            });
+        }
+    })();
 
-        <div class="dashboard-cards">
+    function escapeHtml(str) {
+        if (!str) return '';
+        return String(str).replace(/[&<>"']/g, function(m) {
+            return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#039;' }[m];
+        });
+    }
 
-            <div class="card">
-                <h4>Today's Purchases</h4>
-                <p>₹{{ today_purchases_amount|floatformat:2 }}</p>
+    function formatAiMarkdown(text) {
+        if (!text) return '';
+        // Escape first for XSS prevention
+        let safe = escapeHtml(text);
+        // Safe Markdown subset formatting
+        safe = safe.replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>');
+        safe = safe.replace(/\*(.*?)\*/g, '<em>$1</em>');
+        safe = safe.replace(/`([^`]+)`/g, '<code style="background: var(--surface-2); padding: 1px 5px; border-radius: 4px; font-family: var(--font-mono); font-size: 11.5px;">$1</code>');
+        safe = safe.replace(/\n/g, '<br>');
+        return safe;
+    }
+
+    function getCurrentTimeDisplay() {
+        const now = new Date();
+        return now.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+    }
+
+    function setAiQuery(text) {
+        const input = document.getElementById('ai-query-input');
+        if (input) {
+            input.value = text;
+            input.focus();
+            submitAiQuery();
+        }
+    }
+
+    function clearAiChat() {
+        const thread = document.getElementById('ai-chat-thread');
+        if (!thread) return;
+        thread.innerHTML = `
+            <div class="ai-msg-assistant" style="display: flex; gap: 10px; align-items: flex-start;">
+                <div style="width: 28px; height: 28px; border-radius: 50%; background: rgba(168, 85, 247, 0.15); color: #a855f7; display: flex; align-items: center; justify-content: center; font-size: 14px; flex-shrink: 0; margin-top: 2px;">
+                    <i class="bi bi-robot"></i>
+                </div>
+                <div style="max-width: 82%;">
+                    <div style="background: var(--surface-2); border: 1px solid var(--border); border-radius: 12px 12px 12px 2px; padding: 10px 14px; font-size: 12.5px; line-height: 1.55; color: var(--text);">
+                        Chat history cleared. How can I assist you today?
+                    </div>
+                    <span style="font-size: 10px; color: var(--muted); margin-top: 3px; display: block; padding-left: 2px;">Just now</span>
+                </div>
             </div>
+        `;
+    }
 
-            <div class="card">
-                <h4>Revenue</h4>
-                <p>₹{{ total_revenue|floatformat:2 }}</p>
+    async function submitAiQuery() {
+        const input = document.getElementById('ai-query-input');
+        const thread = document.getElementById('ai-chat-thread');
+        const btn = document.getElementById('btn-ask-ai');
+        const btnIcon = document.getElementById('ai-btn-icon');
+        const btnText = document.getElementById('ai-btn-text');
+
+        const query = (input.value || '').trim();
+        if (!query) return;
+
+        // Append User Message Bubble (Right aligned, escaped content)
+        const userTime = getCurrentTimeDisplay();
+        const userBubble = document.createElement('div');
+        userBubble.className = 'ai-msg-user';
+        userBubble.style.cssText = 'display: flex; justify-content: flex-end; gap: 8px; align-items: flex-start;';
+        userBubble.innerHTML = `
+            <div style="max-width: 80%; text-align: right;">
+                <div style="background: var(--primary); color: #ffffff; border-radius: 12px 12px 2px 12px; padding: 10px 14px; font-size: 12.5px; line-height: 1.5; text-align: left; display: inline-block; word-break: break-word;">
+                    ${escapeHtml(query)}
+                </div>
+                <span style="font-size: 10px; color: var(--muted); margin-top: 3px; display: block; padding-right: 2px;">${userTime}</span>
             </div>
-
-            <div class="card">
-                <h4>Estimated Gross Profit</h4>
-                <p style="color: #16a34a;">₹{{ total_profit|floatformat:2 }}</p>
+            <div style="width: 28px; height: 28px; border-radius: 50%; background: var(--surface-2); border: 1px solid var(--border); color: var(--text); display: flex; align-items: center; justify-content: center; font-size: 13px; flex-shrink: 0; margin-top: 2px;">
+                <i class="bi bi-person-fill"></i>
             </div>
+        `;
+        thread.appendChild(userBubble);
+        input.value = '';
+        input.style.height = 'auto';
 
+        // Append Typing Indicator Bubble
+        const typingId = 'typing-' + Date.now();
+        const typingBubble = document.createElement('div');
+        typingBubble.id = typingId;
+        typingBubble.className = 'ai-msg-assistant';
+        typingBubble.style.cssText = 'display: flex; gap: 10px; align-items: flex-start;';
+        typingBubble.innerHTML = `
+            <div style="width: 28px; height: 28px; border-radius: 50%; background: rgba(168, 85, 247, 0.15); color: #a855f7; display: flex; align-items: center; justify-content: center; font-size: 14px; flex-shrink: 0; margin-top: 2px;">
+                <i class="bi bi-robot"></i>
+            </div>
+            <div style="background: var(--surface-2); border: 1px solid var(--border); border-radius: 12px 12px 12px 2px; padding: 10px 14px; font-size: 12px; color: var(--muted); display: inline-flex; align-items: center; gap: 8px;">
+                <i class="bi bi-hourglass-split spin-icon"></i> Assistant is analyzing store data...
+            </div>
+        `;
+        thread.appendChild(typingBubble);
+        thread.scrollTop = thread.scrollHeight;
+
+        // Disable input during request
+        input.disabled = true;
+        btn.disabled = true;
+        if (btnIcon) btnIcon.className = 'bi bi-arrow-repeat spin-icon';
+        if (btnText) btnText.textContent = 'Thinking…';
+
+        try {
+            const resp = await fetch('/api/ai/ask/', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'X-CSRFToken': '{{ csrf_token }}'
+                },
+                body: JSON.stringify({ question: query })
+            });
+            const data = await resp.json();
+
+            // Remove typing bubble
+            const typingElem = document.getElementById(typingId);
+            if (typingElem) typingElem.remove();
+
+            const assistantTime = getCurrentTimeDisplay();
+            const replyBubble = document.createElement('div');
+            replyBubble.className = 'ai-msg-assistant';
+            replyBubble.style.cssText = 'display: flex; gap: 10px; align-items: flex-start;';
+
+            if (resp.ok && data.status === 'success') {
+                const formattedHtml = formatAiMarkdown(data.answer);
+                replyBubble.innerHTML = `
+                    <div style="width: 28px; height: 28px; border-radius: 50%; background: rgba(168, 85, 247, 0.15); color: #a855f7; display: flex; align-items: center; justify-content: center; font-size: 14px; flex-shrink: 0; margin-top: 2px;">
+                        <i class="bi bi-robot"></i>
+                    </div>
+                    <div style="max-width: 84%;">
+                        <div style="background: var(--surface-2); border: 1px solid var(--border); border-radius: 12px 12px 12px 2px; padding: 10px 14px; font-size: 12.5px; line-height: 1.55; color: var(--text); word-break: break-word;">
+                            ${formattedHtml}
+                        </div>
+                        <span style="font-size: 10px; color: var(--muted); margin-top: 3px; display: block; padding-left: 2px;">${assistantTime}</span>
+                    </div>
+                `;
+            } else {
+                const errMsg = escapeHtml(data.answer || data.error || "I couldn't process that request. Please try again.");
+                replyBubble.innerHTML = `
+                    <div style="width: 28px; height: 28px; border-radius: 50%; background: rgba(239, 68, 68, 0.15); color: #ef4444; display: flex; align-items: center; justify-content: center; font-size: 14px; flex-shrink: 0; margin-top: 2px;">
+                        <i class="bi bi-exclamation-triangle"></i>
+                    </div>
+                    <div style="max-width: 84%;">
+                        <div style="background: rgba(239, 68, 68, 0.08); border: 1px solid rgba(239, 68, 68, 0.2); border-radius: 12px 12px 12px 2px; padding: 10px 14px; font-size: 12.5px; line-height: 1.55; color: var(--danger);">
+                            ${errMsg}
+                        </div>
+                        <span style="font-size: 10px; color: var(--muted); margin-top: 3px; display: block; padding-left: 2px;">${assistantTime}</span>
+                    </div>
+                `;
+            }
+            thread.appendChild(replyBubble);
+            thread.scrollTop = thread.scrollHeight;
+        } catch(err) {
+            const typingElem = document.getElementById(typingId);
+            if (typingElem) typingElem.remove();
+
+            const errBubble = document.createElement('div');
+            errBubble.className = 'ai-msg-assistant';
+            errBubble.style.cssText = 'display: flex; gap: 10px; align-items: flex-start;';
+            errBubble.innerHTML = `
+                <div style="width: 28px; height: 28px; border-radius: 50%; background: rgba(239, 68, 68, 0.15); color: #ef4444; display: flex; align-items: center; justify-content: center; font-size: 14px; flex-shrink: 0; margin-top: 2px;">
+                    <i class="bi bi-wifi-off"></i>
+                </div>
+                <div style="max-width: 84%;">
+                    <div style="background: rgba(239, 68, 68, 0.08); border: 1px solid rgba(239, 68, 68, 0.2); border-radius: 12px 12px 12px 2px; padding: 10px 14px; font-size: 12.5px; line-height: 1.55; color: var(--danger);">
+                        I couldn't reach the server right now. Please check your network connection and try again.
+                    </div>
+                    <span style="font-size: 10px; color: var(--muted); margin-top: 3px; display: block; padding-left: 2px;">${getCurrentTimeDisplay()}</span>
+                </div>
+            `;
+            thread.appendChild(errBubble);
+            thread.scrollTop = thread.scrollHeight;
+        } finally {
+            input.disabled = false;
+            btn.disabled = false;
+            if (btnIcon) btnIcon.className = 'bi bi-send-fill';
+            if (btnText) btnText.textContent = 'Send';
+            input.focus();
+        }
+    }
+    </script>
+
+
+    <!-- ── RECENT SALES LEDGER ──────────────────────────────────────── -->
+    <div style="background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius-md); padding: 18px 20px;">
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 14px;">
+            <div>
+                <h3 style="font-size: 14px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.5px; color: var(--muted); margin: 0 0 2px 0;">
+                    Recent Completed Transactions
+                </h3>
+                <span style="font-size: 12px; color: var(--muted);">Latest customer orders and cashier tenders</span>
+            </div>
+            <a href="{% url 'sales' %}" class="btn btn-secondary btn-sm" style="text-decoration: none;">
+                View All Sales & Invoices <i class="bi bi-arrow-right"></i>
+            </a>
         </div>
-    </div>
 
-    <!-- Recent Sales -->
-    <div class="dashboard-section">
-        <h3>Recent Transactions</h3>
-        {% if recent_sales %}
-            <table style="width: 100%; border-collapse: collapse; margin-top: 10px; background: white; border-radius: 8px; overflow: hidden; box-shadow: 0 1px 3px rgba(0,0,0,0.1);">
+        <div style="overflow-x: auto;">
+            <table class="table-theme" style="width: 100%;">
                 <thead>
-                    <tr style="background: #f3f4f6; text-align: left; padding: 10px;">
-                        <th style="padding: 10px 14px;">Sale #</th>
-                        <th style="padding: 10px 14px;">Customer</th>
-                        <th style="padding: 10px 14px;">Cashier</th>
-                        <th style="padding: 10px 14px;">Grand Total</th>
-                        <th style="padding: 10px 14px;">Status</th>
-                        <th style="padding: 10px 14px;">Time</th>
+                    <tr>
+                        <th>Invoice / ID</th>
+                        <th>Date & Time</th>
+                        <th>Customer</th>
+                        <th>Cashier</th>
+                        <th>Payment Mode</th>
+                        <th style="text-align: right;">Grand Total</th>
+                        <th style="text-align: center;">Action</th>
                     </tr>
                 </thead>
                 <tbody>
                     {% for s in recent_sales %}
-                    <tr style="border-top: 1px solid #e5e7eb;">
-                        <td style="padding: 10px 14px; font-weight: bold;">{{ s.sale_number }}</td>
-                        <td style="padding: 10px 14px;">{{ s.customer.name|default:"Walk-in Customer" }}</td>
-                        <td style="padding: 10px 14px;">{{ s.cashier.username }}</td>
-                        <td style="padding: 10px 14px; font-weight: bold;">₹{{ s.grand_total|floatformat:2 }}</td>
-                        <td style="padding: 10px 14px;"><span style="background: #dcfce7; color: #166534; padding: 2px 8px; border-radius: 4px; font-size: 12px;">{{ s.payment_status }}</span></td>
-                        <td style="padding: 10px 14px; color: #6b7280;">{{ s.created_at|date:"M d, H:i" }}</td>
+                    <tr>
+                        <td style="font-family: var(--font-mono); font-weight: 600;">
+                            {% if s.invoice and s.invoice.invoice_number %}
+                            <a href="{% url 'invoice_detail' s.invoice.invoice_number %}" style="color: var(--primary); text-decoration: none;">
+                                {{ s.invoice.invoice_number }}
+                            </a>
+                            {% else %}
+                            <span style="color: var(--muted);">#{{ s.id }}</span>
+                            {% endif %}
+                        </td>
+                        <td style="font-size: 12px; color: var(--muted);">
+                            {{ s.created_at|date:"M d, Y H:i" }}
+                        </td>
+                        <td>
+                            {% if s.customer and s.customer.name %}
+                                <strong style="color: var(--text);">{{ s.customer.name }}</strong>
+                            {% else %}
+                                <span style="color: var(--muted);">Counter Sale</span>
+                            {% endif %}
+                        </td>
+                        <td style="font-size: 12px; color: var(--muted);">
+                            {{ s.cashier.username|default:"System" }}
+                        </td>
+                        <td>
+                            <span class="badge badge-primary" style="font-size: 11px; font-family: var(--font-mono); font-weight: 600;">
+                                {{ s.payment_mode_display }}
+                            </span>
+                        </td>
+                        <td style="text-align: right; font-family: var(--font-mono); font-weight: 700; color: var(--text);">
+                            ₹{{ s.grand_total|floatformat:2 }}
+                        </td>
+                        <td style="text-align: center;">
+                            {% if s.invoice and s.invoice.invoice_number %}
+                            <a href="{% url 'invoice_detail' s.invoice.invoice_number %}" class="btn btn-secondary btn-sm" style="text-decoration: none; padding: 3px 8px;">
+                                <i class="bi bi-printer"></i> Invoice
+                            </a>
+                            {% endif %}
+                        </td>
+                    </tr>
+                    {% empty %}
+                    <tr>
+                        <td colspan="7" style="text-align: center; padding: 30px; color: var(--muted); font-size: 13px;">
+                            No recent sales records found.
+                        </td>
                     </tr>
                     {% endfor %}
                 </tbody>
             </table>
-        {% else %}
-            <p style="color: #666; margin-top: 10px;">No sales transactions recorded yet.</p>
-        {% endif %}
+        </div>
     </div>
-
-    <!-- Sales Calendar -->
-    <div class="dashboard-section">
-        <h3>Sales Calendar</h3>
-        <p>
-            A date and month filter will be added here to view sales
-            for a selected day or month.
-        </p>
-    </div>
-
 </div>
-
 {% endblock content %}

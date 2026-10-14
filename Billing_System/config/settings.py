@@ -23,7 +23,7 @@ BASE_DIR = Path(__file__).resolve().parent.parent
 # See https://docs.djangoproject.com/en/6.0/howto/deployment/checklist/
 
 # SECURITY WARNING: keep the secret key used in production secret!
-load_dotenv(BASE_DIR / ".env")
+load_dotenv(BASE_DIR / ".env", override=True)
 
 # DEBUG defaults to False unless explicitly configured in environment
 DEBUG = os.getenv("DEBUG", "False").lower() in ("true", "1", "yes")
@@ -40,9 +40,93 @@ if not SECRET_KEY:
         from django.core.exceptions import ImproperlyConfigured
         raise ImproperlyConfigured("The SECRET_KEY environment variable must be set when DEBUG is False.")
 
+# College Demo Session Isolation Mode
+# When True, enables multi-origin loopback host isolation (localhost, 127.0.0.1, 127.0.0.2)
+# and demo hub features. Disabled by default in production.
+COLLEGE_DEMO_MODE = os.getenv("COLLEGE_DEMO_MODE", "False").lower() in ("true", "1", "yes")
+
 # ALLOWED_HOSTS must not default to '*'
 raw_allowed_hosts = os.getenv("ALLOWED_HOSTS", "localhost,127.0.0.1,testserver")
 ALLOWED_HOSTS = [h.strip() for h in raw_allowed_hosts.split(",") if h.strip()]
+
+# Multi-origin loopback hosts for independent demo sessions
+DEMO_LOOPBACK_HOSTS = ["localhost", "127.0.0.1", "127.0.0.2", "127.0.0.3", "testserver"]
+if COLLEGE_DEMO_MODE or DEBUG:
+    for loopback_host in DEMO_LOOPBACK_HOSTS:
+        if loopback_host not in ALLOWED_HOSTS:
+            ALLOWED_HOSTS.append(loopback_host)
+
+# Automatically include local LAN interface IPs for mobile phone scanner companions
+try:
+    from sales.network_utils import get_all_lan_ips
+    for lan_ip in get_all_lan_ips():
+        if lan_ip not in ALLOWED_HOSTS:
+            ALLOWED_HOSTS.append(lan_ip)
+except Exception:
+    pass
+
+# CSRF Trusted Origins for multi-origin loopback demo and local development
+CSRF_TRUSTED_ORIGINS = [
+    "http://localhost:8000",
+    "http://127.0.0.1:8000",
+    "http://127.0.0.2:8000",
+    "http://127.0.0.3:8000",
+]
+
+# POS Scanner Base URL (e.g. http://192.168.1.10:8000 or https://pos.store.local)
+# If blank, LAN IPv4 address is dynamically discovered for the phone QR code
+POS_SCANNER_BASE_URL = os.getenv("POS_SCANNER_BASE_URL", "").strip()
+if POS_SCANNER_BASE_URL:
+    try:
+        from urllib.parse import urlparse
+        parsed_scanner = urlparse(POS_SCANNER_BASE_URL)
+        scanner_host = parsed_scanner.hostname
+        if scanner_host and scanner_host not in ALLOWED_HOSTS:
+            ALLOWED_HOSTS.append(scanner_host)
+    except Exception:
+        pass
+
+# Telegram Bot Integration (Optional)
+# If not configured or blank, Telegram features remain gracefully disabled / offline
+TELEGRAM_BOT_TOKEN = os.getenv("TELEGRAM_BOT_TOKEN", "").strip()
+
+# In development/DEBUG mode: permit local LAN IPv4 addresses dynamically so
+# physical phones on the same Wi-Fi network can reach the POS companion.
+# In production (DEBUG=False), ALLOWED_HOSTS strictly uses the explicit configured list.
+if DEBUG:
+    class DynamicDebugAllowedHosts(list):
+        def __iter__(self):
+            yield from super().__iter__()
+            try:
+                import socket
+                s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+                s.settimeout(0.2)
+                s.connect(("8.8.8.8", 80))
+                lan_ip = s.getsockname()[0]
+                s.close()
+                if lan_ip:
+                    yield lan_ip
+            except Exception:
+                pass
+            try:
+                hostname = socket.gethostname()
+                for info in socket.getaddrinfo(hostname, None):
+                    ip = info[4][0]
+                    if ":" not in ip and not ip.startswith("127.") and not ip.startswith("0.") and not ip.startswith("169.254."):
+                        yield ip
+            except Exception:
+                pass
+
+        def __contains__(self, item):
+            if super().__contains__(item):
+                return True
+            for dynamic_ip in self:
+                if dynamic_ip == item:
+                    return True
+            return False
+
+    ALLOWED_HOSTS = DynamicDebugAllowedHosts(ALLOWED_HOSTS)
+    ALLOWED_HOSTS.extend(["0.0.0.0", ".local", ".lan"])
 
 
 # Application definition
@@ -71,6 +155,7 @@ MIDDLEWARE = [
     'django.middleware.common.CommonMiddleware',
     'django.middleware.csrf.CsrfViewMiddleware',
     'django.contrib.auth.middleware.AuthenticationMiddleware',
+    'accounts.middleware.DemoSessionIsolationMiddleware',
     'django.contrib.messages.middleware.MessageMiddleware',
     'django.middleware.clickjacking.XFrameOptionsMiddleware',
 ]
@@ -87,6 +172,7 @@ TEMPLATES = [
                 'django.template.context_processors.request',
                 'django.contrib.auth.context_processors.auth',
                 'django.contrib.messages.context_processors.messages',
+                'accounts.context_processors.tenancy_context',
             ],
         },
     },
@@ -102,6 +188,9 @@ DATABASES = {
     'default': {
         'ENGINE': 'django.db.backends.sqlite3',
         'NAME': BASE_DIR / 'db.sqlite3',
+        'OPTIONS': {
+            'timeout': 30,
+        },
     }
 }
 
@@ -124,13 +213,19 @@ AUTH_PASSWORD_VALIDATORS = [
     },
 ]
 
+AUTHENTICATION_BACKENDS = [
+    'accounts.backends.UsernameOrEmployeeIdOrEmailBackend',
+    'django.contrib.auth.backends.ModelBackend',
+]
+
 
 # Internationalization
 # https://docs.djangoproject.com/en/6.0/topics/i18n/
 
 LANGUAGE_CODE = 'en-us'
 
-TIME_ZONE = 'UTC'
+TIME_ZONE = os.getenv('TIME_ZONE', 'Asia/Kolkata')
+STORE_TIMEZONE = TIME_ZONE
 
 USE_I18N = True
 
@@ -163,5 +258,15 @@ REST_FRAMEWORK = {
         'rest_framework.renderers.JSONRenderer',
         'rest_framework.renderers.BrowsableAPIRenderer',
     ],
+    'DEFAULT_THROTTLE_CLASSES': [
+        'rest_framework.throttling.UserRateThrottle',
+        'rest_framework.throttling.AnonRateThrottle',
+    ],
+    'DEFAULT_THROTTLE_RATES': {
+        'user': '1000/hour',
+        'anon': '100/hour',
+        'checkout': '50/minute',
+        'payment': '30/minute',
+    },
 }
 

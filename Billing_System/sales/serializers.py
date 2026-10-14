@@ -1,6 +1,9 @@
 from rest_framework import serializers
 from decimal import Decimal
-from sales.models import Customer, Sale, SaleItem, Payment, Invoice
+from sales.models import (
+    Customer, Sale, SaleItem, Payment, Invoice,
+    POSScannerSession, POSScannerScan, ReturnRequest, ReturnItem
+)
 
 
 class CustomerSerializer(serializers.ModelSerializer):
@@ -107,9 +110,12 @@ class InvoiceSerializer(serializers.ModelSerializer):
 class SaleSerializer(serializers.ModelSerializer):
     items = SaleItemSerializer(many=True, read_only=True)
     payments = PaymentSerializer(many=True, read_only=True)
-    customer_name = serializers.CharField(source="customer.name", read_only=True, default="Walk-in Customer")
+    customer_name = serializers.CharField(source="customer_display_name", read_only=True, default="Counter Sale")
+    customer_display_name = serializers.CharField(read_only=True)
     cashier_name = serializers.CharField(source="cashier.username", read_only=True)
     invoice_number = serializers.CharField(source="invoice.invoice_number", read_only=True, default=None)
+    payment_mode_display = serializers.CharField(read_only=True)
+    payment_method = serializers.CharField(read_only=True)
 
     class Meta:
         model = Sale
@@ -119,6 +125,7 @@ class SaleSerializer(serializers.ModelSerializer):
             "invoice_number",
             "customer",
             "customer_name",
+            "customer_display_name",
             "cashier",
             "cashier_name",
             "subtotal",
@@ -137,6 +144,8 @@ class SaleSerializer(serializers.ModelSerializer):
             "notes",
             "items",
             "payments",
+            "payment_mode_display",
+            "payment_method",
             "created_at",
         ]
         read_only_fields = fields
@@ -153,6 +162,14 @@ class CheckoutPaymentSerializer(serializers.Serializer):
     transaction_reference = serializers.CharField(required=False, allow_blank=True, default="")
     notes = serializers.CharField(required=False, allow_blank=True, default="")
 
+    def to_internal_value(self, data):
+        if isinstance(data, dict):
+            # Normalize reference_number to transaction_reference
+            if "reference_number" in data and "transaction_reference" not in data:
+                data = dict(data)
+                data["transaction_reference"] = data.get("reference_number", "")
+        return super().to_internal_value(data)
+
 
 class CheckoutRequestSerializer(serializers.Serializer):
     customer_id = serializers.IntegerField(required=False, allow_null=True, default=None)
@@ -165,7 +182,88 @@ class CheckoutRequestSerializer(serializers.Serializer):
     is_interstate = serializers.BooleanField(default=False)
     notes = serializers.CharField(required=False, allow_blank=True, default="")
 
+    def to_internal_value(self, data):
+        if isinstance(data, dict):
+            data = dict(data)
+            # If client passed single 'payment' object, normalize into 'payments' array
+            if "payment" in data and ("payments" not in data or not data["payments"]):
+                pay_obj = data["payment"]
+                if isinstance(pay_obj, dict):
+                    data["payments"] = [pay_obj]
+        return super().to_internal_value(data)
+
     def validate_items(self, value):
         if not value:
             raise serializers.ValidationError("At least one item is required for checkout.")
         return value
+
+
+class POSScannerSessionSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = POSScannerSession
+        fields = [
+            "id",
+            "session_token",
+            "pairing_code",
+            "status",
+            "device_info",
+            "created_at",
+            "expires_at",
+        ]
+        read_only_fields = fields
+
+
+class ReturnItemSerializer(serializers.ModelSerializer):
+    product_name = serializers.CharField(source="product.name", read_only=True)
+    product_code = serializers.CharField(source="product.product_code", read_only=True)
+
+    class Meta:
+        model = ReturnItem
+        fields = [
+            "id",
+            "sale_item",
+            "product",
+            "product_name",
+            "product_code",
+            "quantity",
+            "refund_unit_price",
+            "refund_total",
+            "restock",
+        ]
+
+
+class ReturnRequestSerializer(serializers.ModelSerializer):
+    items = ReturnItemSerializer(many=True, read_only=True)
+    created_by_name = serializers.CharField(source="created_by.username", read_only=True, default=None, allow_null=True)
+    approved_by_name = serializers.CharField(source="approved_by.username", read_only=True, default=None, allow_null=True)
+    created_by_label = serializers.CharField(read_only=True)
+    approved_by_label = serializers.CharField(read_only=True)
+    sale_number = serializers.CharField(source="sale.sale_number", read_only=True)
+    customer_name = serializers.CharField(source="customer.name", read_only=True, default="Counter Sale", allow_null=True)
+
+    class Meta:
+        model = ReturnRequest
+        fields = [
+            "id",
+            "return_number",
+            "sale",
+            "sale_number",
+            "invoice",
+            "customer",
+            "customer_name",
+            "status",
+            "reason",
+            "refund_amount",
+            "refund_payment_method",
+            "notes",
+            "created_by_name",
+            "approved_by_name",
+            "created_by_label",
+            "approved_by_label",
+            "approved_at",
+            "rejection_reason",
+            "items",
+            "created_at",
+            "updated_at",
+        ]
+        read_only_fields = fields

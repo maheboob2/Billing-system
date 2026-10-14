@@ -80,7 +80,7 @@ def registration_form(request):
                     email=email
                 )
 
-                companyRegistration.objects.create(
+                new_comp = companyRegistration.objects.create(
                     owner=user,
                     company_name=company_name,
                     address_line=address_line,
@@ -95,6 +95,12 @@ def registration_form(request):
                     pan_number=pan_number,
                     business_info=business_info
                 )
+
+                # Initialize tenant-specific sync and Telegram onboarding idempotently
+                from dashboard.sync_service import SyncService
+                from dashboard.telegram_service import generate_pairing_code
+                SyncService.get_or_create_status(new_comp)
+                generate_pairing_code(new_comp, user)
 
             return redirect("accounts")
         except IntegrityError as e:

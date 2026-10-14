@@ -132,6 +132,29 @@ class SalesService:
                 missing = set(product_ids) - set(locked_products.keys())
                 raise ValidationError(f"Products with IDs {missing} do not exist in your company catalog.")
 
+            # Calculate cumulative requested quantity per product across all line items
+            requested_cumulative = {}
+            for item_input in items_data:
+                p_id = item_input["product_id"]
+                try:
+                    q = quantize_money(item_input.get("quantity", 1))
+                except Exception:
+                    raise ValidationError(f"Invalid quantity format for product ID {p_id}.")
+                if q <= Decimal("0.00"):
+                    raise ValidationError("Item quantity must be greater than zero.")
+                requested_cumulative[p_id] = requested_cumulative.get(p_id, Decimal("0.00")) + q
+
+            # Authoritative cumulative stock check
+            for p_id, total_requested in requested_cumulative.items():
+                prod = locked_products[p_id]
+                if not prod.status:
+                    raise ValidationError(f"Product '{prod.name}' is inactive and no longer available for sale.")
+                if prod.current_stock < total_requested:
+                    raise ValidationError(
+                        f"Insufficient stock for '{prod.name}'. "
+                        f"Available: {prod.current_stock} {prod.unit}, Requested: {total_requested} {prod.unit}."
+                    )
+
             # 3. Process Line Items
             prepared_items = []
             gross_subtotal = Decimal("0.00")
@@ -143,27 +166,7 @@ class SalesService:
             for item_input in items_data:
                 p_id = item_input["product_id"]
                 product = locked_products[p_id]
-
-                # Verify product is active and available for sale
-                if not product.status:
-                    raise ValidationError(
-                        f"Product '{product.name}' is inactive and no longer available for sale."
-                    )
-
-                try:
-                    qty = quantize_money(item_input.get("quantity", 1))
-                except Exception:
-                    raise ValidationError(f"Invalid quantity for product '{product.name}'.")
-
-                if qty <= Decimal("0.00"):
-                    raise ValidationError(f"Quantity for product '{product.name}' must be greater than zero.")
-
-                # Stock verification
-                if product.current_stock < qty:
-                    raise ValidationError(
-                        f"Insufficient stock for '{product.name}'. "
-                        f"Available: {product.current_stock} {product.unit}, Requested: {qty} {product.unit}."
-                    )
+                qty = quantize_money(item_input.get("quantity", 1))
 
                 # Authoritative pricing from backend DB
                 unit_price = quantize_money(product.selling_price)
@@ -318,7 +321,13 @@ class SalesService:
                 )
 
             # 8. Record Payments
-            payment_methods_used = []
+            method_labels = {
+                "CASH": "Cash",
+                "UPI": "UPI",
+                "CARD": "Card",
+                "CREDIT": "Store Credit",
+            }
+            payment_parts = []
             for p in parsed_payments:
                 Payment.objects.create(
                     company=company,
@@ -329,17 +338,22 @@ class SalesService:
                     received_by=cashier,
                     notes=p["notes"],
                 )
-                payment_methods_used.append(f"{p['payment_method']} (₹{p['amount']})")
+                lbl = method_labels.get(p["payment_method"].upper(), p["payment_method"])
+                amt = p["amount"]
+                amt_str = f"₹{amt:,.0f}" if amt == amt.to_integral() else f"₹{amt:,.2f}"
+                payment_parts.append(f"{lbl} {amt_str}" if len(parsed_payments) > 1 else lbl)
 
                 # If customer paid via Store Credit, adjust customer's credit balance
                 if p["payment_method"] == "CREDIT" and customer_obj:
                     customer_obj.credit_balance += p["amount"]
                     customer_obj.save(update_fields=["credit_balance"])
 
+            payment_summary_text = " + ".join(payment_parts) if len(payment_parts) > 1 else (payment_parts[0] if payment_parts else "Not recorded")
+
             # 9. Create Invoice
             invoice_number = cls.generate_invoice_number(company)
             cashier_name = cashier.get_full_name() or cashier.username
-            cust_name = customer_obj.name if customer_obj else "Walk-in Customer"
+            cust_name = customer_obj.name if customer_obj else "Counter Sale"
             cust_phone = customer_obj.phone if customer_obj else ""
             cust_address = customer_obj.address if customer_obj else ""
 
@@ -366,7 +380,17 @@ class SalesService:
                 paid_amount=total_paid,
                 balance_due=balance_due,
                 cashier_name=cashier_name,
-                payment_summary=", ".join(payment_methods_used),
+                payment_summary=payment_summary_text,
             )
+
+            # Enqueue for remote sync (operates safely offline and online)
+            try:
+                from dashboard.sync_service import SyncService
+                SyncService.queue_sale(sale)
+                for p in sale.payments.all():
+                    SyncService.queue_payment(p)
+            except Exception:
+                # Local POS operation is never blocked by sync queue exceptions
+                pass
 
         return sale, invoice

@@ -1,0 +1,479 @@
+{% extends "dashboard/main_nav.html" %}
+{% load static %}
+
+{% block content %}
+<div class="settings-wrap" style="max-width: 960px; margin: 24px auto; padding: 0 16px;">
+    
+    <!-- Header -->
+    <div style="margin-bottom: 20px;">
+        <h1 style="font-size: 22px; font-weight: 700; color: var(--text); margin: 0 0 4px 0;">Telegram Owner Reporting & Offline Sync</h1>
+        <p style="margin: 0; font-size: 13px; color: var(--muted);">Autonomous AI reporting, remote owner digests, and resilient local-to-cloud synchronization.</p>
+    </div>
+
+    <!-- Navigation Tabs -->
+    <div style="display: flex; gap: 8px; border-bottom: 1px solid var(--border); margin-bottom: 20px; overflow-x: auto;">
+        <a href="{% url 'settings_general' %}" class="settings-tab">
+            <i class="bi bi-gear-fill"></i> General
+        </a>
+        <a href="{% url 'settings_appearance' %}" class="settings-tab">
+            <i class="bi bi-palette-fill"></i> Appearance
+        </a>
+        <a href="{% url 'settings_scanner' %}" class="settings-tab">
+            <i class="bi bi-upc-scan"></i> Scanner & POS Devices
+        </a>
+        <a href="{% url 'settings_company' %}" class="settings-tab">
+            <i class="bi bi-building"></i> Company Profile
+        </a>
+        <a href="{% url 'settings_telegram' %}" class="settings-tab active" aria-current="page">
+            <i class="bi bi-telegram"></i> Telegram Bot & Sync
+        </a>
+    </div>
+
+    {% if msg %}
+    <div style="background: rgba(16, 185, 129, 0.12); border: 1px solid rgba(16, 185, 129, 0.3); color: var(--success, #10b981); padding: 12px 16px; border-radius: var(--radius-sm); margin-bottom: 20px; font-size: 13px; display: flex; align-items: center; gap: 8px;">
+        <i class="bi bi-info-circle-fill"></i>
+        <span>{{ msg }}</span>
+    </div>
+    {% endif %}
+
+    {% if test_result %}
+    <div style="background: rgba(239, 68, 68, 0.12); border: 1px solid rgba(239, 68, 68, 0.3); color: var(--danger, #ef4444); padding: 12px 16px; border-radius: var(--radius-sm); margin-bottom: 20px; font-size: 13px; display: flex; align-items: center; gap: 8px;">
+        <i class="bi bi-exclamation-triangle-fill"></i>
+        <span>{{ test_result }}</span>
+    </div>
+    {% endif %}
+
+    <!-- ── MERCHANT DEDICATED BOT (BOTFATHER) CARD ──────────────────────── -->
+    <div style="background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius-md); padding: 22px; margin-bottom: 24px;">
+        <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 16px; flex-wrap: wrap; gap: 10px;">
+            <div style="display: flex; align-items: center; gap: 12px;">
+                <div style="width: 42px; height: 42px; border-radius: 10px; background: rgba(56, 189, 248, 0.15); display: flex; align-items: center; justify-content: center; color: #38bdf8; font-size: 20px;">
+                    <i class="bi bi-robot"></i>
+                </div>
+                <div>
+                    <h2 style="font-size: 16px; font-weight: 700; color: var(--text); margin: 0;">Connect Your Telegram Business Assistant</h2>
+                    <p style="margin: 2px 0 0 0; font-size: 12px; color: var(--muted);">
+                        Create your store's own bot via BotFather. Live sales, cash/UPI reconciliation, and low-stock alerts delivered directly to the Owner.
+                    </p>
+                </div>
+            </div>
+
+            <div>
+                {% if merchant_bot and merchant_bot.status == "CONNECTED" %}
+                <span style="background: rgba(16, 185, 129, 0.15); color: #10b981; border: 1px solid rgba(16, 185, 129, 0.3); padding: 4px 12px; border-radius: 9999px; font-size: 12px; font-weight: 700;">
+                    ● CONNECTED (@{{ merchant_bot.bot_username }})
+                </span>
+                {% elif merchant_bot and merchant_bot.status == "PENDING_VERIFICATION" %}
+                <span style="background: rgba(245, 158, 11, 0.15); color: #f59e0b; border: 1px solid rgba(245, 158, 11, 0.3); padding: 4px 12px; border-radius: 9999px; font-size: 12px; font-weight: 700;">
+                    ● PENDING VERIFICATION
+                </span>
+                {% elif merchant_bot and merchant_bot.status == "INVALID_TOKEN" %}
+                <span style="background: rgba(239, 68, 68, 0.15); color: #ef4444; border: 1px solid rgba(239, 68, 68, 0.3); padding: 4px 12px; border-radius: 9999px; font-size: 12px; font-weight: 700;">
+                    ⚠️ INVALID / REVOKED TOKEN
+                </span>
+                {% else %}
+                <span style="background: rgba(148, 163, 184, 0.15); color: #94a3b8; border: 1px solid rgba(148, 163, 184, 0.3); padding: 4px 12px; border-radius: 9999px; font-size: 12px; font-weight: 700;">
+                    ○ NOT CONFIGURED
+                </span>
+                {% endif %}
+            </div>
+        </div>
+
+        {% if merchant_bot and merchant_bot.status == "CONNECTED" %}
+        <!-- Connected Status Details -->
+        <div style="background: var(--surface-2); border: 1px solid rgba(16, 185, 129, 0.2); border-radius: var(--radius-sm); padding: 14px 16px; margin-bottom: 16px; font-size: 12px; line-height: 1.8;">
+            <div style="display: flex; justify-content: space-between; flex-wrap: wrap;">
+                <span style="color: var(--muted);">Bot Handle:</span>
+                <strong><a href="https://t.me/{{ merchant_bot.bot_username }}" target="_blank" style="color: #38bdf8;">@{{ merchant_bot.bot_username }}</a></strong>
+            </div>
+            <div style="display: flex; justify-content: space-between; flex-wrap: wrap;">
+                <span style="color: var(--muted);">Verified Owner Chat:</span>
+                <strong style="color: var(--text);">{{ merchant_bot.verified_username|default:"Owner" }} (<code>{{ merchant_bot.verified_chat_id }}</code>)</strong>
+            </div>
+            <div style="display: flex; justify-content: space-between; flex-wrap: wrap;">
+                <span style="color: var(--muted);">Configured Token:</span>
+                <span style="color: var(--muted); font-family: monospace;">{{ masked_token }}</span>
+            </div>
+            <div style="display: flex; justify-content: space-between; flex-wrap: wrap;">
+                <span style="color: var(--muted);">Verified Timestamp:</span>
+                <span style="color: var(--text);">{{ merchant_bot.verified_at|date:"M d, Y H:i" }}</span>
+            </div>
+        </div>
+
+        <div style="display: flex; gap: 10px; flex-wrap: wrap;">
+            <a href="https://t.me/{{ merchant_bot.bot_username }}" target="_blank" class="btn btn-primary" style="font-size: 12px; padding: 7px 14px; text-decoration: none;">
+                <i class="bi bi-telegram"></i> Open Bot in Telegram
+            </a>
+            <button type="button" class="btn btn-secondary" style="font-size: 12px; padding: 7px 14px;" onclick="document.getElementById('tokenConfigCollapse').style.display = document.getElementById('tokenConfigCollapse').style.display === 'none' ? 'block' : 'none';">
+                <i class="bi bi-arrow-repeat"></i> Update / Replace Token
+            </button>
+            <form method="POST" onsubmit="return confirm('Disconnect this Telegram bot from your store?');" style="margin: 0;">
+                {% csrf_token %}
+                <input type="hidden" name="action" value="disconnect_merchant_bot">
+                <button type="submit" class="btn btn-secondary" style="font-size: 12px; padding: 7px 14px; color: var(--danger); border-color: rgba(239, 68, 68, 0.3);">
+                    <i class="bi bi-x-circle"></i> Disconnect Bot
+                </button>
+            </form>
+        </div>
+
+        {% elif merchant_bot and merchant_bot.status == "PENDING_VERIFICATION" %}
+        <!-- Pending Verification State -->
+        <div style="background: rgba(245, 158, 11, 0.08); border: 1px solid rgba(245, 158, 11, 0.3); border-radius: var(--radius-sm); padding: 14px 16px; margin-bottom: 16px;">
+            <div style="font-size: 13px; font-weight: 700; color: #f59e0b; margin-bottom: 6px;">
+                <i class="bi bi-hourglass-split"></i> Step 3: Complete One-Time Verification
+            </div>
+            <p style="font-size: 12px; color: var(--text); margin: 0 0 10px 0; line-height: 1.5;">
+                Token for <strong>@{{ merchant_bot.bot_username }}</strong> was accepted! Now open your bot and click <strong>Start</strong> or send the challenge code below to bind your personal chat to this store.
+            </p>
+            <div style="display: flex; align-items: center; gap: 12px; flex-wrap: wrap;">
+                <div style="background: rgba(0,0,0,0.25); border: 1px dashed #f59e0b; border-radius: 8px; padding: 6px 14px;">
+                    <span style="font-size: 11px; color: var(--muted);">Challenge Code: </span>
+                    <strong style="font-size: 18px; font-family: monospace; color: #f59e0b; letter-spacing: 2px;">{{ merchant_bot.verification_challenge }}</strong>
+                </div>
+                <a href="https://t.me/{{ merchant_bot.bot_username }}?start={{ merchant_bot.verification_challenge }}" target="_blank" class="btn btn-primary" style="font-size: 12px; padding: 8px 16px; text-decoration: none;">
+                    <i class="bi bi-box-arrow-up-right"></i> Open Bot &amp; Start
+                </a>
+            </div>
+        </div>
+        {% endif %}
+
+        <!-- Secure Token Input Form (Always available or expandable) -->
+        <div id="tokenConfigCollapse" style="margin-top: 16px; {% if merchant_bot and merchant_bot.status == 'CONNECTED' %}display: none;{% endif %}">
+            <div style="background: var(--surface-2); border: 1px solid var(--border); border-radius: var(--radius-sm); padding: 16px;">
+                <div style="font-size: 13px; font-weight: 700; color: var(--text); margin-bottom: 6px;">
+                    <i class="bi bi-shield-lock-fill" style="color: #38bdf8;"></i> Setup Guide &amp; Token Entry
+                </div>
+                <div style="font-size: 12px; color: var(--muted); line-height: 1.6; margin-bottom: 12px;">
+                    <strong>3 Simple Steps to Create Your Store Bot:</strong><br>
+                    1. Open <a href="https://t.me/BotFather" target="_blank" style="color: #38bdf8; text-decoration: underline;">@BotFather</a> in Telegram and send <code>/newbot</code>.<br>
+                    2. Give your bot a display name (e.g. <em>{{ company.company_name }} Reports</em>) and a unique username ending in <code>_bot</code>.<br>
+                    3. Copy the <strong>API token</strong> BotFather returns and paste it below. (It will be encrypted at rest and never shared).
+                </div>
+
+                <form method="POST">
+                    {% csrf_token %}
+                    <input type="hidden" name="action" value="configure_merchant_bot">
+                    <div style="display: flex; gap: 8px; flex-wrap: wrap;">
+                        <input type="password" id="botTokenInput" name="bot_token" placeholder="Paste BotFather API Token (e.g. 789123456:AA...)" style="flex: 1; min-width: 240px; font-family: monospace; font-size: 12px; padding: 8px 12px;" required autocomplete="off">
+                        <button type="button" class="btn btn-secondary" onclick="var el = document.getElementById('botTokenInput'); el.type = el.type === 'password' ? 'text' : 'password';" style="font-size: 12px;">
+                            <i class="bi bi-eye"></i>
+                        </button>
+                        <button type="submit" class="btn btn-primary" style="font-size: 12px; padding: 8px 16px;">
+                            <i class="bi bi-check2-circle"></i> Verify &amp; Connect Bot
+                        </button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+
+    <!-- Top Grid: Sync Health & Telegram Pairing -->
+    <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 20px; margin-bottom: 24px;">
+        
+        <!-- Cloud Sync Worker Health -->
+        <div style="background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius-md); padding: 22px;">
+            <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 14px;">
+                <div style="display: flex; align-items: center; gap: 10px;">
+                    <div style="width: 38px; height: 38px; border-radius: 50%; background: rgba(16, 185, 129, 0.15); display: flex; align-items: center; justify-content: center; color: #10b981; font-size: 18px;">
+                        <i class="bi bi-cloud-arrow-up"></i>
+                    </div>
+                    <div>
+                        <div style="font-size: 14px; font-weight: 700; color: var(--text);">Cloud Sync Worker</div>
+                        <div style="font-size: 11px; color: var(--muted);">Idempotent Remote Pipeline</div>
+                    </div>
+                </div>
+                <div>
+                    {% if sync_info.is_online %}
+                    <span style="background: rgba(16, 185, 129, 0.15); color: #10b981; border: 1px solid rgba(16, 185, 129, 0.3); padding: 3px 10px; border-radius: 9999px; font-size: 11px; font-weight: 700;">
+                        ● ONLINE
+                    </span>
+                    {% else %}
+                    <span style="background: rgba(239, 68, 68, 0.15); color: #ef4444; border: 1px solid rgba(239, 68, 68, 0.3); padding: 3px 10px; border-radius: 9999px; font-size: 11px; font-weight: 700;">
+                        ⚠️ OFFLINE
+                    </span>
+                    {% endif %}
+                </div>
+            </div>
+
+            <div style="background: var(--surface-2); border: 1px solid var(--border); border-radius: var(--radius-sm); padding: 12px 14px; margin-bottom: 16px; font-size: 12px; line-height: 1.8;">
+                <div style="display: flex; justify-content: space-between;">
+                    <span style="color: var(--muted);">Last Successful Sync:</span>
+                    <strong style="color: #34d399; font-family: monospace;">{{ sync_info.last_sync_timestamp_display }}</strong>
+                </div>
+                <div style="display: flex; justify-content: space-between;">
+                    <span style="color: var(--muted);">Pending Offline Buffer:</span>
+                    <strong style="color: {% if sync_info.pending_count > 0 %}#f59e0b{% else %}var(--text){% endif %}; font-family: monospace;">
+                        {{ sync_info.pending_count }} transactions
+                    </strong>
+                </div>
+                <div style="display: flex; justify-content: space-between;">
+                    <span style="color: var(--muted);">Total Uploaded Records:</span>
+                    <strong style="color: var(--text); font-family: monospace;">{{ sync_info.total_synced_count }} items</strong>
+                </div>
+            </div>
+
+            <form method="POST">
+                {% csrf_token %}
+                <input type="hidden" name="action" value="trigger_sync">
+                <button type="submit" class="btn btn-secondary" style="width: 100%; font-size: 12px; display: flex; align-items: center; justify-content: center; gap: 6px;">
+                    <i class="bi bi-arrow-repeat"></i> Trigger Cloud Sync Upload Now
+                </button>
+            </form>
+        </div>
+
+        <!-- Telegram Connection & Pairing -->
+        <div style="background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius-md); padding: 22px;">
+            <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 14px;">
+                <div style="display: flex; align-items: center; gap: 10px;">
+                    <div style="width: 38px; height: 38px; border-radius: 50%; background: rgba(0, 136, 204, 0.15); display: flex; align-items: center; justify-content: center; color: #0088cc; font-size: 18px;">
+                        <i class="bi bi-telegram"></i>
+                    </div>
+                    <div>
+                        <div style="font-size: 14px; font-weight: 700; color: var(--text);">Telegram Bot Gateway</div>
+                        <div style="font-size: 11px; color: var(--muted);">Remote Owner Reporting</div>
+                    </div>
+                </div>
+                <div>
+                    {% if tg_gateway.is_verified and tg_gateway.worker_active %}
+                    <span style="background: rgba(16, 185, 129, 0.15); color: #10b981; border: 1px solid rgba(16, 185, 129, 0.3); padding: 3px 10px; border-radius: 9999px; font-size: 11px; font-weight: 700;">
+                        ● ACTIVE (LISTENING)
+                    </span>
+                    {% elif tg_gateway.is_verified and not tg_gateway.worker_active %}
+                    <span style="background: rgba(245, 158, 11, 0.15); color: #f59e0b; border: 1px solid rgba(245, 158, 11, 0.3); padding: 3px 10px; border-radius: 9999px; font-size: 11px; font-weight: 700;">
+                        ● VERIFIED · WORKER STANDBY
+                    </span>
+                    {% elif not tg_gateway.is_configured %}
+                    <span style="background: rgba(148, 163, 184, 0.15); color: #94a3b8; border: 1px solid rgba(148, 163, 184, 0.3); padding: 3px 10px; border-radius: 9999px; font-size: 11px; font-weight: 700;">
+                        ○ NOT CONFIGURED
+                    </span>
+                    {% elif tg_gateway.status == "Token configured but invalid" %}
+                    <span style="background: rgba(239, 68, 68, 0.15); color: #ef4444; border: 1px solid rgba(239, 68, 68, 0.3); padding: 3px 10px; border-radius: 9999px; font-size: 11px; font-weight: 700;">
+                        ⚠️ INVALID BOT TOKEN
+                    </span>
+                    {% else %}
+                    <span style="background: rgba(239, 68, 68, 0.15); color: #ef4444; border: 1px solid rgba(239, 68, 68, 0.3); padding: 3px 10px; border-radius: 9999px; font-size: 11px; font-weight: 700;">
+                        ⚠️ {{ tg_gateway.status|upper }}
+                    </span>
+                    {% endif %}
+                </div>
+            </div>
+
+            <!-- Honest Gateway Details -->
+            <div style="background: var(--surface-2); border: 1px solid var(--border); border-radius: var(--radius-sm); padding: 12px 14px; margin-bottom: 14px; font-size: 12px; line-height: 1.8;">
+                <div style="display: flex; justify-content: space-between;">
+                    <span style="color: var(--muted);">Bot Identity:</span>
+                    <strong style="color: var(--text); font-family: monospace;">{{ tg_gateway.bot_username|default:"Not verified" }}</strong>
+                </div>
+                <div style="display: flex; justify-content: space-between;">
+                    <span style="color: var(--muted);">Polling Worker:</span>
+                    <strong style="color: {% if tg_gateway.worker_active %}#10b981{% else %}#f59e0b{% endif %};">
+                        {% if tg_gateway.worker_active %}● Active (Listening){% else %}○ Standby{% endif %}
+                    </strong>
+                </div>
+                <div style="display: flex; justify-content: space-between;">
+                    <span style="color: var(--muted);">Delivery Mode:</span>
+                    <strong style="color: var(--text);">{{ tg_gateway.mode }}</strong>
+                </div>
+                <div style="display: flex; justify-content: space-between;">
+                    <span style="color: var(--muted);">Last Telegram Update:</span>
+                    <strong style="color: var(--text); font-family: monospace;">
+                        {% if tg_gateway.last_update_received %}
+                            {{ tg_gateway.last_update_received|date:"M d, H:i:s" }}
+                        {% else %}
+                            None yet
+                        {% endif %}
+                    </strong>
+                </div>
+                <div style="display: flex; justify-content: space-between;">
+                    <span style="color: var(--muted);">POS DB Connection:</span>
+                    <strong style="color: {% if tg_gateway.db_connected %}#10b981{% else %}#ef4444{% endif %};">
+                        {% if tg_gateway.db_connected %}● Connected{% else %}❌ Offline{% endif %}
+                    </strong>
+                </div>
+                <div style="display: flex; justify-content: space-between;">
+                    <span style="color: var(--muted);">Owner Pairing:</span>
+                    <strong style="color: {% if link and link.is_verified and is_bot_configured %}#10b981{% else %}var(--muted){% endif %};">
+                        {% if link and link.is_verified and is_bot_configured %}
+                            Paired ({{ link.telegram_chat_id }})
+                        {% elif link and link.is_verified %}
+                            Paired locally (Bot unconfigured)
+                        {% else %}
+                            Unpaired
+                        {% endif %}
+                    </strong>
+                </div>
+                <div style="font-size: 11px; color: var(--muted); margin-top: 4px; line-height: 1.4;">
+                    {{ tg_gateway.description }}
+                </div>
+            </div>
+
+            <!-- Safe Authenticated Test Telegram Connection Form -->
+            <form method="POST" style="margin-bottom: 12px;">
+                {% csrf_token %}
+                <input type="hidden" name="action" value="test_connection">
+                <button type="submit" class="btn btn-secondary" style="width: 100%; font-size: 12px; display: flex; align-items: center; justify-content: center; gap: 6px;">
+                    <i class="bi bi-shield-check"></i> Test Telegram Connection (getMe)
+                </button>
+            </form>
+
+            {% if link and link.is_verified %}
+            <form method="POST" onsubmit="return confirm('Disconnect Telegram notifications for this store?');">
+                {% csrf_token %}
+                <input type="hidden" name="action" value="unlink">
+                <button type="submit" class="btn btn-secondary" style="width: 100%; border-color: rgba(239, 68, 68, 0.3); color: var(--danger); font-size: 12px;">
+                    <i class="bi bi-link-45deg"></i> Disconnect Telegram Pairing
+                </button>
+            </form>
+
+            {% else %}
+            {% if link and not link.is_verified and link.pairing_code %}
+            <div style="text-align: center; background: var(--surface-2); border: 2px dashed var(--primary); border-radius: var(--radius-sm); padding: 14px; margin-bottom: 14px;">
+                <div style="font-size: 11px; text-transform: uppercase; letter-spacing: 0.5px; color: var(--muted); margin-bottom: 2px;">One-Time Pairing Code</div>
+                <div style="font-size: 26px; font-weight: 800; letter-spacing: 4px; color: var(--primary); font-family: monospace;">{{ link.pairing_code }}</div>
+                <div style="font-size: 11px; color: var(--muted);">Expires at {{ link.pairing_code_expires_at|date:"H:i:s" }}</div>
+            </div>
+
+            <div style="background: rgba(0, 136, 204, 0.08); border: 1px solid rgba(0, 136, 204, 0.2); border-radius: var(--radius-sm); padding: 10px 12px; font-size: 11px; margin-bottom: 12px; color: #93c5fd;">
+                <strong>Next Step:</strong> Open Telegram and send <code>/pair {{ link.pairing_code }}</code> to your store bot.
+            </div>
+
+            <form method="POST">
+                {% csrf_token %}
+                <input type="hidden" name="action" value="simulate_pair">
+                <input type="hidden" name="pairing_code" value="{{ link.pairing_code }}">
+                <div style="display: flex; gap: 8px;">
+                    <input type="text" name="chat_id" placeholder="Simulated Chat ID" value="owner_chat_{{ request.user.id }}" style="font-size: 11px; flex: 1;">
+                    <button type="submit" class="btn btn-secondary" style="font-size: 11px; white-space: nowrap;">
+                        <i class="bi bi-lightning-charge"></i> Instant Verify
+                    </button>
+                </div>
+            </form>
+
+            {% else %}
+            <p style="font-size: 12px; color: var(--muted); line-height: 1.5; margin-bottom: 14px;">
+                Telegram reporting uses secure pairing: your store generates a temporary one-time code. Your application password is <strong>never</strong> required or exposed.
+            </p>
+            <form method="POST">
+                {% csrf_token %}
+                <input type="hidden" name="action" value="generate_code">
+                <button type="submit" class="btn btn-primary" style="width: 100%; font-size: 12px;">
+                    <i class="bi bi-key"></i> Generate One-Time Pairing Code
+                </button>
+            </form>
+            {% endif %}
+            {% endif %}
+        </div>
+    </div>
+
+    <!-- Natural-Language AI Reporting Console & Test Simulator -->
+    <div style="background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius-md); padding: 22px; margin-bottom: 24px;">
+        <div style="display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 12px;">
+            <div>
+                <h3 style="font-size: 15px; font-weight: 700; color: var(--text); margin: 0 0 2px 0;">Natural Language Reporting Engine</h3>
+                <p style="margin: 0; font-size: 12px; color: var(--muted);">
+                    AI interprets natural queries. Database remains the source of truth (numbers are never hallucinated, SQL is never injected).
+                </p>
+            </div>
+            <span style="font-size: 11px; background: rgba(16, 185, 129, 0.15); color: #34d399; border: 1px solid rgba(16, 185, 129, 0.3); padding: 2px 8px; border-radius: 4px;">
+                DETERMINISTIC SQL ORM
+            </span>
+        </div>
+
+        <!-- Quick Query Chips -->
+        <div style="display: flex; gap: 6px; flex-wrap: wrap; margin-bottom: 14px;">
+            <button type="button" class="btn btn-secondary" style="font-size: 11px; padding: 4px 10px;" onclick="setQuery('today\'s report')">today's report</button>
+            <button type="button" class="btn btn-secondary" style="font-size: 11px; padding: 4px 10px;" onclick="setQuery('yesterday\'s report')">yesterday's report</button>
+            <button type="button" class="btn btn-secondary" style="font-size: 11px; padding: 4px 10px;" onclick="setQuery('how much cash did we collect?')">cash</button>
+            <button type="button" class="btn btn-secondary" style="font-size: 11px; padding: 4px 10px;" onclick="setQuery('show upi collections')">upi</button>
+            <button type="button" class="btn btn-secondary" style="font-size: 11px; padding: 4px 10px;" onclick="setQuery('card collections')">card</button>
+            <button type="button" class="btn btn-secondary" style="font-size: 11px; padding: 4px 10px;" onclick="setQuery('customer credit balances')">credit</button>
+            <button type="button" class="btn btn-secondary" style="font-size: 11px; padding: 4px 10px;" onclick="setQuery('supplier purchases')">purchases</button>
+            <button type="button" class="btn btn-secondary" style="font-size: 11px; padding: 4px 10px;" onclick="setQuery('who are our top customers?')">customers</button>
+            <button type="button" class="btn btn-secondary" style="font-size: 11px; padding: 4px 10px;" onclick="setQuery('returns & refunds status')">returns</button>
+            <button type="button" class="btn btn-secondary" style="font-size: 11px; padding: 4px 10px;" onclick="setQuery('inventory stock overview')">inventory</button>
+            <button type="button" class="btn btn-secondary" style="font-size: 11px; padding: 4px 10px;" onclick="setQuery('top selling products')">top products</button>
+            <button type="button" class="btn btn-secondary" style="font-size: 11px; padding: 4px 10px;" onclick="setQuery('compare this week with last week')">comparisons</button>
+            <button type="button" class="btn btn-secondary" style="font-size: 11px; padding: 4px 10px;" onclick="setQuery('send me a pdf report')">PDF report</button>
+            <button type="button" class="btn btn-secondary" style="font-size: 11px; padding: 4px 10px;" onclick="setQuery('show chart image')">chart image</button>
+        </div>
+
+        <form method="POST" style="display: flex; gap: 8px; margin-bottom: 14px;">
+            {% csrf_token %}
+            <input type="hidden" name="action" value="test_command">
+            <input type="text" id="nl-query-input" name="command" value="today's report" placeholder="Ask anything, e.g. 'how much cash did we collect today?'" style="flex: 1; font-size: 13px; padding: 8px 12px; background: var(--surface-2); border: 1px solid var(--border); border-radius: 6px; color: var(--text);">
+            <button type="submit" class="btn btn-primary" style="padding: 8px 18px; font-size: 13px; white-space: nowrap;">
+                <i class="bi bi-send-fill"></i> Execute Query
+            </button>
+        </form>
+
+        {% if test_result %}
+        <div style="background: #090d16; color: #f8fafc; border-radius: var(--radius-sm); padding: 16px; font-family: var(--font-mono, monospace); font-size: 12px; white-space: pre-wrap; line-height: 1.6; border: 1px solid #1e293b;">
+{{ test_result }}
+        </div>
+        {% endif %}
+    </div>
+
+    <!-- Outbound Message Queue (Survives Offline & Reconnects) -->
+    <div style="background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius-md); padding: 22px;">
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px;">
+            <div>
+                <h3 style="font-size: 15px; font-weight: 700; color: var(--text); margin: 0 0 2px 0;">Outbound Telegram Queue</h3>
+                <p style="margin: 0; font-size: 12px; color: var(--muted);">Messages generated while offline queue locally and dispatch once connection restores.</p>
+            </div>
+            <span style="font-size: 11px; color: var(--muted);">Showing last 10</span>
+        </div>
+
+        {% if outbound_messages %}
+        <div style="overflow-x: auto;">
+            <table style="width: 100%; border-collapse: collapse; font-size: 12px;">
+                <thead>
+                    <tr style="border-bottom: 1px solid var(--border); text-align: left; color: var(--muted);">
+                        <th style="padding: 8px 6px;">Status</th>
+                        <th style="padding: 8px 6px;">Media</th>
+                        <th style="padding: 8px 6px;">Chat ID</th>
+                        <th style="padding: 8px 6px;">Message Preview</th>
+                        <th style="padding: 8px 6px;">Created</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for msg in outbound_messages %}
+                    <tr style="border-bottom: 1px solid var(--border);">
+                        <td style="padding: 8px 6px;">
+                            {% if msg.status == 'SENT' %}
+                            <span style="background: rgba(16, 185, 129, 0.15); color: #10b981; padding: 2px 8px; border-radius: 9999px; font-size: 10px; font-weight: 700;">SENT</span>
+                            {% elif msg.status == 'QUEUED' %}
+                            <span style="background: rgba(245, 158, 11, 0.15); color: #f59e0b; padding: 2px 8px; border-radius: 9999px; font-size: 10px; font-weight: 700;">QUEUED</span>
+                            {% else %}
+                            <span style="background: rgba(239, 68, 68, 0.15); color: #ef4444; padding: 2px 8px; border-radius: 9999px; font-size: 10px; font-weight: 700;">FAILED</span>
+                            {% endif %}
+                        </td>
+                        <td style="padding: 8px 6px;">
+                            <span style="background: var(--surface-2); border: 1px solid var(--border); padding: 1px 6px; border-radius: 4px; font-size: 10px;">{{ msg.media_type }}</span>
+                        </td>
+                        <td style="padding: 8px 6px; font-family: monospace;">{{ msg.chat_id }}</td>
+                        <td style="padding: 8px 6px; color: var(--muted); max-width: 320px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">{{ msg.message_text }}</td>
+                        <td style="padding: 8px 6px; color: var(--muted);">{{ msg.created_at|date:"M d, H:i:s" }}</td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+        {% else %}
+        <div style="text-align: center; padding: 20px 0; color: var(--muted); font-size: 13px;">
+            No outbound messages in queue.
+        </div>
+        {% endif %}
+    </div>
+
+</div>
+
+<script>
+function setQuery(text) {
+    const input = document.getElementById('nl-query-input');
+    if (input) {
+        input.value = text;
+        input.focus();
+    }
+}
+</script>
+{% endblock content %}

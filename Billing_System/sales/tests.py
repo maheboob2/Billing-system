@@ -370,4 +370,360 @@ class SalesAndCheckoutTests(TestCase):
         prod_inactive.refresh_from_db()
         self.assertEqual(prod_inactive.current_stock, Decimal("50.00"))
 
+    # -----------------------------------------------------------------
+    # POS Cart Page & Sales Quote & Store Credit Tests (Phase 9)
+    # -----------------------------------------------------------------
+    def test_cart_page_view_accessible_by_cashier(self):
+        """Verify /cart/ loads 200 OK and renders cart.html for Cashier."""
+        self.client.force_login(user=self.cashier_user)
+        response = self.client.get("/cart/")
+        self.assertEqual(response.status_code, 200)
+        self.assertTemplateUsed(response, "sales/cart.html")
+        self.assertContains(response, "POS Checkout")
+
+    def test_cart_page_view_unauthenticated_redirects(self):
+        """Unauthenticated requests to /cart/ redirect to login."""
+        self.client.logout()
+        response = self.client.get("/cart/")
+        self.assertEqual(response.status_code, 302)
+
+    def test_sales_quote_endpoint_accuracy_and_non_mutating(self):
+        """POST /api/sales/quote/ calculates authoritative totals without DB mutation."""
+        self.client.force_authenticate(user=self.cashier_user)
+
+        stock_before = self.prod_cola.current_stock
+        sales_count_before = Sale.objects.filter(company=self.company).count()
+        payments_count_before = Payment.objects.filter(company=self.company).count()
+        invoices_count_before = Invoice.objects.filter(company=self.company).count()
+
+        payload = {
+            "items": [{"product_id": self.prod_cola.id, "quantity": 2}],
+            "discount_type": "FLAT",
+            "discount_value": 10.00,
+            "payments": [{"payment_method": "CASH", "amount": 106.20}]
+        }
+
+        response = self.client.post("/api/sales/quote/", data=payload, format="json")
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+
+        data = response.data
+        quote = data["quote"]
+        # Subtotal: 2 * 50 = 100.00
+        self.assertEqual(Decimal(str(quote["subtotal"])), Decimal("100.00"))
+        # Discount: 10.00
+        self.assertEqual(Decimal(str(quote["discount_amount"])), Decimal("10.00"))
+        # Taxable: 90.00, 18% GST = 16.20 (CGST 8.10, SGST 8.10)
+        self.assertEqual(Decimal(str(quote["tax_amount"])), Decimal("16.20"))
+        self.assertEqual(Decimal(str(quote["cgst_amount"])), Decimal("8.10"))
+        self.assertEqual(Decimal(str(quote["sgst_amount"])), Decimal("8.10"))
+        # Grand total: 90 + 16.20 = 106.20
+        self.assertEqual(Decimal(str(quote["grand_total"])), Decimal("106.20"))
+        self.assertEqual(quote["payment_status_preview"], "PAID")
+
+        # Zero DB mutations verified
+        self.assertEqual(Sale.objects.filter(company=self.company).count(), sales_count_before)
+        self.assertEqual(Payment.objects.filter(company=self.company).count(), payments_count_before)
+        self.assertEqual(Invoice.objects.filter(company=self.company).count(), invoices_count_before)
+        self.prod_cola.refresh_from_db()
+        self.assertEqual(self.prod_cola.current_stock, stock_before)
+
+    def test_sales_quote_insufficient_stock_error(self):
+        """Quote fails with 400 when requested quantity exceeds available stock."""
+        self.client.force_authenticate(user=self.cashier_user)
+        payload = {
+            "items": [{"product_id": self.prod_cola.id, "quantity": 99999}],
+        }
+        response = self.client.post("/api/sales/quote/", data=payload, format="json")
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertIn("Insufficient stock", response.data.get("error", ""))
+
+    def test_sales_quote_inactive_product_error(self):
+        """Quote fails with 400 when product is inactive."""
+        prod_inactive = Product.objects.create(
+            company=self.company,
+            category=self.category,
+            supplier=self.supplier,
+            name="Archived Item",
+            product_code="ARCH-001",
+            purchase_price=Decimal("10.00"),
+            selling_price=Decimal("20.00"),
+            current_stock=Decimal("10.00"),
+            status=False
+        )
+        self.client.force_authenticate(user=self.cashier_user)
+        payload = {
+            "items": [{"product_id": prod_inactive.id, "quantity": 1}],
+        }
+        response = self.client.post("/api/sales/quote/", data=payload, format="json")
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertIn("inactive", response.data.get("error", ""))
+
+    def test_sales_quote_credit_warning_when_limit_exceeded(self):
+        """Quote returns a warning when projected credit exceeds customer credit limit."""
+        self.client.force_authenticate(user=self.cashier_user)
+        # Customer limit is 5000.00, balance is 0.00
+        payload = {
+            "customer_id": self.customer.id,
+            "items": [{"product_id": self.prod_cola.id, "quantity": 1}],
+            "payments": [{"payment_method": "CREDIT", "amount": 6000.00}]
+        }
+        response = self.client.post("/api/sales/quote/", data=payload, format="json")
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertIn("warnings", response.data)
+        self.assertTrue(len(response.data["warnings"]) > 0)
+        self.assertIn("Credit limit would be exceeded", response.data["warnings"][0])
+
+    def test_checkout_credit_payment_requires_customer(self):
+        """Checkout with payment method CREDIT without a customer returns 400."""
+        self.client.force_authenticate(user=self.cashier_user)
+        payload = {
+            "items": [{"product_id": self.prod_cola.id, "quantity": 1}],
+            "payments": [{"payment_method": "CREDIT", "amount": 59.00}],
+            # No customer_id
+        }
+        response = self.client.post("/api/sales/checkout/", data=payload, format="json")
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertIn("Store credit payments require a registered customer", response.data.get("error", ""))
+
+    def test_checkout_credit_payment_success_and_balance_update(self):
+        """Checkout with CREDIT updates customer credit_balance."""
+        self.client.force_authenticate(user=self.cashier_user)
+        balance_before = self.customer.credit_balance
+
+        payload = {
+            "customer_id": self.customer.id,
+            "items": [{"product_id": self.prod_cola.id, "quantity": 1}],
+            "payments": [{"payment_method": "CREDIT", "amount": 59.00}],
+        }
+        response = self.client.post("/api/sales/checkout/", data=payload, format="json")
+        self.assertEqual(response.status_code, status.HTTP_201_CREATED)
+
+        self.customer.refresh_from_db()
+        self.assertEqual(self.customer.credit_balance, balance_before + Decimal("59.00"))
+
+    def test_checkout_credit_limit_exceeded_rejected(self):
+        """Checkout with CREDIT exceeding customer limit fails with 400."""
+        self.client.force_authenticate(user=self.cashier_user)
+        # customer credit limit is 5000.00
+        self.customer.credit_balance = Decimal("4950.00")
+        self.customer.save(update_fields=["credit_balance"])
+
+        payload = {
+            "customer_id": self.customer.id,
+            "items": [{"product_id": self.prod_cola.id, "quantity": 2}],
+            "payments": [{"payment_method": "CREDIT", "amount": 118.00}],
+        }
+        response = self.client.post("/api/sales/checkout/", data=payload, format="json")
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertIn("Credit limit exceeded", response.data.get("error", ""))
+
+
+class PaymentModeAndCustomerDisplayTests(TestCase):
+    def setUp(self):
+        self.owner = User.objects.create_user(username="owner_pm", password="password123")
+        self.company = companyRegistration.objects.create(
+            owner=self.owner,
+            company_name="Tender Retail",
+            address_line="50 Market Lane",
+            city="Chennai",
+            state="Tamil Nadu",
+            country="India",
+            pincode="600001",
+            company_email="tender@example.com",
+            phone="9833334444",
+            gst_number="33TEND0000A1Z1",
+            business_info="Retail"
+        )
+        self.cashier = User.objects.create_user(username="cashier_pm", password="password123")
+        self.cashier_emp = user_registration.objects.create(
+            user=self.cashier,
+            company=self.company,
+            employee_id="CSH_PM01",
+            Role="Cashier",
+            Phone="9833335555",
+            joining_date="2026-01-01",
+            payment="Paid",
+            status="active"
+        )
+        self.customer = Customer.objects.create(
+            company=self.company,
+            name="Alice Smith",
+            phone="9876543210"
+        )
+        self.category = Category.objects.create(company=self.company, name="General")
+        self.supplier = Supplier.objects.create(company=self.company, name="Gen Supplier", phone="9800007777")
+        self.prod = Product.objects.create(
+            company=self.company,
+            category=self.category,
+            supplier=self.supplier,
+            name="Sample Item",
+            product_code="SAMP-001",
+            purchase_price=Decimal("50.00"),
+            selling_price=Decimal("100.00"),
+            gst_percentage=Decimal("18.00"),
+            current_stock=Decimal("100.00"),
+            minimum_stock=Decimal("5.00")
+        )
+        self.client = APIClient()
+
+    def test_customer_display_name_registered_vs_counter_sale(self):
+        # 1. Registered customer attached
+        sale1 = Sale.objects.create(
+            company=self.company,
+            sale_number="SALE-CUST-1",
+            cashier=self.cashier,
+            customer=self.customer,
+            subtotal=Decimal("100.00"),
+            tax_amount=Decimal("18.00"),
+            grand_total=Decimal("118.00"),
+            paid_amount=Decimal("118.00")
+        )
+        self.assertEqual(sale1.customer_display_name, "Alice Smith")
+
+        # 2. No customer attached -> Counter Sale
+        sale2 = Sale.objects.create(
+            company=self.company,
+            sale_number="SALE-CUST-2",
+            cashier=self.cashier,
+            customer=None,
+            subtotal=Decimal("100.00"),
+            tax_amount=Decimal("18.00"),
+            grand_total=Decimal("118.00"),
+            paid_amount=Decimal("118.00")
+        )
+        self.assertEqual(sale2.customer_display_name, "Counter Sale")
+
+        # 3. Invoice customer display name
+        inv = Invoice.objects.create(
+            company=self.company,
+            sale=sale2,
+            invoice_number="INV-CUST-2",
+            customer_name="Walk-in Customer",
+            company_name=self.company.company_name,
+            subtotal=Decimal("100.00"),
+            tax_amount=Decimal("18.00"),
+            discount_amount=Decimal("0.00"),
+            grand_total=Decimal("118.00"),
+            paid_amount=Decimal("118.00"),
+            balance_due=Decimal("0.00"),
+            cashier_name="cashier_pm"
+        )
+        # Should sanitize Walk-in Customer to Counter Sale
+        self.assertEqual(inv.customer_display_name, "Counter Sale")
+
+    def test_payment_mode_display_single_methods(self):
+        sale = Sale.objects.create(
+            company=self.company,
+            sale_number="SALE-SINGLE-METHODS",
+            cashier=self.cashier,
+            subtotal=Decimal("100.00"),
+            tax_amount=Decimal("18.00"),
+            grand_total=Decimal("118.00"),
+            paid_amount=Decimal("118.00")
+        )
+
+        # Cash
+        p_cash = Payment.objects.create(
+            company=self.company,
+            sale=sale,
+            payment_method="CASH",
+            amount=Decimal("118.00"),
+            received_by=self.cashier
+        )
+        self.assertEqual(sale.payment_mode_display, "Cash")
+        self.assertEqual(sale.payment_method, "Cash")
+
+        # UPI
+        p_cash.payment_method = "UPI"
+        p_cash.save()
+        self.assertEqual(sale.payment_mode_display, "UPI")
+
+        # Card
+        p_cash.payment_method = "CARD"
+        p_cash.save()
+        self.assertEqual(sale.payment_mode_display, "Card")
+
+        # Store Credit
+        p_cash.payment_method = "CREDIT"
+        p_cash.save()
+        self.assertEqual(sale.payment_mode_display, "Store Credit")
+
+    def test_payment_mode_display_split_tender(self):
+        sale = Sale.objects.create(
+            company=self.company,
+            sale_number="SALE-SPLIT-1",
+            cashier=self.cashier,
+            subtotal=Decimal("254.24"),
+            tax_amount=Decimal("45.76"),
+            grand_total=Decimal("300.00"),
+            paid_amount=Decimal("300.00")
+        )
+        # Split tender: Cash ₹200 + UPI ₹100
+        Payment.objects.create(
+            company=self.company,
+            sale=sale,
+            payment_method="CASH",
+            amount=Decimal("200.00"),
+            received_by=self.cashier
+        )
+        Payment.objects.create(
+            company=self.company,
+            sale=sale,
+            payment_method="UPI",
+            amount=Decimal("100.00"),
+            received_by=self.cashier
+        )
+        self.assertEqual(sale.payment_mode_display, "Cash ₹200 + UPI ₹100")
+
+    def test_payment_mode_display_no_records_fallback(self):
+        sale_empty = Sale.objects.create(
+            company=self.company,
+            sale_number="SALE-NO-PAY",
+            cashier=self.cashier,
+            subtotal=Decimal("100.00"),
+            tax_amount=Decimal("18.00"),
+            grand_total=Decimal("118.00"),
+            paid_amount=Decimal("0.00")
+        )
+        self.assertEqual(sale_empty.payment_mode_display, "Not recorded")
+
+    def test_checkout_service_split_tender_end_to_end(self):
+        items_data = [{"product_id": self.prod.id, "quantity": Decimal("2.00")}]
+        payments_data = [
+            {"payment_method": "CASH", "amount": Decimal("100.00")},
+            {"payment_method": "UPI", "amount": Decimal("136.00")},
+        ]
+
+        sale, invoice = SalesService.checkout(
+            company=self.company,
+            cashier=self.cashier,
+            items_data=items_data,
+            customer=None,
+            payments_data=payments_data
+        )
+
+        self.assertEqual(sale.grand_total, Decimal("236.00"))
+        self.assertEqual(sale.paid_amount, Decimal("236.00"))
+        self.assertEqual(sale.customer_display_name, "Counter Sale")
+        self.assertEqual(sale.payments.count(), 2)
+        self.assertEqual(sale.payment_mode_display, "Cash ₹100 + UPI ₹136")
+        self.assertEqual(invoice.customer_name, "Counter Sale")
+        self.assertEqual(invoice.payment_summary, "Cash ₹100 + UPI ₹136")
+
+    def test_checkout_api_split_tender_response(self):
+        self.client.force_authenticate(user=self.cashier)
+        payload = {
+            "items": [{"product_id": self.prod.id, "quantity": 1}],
+            "payments": [
+                {"payment_method": "CASH", "amount": "50.00"},
+                {"payment_method": "UPI", "amount": "68.00"}
+            ]
+        }
+        res = self.client.post("/api/sales/checkout/", data=payload, format="json")
+        self.assertEqual(res.status_code, status.HTTP_201_CREATED)
+        self.assertEqual(res.data["sale"]["payment_mode_display"], "Cash ₹50 + UPI ₹68")
+        self.assertEqual(res.data["sale"]["customer_display_name"], "Counter Sale")
+
+
+
 

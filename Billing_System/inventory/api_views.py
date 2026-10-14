@@ -1,6 +1,7 @@
 from rest_framework import viewsets, status
 from rest_framework.views import APIView
 from rest_framework.response import Response
+from rest_framework.decorators import action
 from django.db.models import Q, F
 from django.core.exceptions import ValidationError
 
@@ -55,7 +56,7 @@ class ProductViewSet(viewsets.ModelViewSet):
     serializer_class = ProductSerializer
 
     def get_permissions(self):
-        if self.action in ["list", "retrieve"]:
+        if self.action in ["list", "retrieve", "lookup"]:
             return [IsCashierOrAbove()]
         return [IsManagerOrAbove()]
 
@@ -92,6 +93,85 @@ class ProductViewSet(viewsets.ModelViewSet):
 
     def perform_create(self, serializer):
         serializer.save(company=self.request.company)
+
+    @action(detail=False, methods=["get"], url_path="lookup")
+    def lookup(self, request):
+        code = request.query_params.get("code", "").strip()
+        if not code:
+            return Response(
+                {"found": False, "error": "Barcode or SKU code is required."},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        product = Product.objects.filter(company=request.company).filter(
+            Q(barcode__iexact=code) | Q(product_code__iexact=code)
+        ).first()
+
+        if not product:
+            return Response(
+                {"found": False, "error": f"Product with code '{code}' not found."},
+                status=status.HTTP_404_NOT_FOUND
+            )
+
+        if not product.status:
+            return Response(
+                {
+                    "found": True,
+                    "active": False,
+                    "error": f"Product '{product.name}' is inactive and cannot be sold.",
+                    "product": ProductSerializer(product).data,
+                },
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        return Response(
+            {
+                "found": True,
+                "active": True,
+                "product": ProductSerializer(product).data,
+            },
+            status=status.HTTP_200_OK
+        )
+
+    @action(detail=False, methods=["get", "post"], url_path="generate-barcode")
+    def generate_barcode(self, request):
+        from inventory.services import generate_internal_barcode
+        barcode = generate_internal_barcode(request.company)
+        return Response(
+            {
+                "success": True,
+                "barcode": barcode,
+                "type": "CODE128_INTERNAL",
+            },
+            status=status.HTTP_200_OK
+        )
+
+    @action(detail=False, methods=["get"], url_path="check-barcode")
+    def check_barcode(self, request):
+        code = request.query_params.get("barcode", "").strip() or request.query_params.get("code", "").strip()
+        exclude_id = request.query_params.get("exclude_id", "").strip()
+        if not code:
+            return Response(
+                {"available": False, "error": "Barcode parameter is required."},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        qs = Product.objects.filter(company=request.company, barcode=code)
+        if exclude_id and exclude_id.isdigit():
+            qs = qs.exclude(id=int(exclude_id))
+
+        exists = qs.exists()
+        matched = qs.first() if exists else None
+        return Response(
+            {
+                "available": not exists,
+                "exists": exists,
+                "barcode": code,
+                "product_name": matched.name if matched else None,
+                "conflict_product": matched.name if matched else None,
+            },
+            status=status.HTTP_200_OK
+        )
 
 
 class StockMovementViewSet(viewsets.ReadOnlyModelViewSet):

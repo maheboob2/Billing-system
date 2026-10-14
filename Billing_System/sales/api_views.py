@@ -1,5 +1,8 @@
 import hashlib
 import json
+import secrets
+import random
+from datetime import timedelta
 import time
 from decimal import Decimal
 from django.db import IntegrityError, transaction
@@ -9,6 +12,7 @@ from rest_framework import viewsets, status
 from rest_framework.views import APIView
 from rest_framework.response import Response
 from rest_framework.decorators import action
+from rest_framework.permissions import AllowAny
 from django.core.exceptions import ValidationError
 
 from accounts.tenancy import (
@@ -17,16 +21,28 @@ from accounts.tenancy import (
     IsManagerOrAbove,
     IsCompanyAdmin,
 )
-from sales.models import Customer, Sale, Payment, Invoice, CheckoutIdempotency
-from inventory.models import Product
+from sales.models import (
+    Customer, Sale, SaleItem, Payment, Invoice, CheckoutIdempotency,
+    POSScannerSession, POSScannerScan, ReturnRequest, ReturnItem
+)
+from inventory.models import Product, StockMovement
+from inventory.services import StockService
 from sales.serializers import (
     CustomerSerializer,
     SaleSerializer,
     InvoiceSerializer,
     PaymentSerializer,
     CheckoutRequestSerializer,
+    POSScannerSessionSerializer,
+    ReturnRequestSerializer,
+    ReturnItemSerializer,
 )
-from sales.services import SalesService
+from sales.services import SalesService, quantize_money
+from sales.network_utils import get_pos_scanner_base_url, get_phone_scanner_full_url
+
+# Alias used in SalesQuoteAPIView for readability
+sales_quantize = quantize_money
+
 
 
 class CustomerViewSet(viewsets.ModelViewSet):
@@ -82,6 +98,15 @@ class SaleViewSet(viewsets.ReadOnlyModelViewSet):
         if end_date:
             qs = qs.filter(created_at__date__lte=end_date)
 
+        search = self.request.query_params.get("search", "").strip()
+        if search:
+            qs = qs.filter(
+                Q(sale_number__icontains=search) |
+                Q(invoice__invoice_number__icontains=search) |
+                Q(customer__name__icontains=search) |
+                Q(customer__phone__icontains=search)
+            )
+
         return qs
 
 
@@ -118,6 +143,7 @@ class CheckoutAPIView(APIView):
     Supports Idempotency-Key header to guarantee at-most-once execution.
     """
     permission_classes = [IsCashierOrAbove]
+    throttle_scope = 'checkout'
 
     @staticmethod
     def _compute_payload_hash(data_dict):
@@ -200,31 +226,40 @@ class CheckoutAPIView(APIView):
                 existing_rec.save(update_fields=["status", "request_hash", "user", "updated_at"])
                 idempotency_record = existing_rec
             else:
-                try:
-                    with transaction.atomic():
-                        idempotency_record = CheckoutIdempotency.objects.create(
+                idempotency_record = None
+                for lock_try in range(5):
+                    try:
+                        with transaction.atomic():
+                            idempotency_record = CheckoutIdempotency.objects.create(
+                                company=company,
+                                idempotency_key=idempotency_key,
+                                user=cashier,
+                                request_hash=req_hash,
+                                status="PROCESSING"
+                            )
+                        break
+                    except IntegrityError:
+                        winning_rec = CheckoutIdempotency.objects.filter(
                             company=company,
-                            idempotency_key=idempotency_key,
-                            user=cashier,
-                            request_hash=req_hash,
-                            status="PROCESSING"
+                            idempotency_key=idempotency_key
+                        ).first()
+                        if winning_rec and winning_rec.status == "COMPLETED" and winning_rec.request_hash == req_hash:
+                            resp = Response(
+                                winning_rec.response_body,
+                                status=winning_rec.response_status_code or status.HTTP_200_OK
+                            )
+                            resp["X-Idempotent-Replay"] = "true"
+                            return resp
+                        return Response(
+                            {"error": "A concurrent checkout request with this Idempotency-Key is in progress."},
+                            status=status.HTTP_409_CONFLICT
                         )
-                except IntegrityError:
-                    winning_rec = CheckoutIdempotency.objects.filter(
-                        company=company,
-                        idempotency_key=idempotency_key
-                    ).first()
-                    if winning_rec and winning_rec.status == "COMPLETED" and winning_rec.request_hash == req_hash:
-                        resp = Response(
-                            winning_rec.response_body,
-                            status=winning_rec.response_status_code or status.HTTP_200_OK
-                        )
-                        resp["X-Idempotent-Replay"] = "true"
-                        return resp
-                    return Response(
-                        {"error": "A concurrent checkout request with this Idempotency-Key is in progress."},
-                        status=status.HTTP_409_CONFLICT
-                    )
+                    except Exception as e:
+                        err_str = str(e).lower()
+                        if ("database is locked" in err_str or "table is locked" in err_str or "locked" in err_str) and lock_try < 4:
+                            time.sleep(0.15 * (lock_try + 1))
+                            continue
+                        raise e
 
         serializer = CheckoutRequestSerializer(data=request.data)
         if not serializer.is_valid():
@@ -242,55 +277,63 @@ class CheckoutAPIView(APIView):
             for item in data["items"]
         ]
 
-        try:
-            sale, invoice = SalesService.checkout(
-                company=company,
-                cashier=cashier,
-                items_data=items_input,
-                customer_id=data.get("customer_id"),
-                discount_type=data.get("discount_type", "FLAT"),
-                discount_value=data.get("discount_value", Decimal("0.00")),
-                payments_data=data.get("payments", []),
-                is_interstate=data.get("is_interstate", False),
-                notes=data.get("notes", ""),
-            )
+        sale = None
+        invoice = None
+        for attempt in range(5):
+            try:
+                sale, invoice = SalesService.checkout(
+                    company=company,
+                    cashier=cashier,
+                    items_data=items_input,
+                    customer_id=data.get("customer_id"),
+                    discount_type=data.get("discount_type", "FLAT"),
+                    discount_value=data.get("discount_value", Decimal("0.00")),
+                    payments_data=data.get("payments", []),
+                    is_interstate=data.get("is_interstate", False),
+                    notes=data.get("notes", ""),
+                )
+                break
+            except ValidationError as e:
+                err_msg = str(e.message if hasattr(e, "message") else e)
+                if idempotency_record:
+                    idempotency_record.status = "FAILED"
+                    idempotency_record.response_status_code = status.HTTP_400_BAD_REQUEST
+                    idempotency_record.response_body = {"error": err_msg}
+                    idempotency_record.save(update_fields=["status", "response_status_code", "response_body", "updated_at"])
+                return Response(
+                    {"error": err_msg},
+                    status=status.HTTP_400_BAD_REQUEST,
+                )
+            except Exception as e:
+                err_str = str(e).lower()
+                if ("database is locked" in err_str or "table is locked" in err_str or "locked" in err_str) and attempt < 4:
+                    time.sleep(0.2 * (attempt + 1))
+                    continue
+                err_msg = f"Checkout processing error: {str(e)}"
+                if idempotency_record:
+                    idempotency_record.status = "FAILED"
+                    idempotency_record.response_status_code = status.HTTP_500_INTERNAL_SERVER_ERROR
+                    idempotency_record.response_body = {"error": err_msg}
+                    idempotency_record.save(update_fields=["status", "response_status_code", "response_body", "updated_at"])
+                return Response(
+                    {"error": err_msg},
+                    status=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                )
 
-            response_data = {
-                "message": "Checkout completed successfully.",
-                "sale": SaleSerializer(sale).data,
-                "invoice": InvoiceSerializer(invoice).data,
-            }
+        response_data = {
+            "message": "Checkout completed successfully.",
+            "sale": SaleSerializer(sale).data,
+            "invoice": InvoiceSerializer(invoice).data,
+        }
 
-            if idempotency_record:
-                idempotency_record.status = "COMPLETED"
-                idempotency_record.response_status_code = status.HTTP_201_CREATED
-                idempotency_record.response_body = response_data
-                idempotency_record.sale = sale
-                idempotency_record.save(update_fields=["status", "response_status_code", "response_body", "sale", "updated_at"])
+        if idempotency_record:
+            idempotency_record.status = "COMPLETED"
+            idempotency_record.response_status_code = status.HTTP_201_CREATED
+            idempotency_record.response_body = response_data
+            idempotency_record.sale = sale
+            idempotency_record.save(update_fields=["status", "response_status_code", "response_body", "sale", "updated_at"])
 
-            return Response(response_data, status=status.HTTP_201_CREATED)
-        except ValidationError as e:
-            err_msg = str(e.message if hasattr(e, "message") else e)
-            if idempotency_record:
-                idempotency_record.status = "FAILED"
-                idempotency_record.response_status_code = status.HTTP_400_BAD_REQUEST
-                idempotency_record.response_body = {"error": err_msg}
-                idempotency_record.save(update_fields=["status", "response_status_code", "response_body", "updated_at"])
-            return Response(
-                {"error": err_msg},
-                status=status.HTTP_400_BAD_REQUEST,
-            )
-        except Exception as e:
-            err_msg = f"Checkout processing error: {str(e)}"
-            if idempotency_record:
-                idempotency_record.status = "FAILED"
-                idempotency_record.response_status_code = status.HTTP_500_INTERNAL_SERVER_ERROR
-                idempotency_record.response_body = {"error": err_msg}
-                idempotency_record.save(update_fields=["status", "response_status_code", "response_body", "updated_at"])
-            return Response(
-                {"error": err_msg},
-                status=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            )
+        return Response(response_data, status=status.HTTP_201_CREATED)
 
 
 
@@ -300,26 +343,39 @@ class RecordPaymentAPIView(APIView):
     POST /api/sales/payments/
     """
     permission_classes = [IsCashierOrAbove]
+    throttle_scope = 'payment'
+
+    VALID_PAYMENT_METHODS = {m[0] for m in Payment.PAYMENT_METHODS}
+    MAX_REF_LENGTH = 100
+    MAX_NOTES_LENGTH = 500
 
     def post(self, request):
         sale_id = request.data.get("sale_id")
         amount = request.data.get("amount")
         method = request.data.get("payment_method", "CASH").upper()
-        ref = request.data.get("transaction_reference", "")
-        notes = request.data.get("notes", "")
+        ref = request.data.get("transaction_reference", "")[:self.MAX_REF_LENGTH]
+        notes = request.data.get("notes", "")[:self.MAX_NOTES_LENGTH]
 
         if not sale_id or not amount:
             return Response({"error": "sale_id and amount are required."}, status=status.HTTP_400_BAD_REQUEST)
 
+        if method not in self.VALID_PAYMENT_METHODS:
+            return Response(
+                {"error": f"Invalid payment method. Allowed: {', '.join(sorted(self.VALID_PAYMENT_METHODS))}."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
         try:
-            pay_amt = Decimal(str(amount))
+            pay_amt = quantize_money(amount)
             if pay_amt <= Decimal("0.00"):
                 raise ValueError()
         except Exception:
             return Response({"error": "Amount must be a positive decimal."}, status=status.HTTP_400_BAD_REQUEST)
 
         try:
-            sale = Sale.objects.get(id=sale_id, company=request.company)
+            with transaction.atomic():
+                # Lock sale row to prevent concurrent payment race conditions
+                sale = Sale.objects.select_for_update().get(id=sale_id, company=request.company)
         except Sale.DoesNotExist:
             return Response({"error": "Sale not found."}, status=status.HTTP_404_NOT_FOUND)
 
@@ -332,6 +388,13 @@ class RecordPaymentAPIView(APIView):
                 status=status.HTTP_400_BAD_REQUEST,
             )
 
+        # Validate CREDIT payment requires a customer on the sale
+        if method == "CREDIT" and not sale.customer:
+            return Response(
+                {"error": "Store credit payments require a registered customer on the sale."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
         payment = Payment.objects.create(
             company=request.company,
             sale=sale,
@@ -341,6 +404,11 @@ class RecordPaymentAPIView(APIView):
             received_by=request.user,
             notes=notes,
         )
+
+        # If customer paid via Store Credit, adjust customer's credit balance
+        if method == "CREDIT" and sale.customer:
+            sale.customer.credit_balance += pay_amt
+            sale.customer.save(update_fields=["credit_balance"])
 
         sale.paid_amount += pay_amt
         sale.balance_due -= pay_amt
@@ -415,3 +483,1083 @@ class DashboardMetricsAPIView(APIView):
             "total_suppliers": total_suppliers,
             "top_products": list(top_products),
         })
+
+
+class SalesQuoteAPIView(APIView):
+    """
+    Non-mutating sales quote/preview endpoint.
+    POST /api/sales/quote/
+
+    Returns authoritative subtotal, discount, tax, and grand total
+    using the same calculation logic as checkout WITHOUT creating any
+    Sale, Payment, Invoice, or changing any stock.
+
+    Access: Cashier and above.
+    """
+    permission_classes = [IsCashierOrAbove]
+
+    def post(self, request):
+        from decimal import Decimal as D
+        from django.core.exceptions import ValidationError as DjangoValidationError
+
+        company = request.company
+
+        # Deserialize using the existing checkout serializer (reuse validation)
+        serializer = CheckoutRequestSerializer(data=request.data)
+        if not serializer.is_valid():
+            return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
+        data = serializer.validated_data
+
+        # Resolve customer if provided (read-only)
+        customer_id = data.get("customer_id")
+        customer_obj = None
+        if customer_id:
+            try:
+                customer_obj = Customer.objects.get(id=customer_id, company=company)
+            except Customer.DoesNotExist:
+                return Response(
+                    {"error": f"Customer with ID {customer_id} does not exist."},
+                    status=status.HTTP_400_BAD_REQUEST,
+                )
+
+        items_data = [
+            {"product_id": item["product_id"], "quantity": item["quantity"]}
+            for item in data["items"]
+        ]
+
+        if not items_data:
+            return Response(
+                {"error": "At least one item is required."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        discount_type = data.get("discount_type", "FLAT")
+        discount_value = data.get("discount_value", D("0.00"))
+        is_interstate = data.get("is_interstate", False)
+        payments_data = data.get("payments", [])
+
+        # ----- Read-only calculation (mirrors SalesService.checkout but never persists) -----
+        product_ids = [item["product_id"] for item in items_data]
+        products_qs = Product.objects.filter(id__in=product_ids, company=company)
+        locked_products = {p.id: p for p in products_qs}
+
+        if len(locked_products) != len(set(product_ids)):
+            missing = set(product_ids) - set(locked_products.keys())
+            return Response(
+                {"error": f"Products with IDs {missing} do not exist in your company catalog."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        discount_val = sales_quantize(discount_value)
+        if discount_val < D("0.00"):
+            return Response({"error": "Discount value cannot be negative."}, status=status.HTTP_400_BAD_REQUEST)
+
+        line_items = []
+        gross_subtotal = D("0.00")
+        total_tax = D("0.00")
+        total_cgst = D("0.00")
+        total_sgst = D("0.00")
+        total_igst = D("0.00")
+
+        # Cumulative requested quantity check
+        requested_cumulative = {}
+        for item_input in items_data:
+            p_id = item_input["product_id"]
+            qty = sales_quantize(item_input.get("quantity", 1))
+            if qty <= D("0.00"):
+                return Response(
+                    {"error": "Item quantity must be greater than zero."},
+                    status=status.HTTP_400_BAD_REQUEST,
+                )
+            requested_cumulative[p_id] = requested_cumulative.get(p_id, D("0.00")) + qty
+
+        for p_id, total_requested in requested_cumulative.items():
+            prod = locked_products[p_id]
+            if not prod.status:
+                return Response(
+                    {"error": f"Product '{prod.name}' is inactive and no longer available for sale."},
+                    status=status.HTTP_400_BAD_REQUEST,
+                )
+            if prod.current_stock < total_requested:
+                return Response(
+                    {
+                        "error": f"Insufficient stock for '{prod.name}'. "
+                        f"Available: {prod.current_stock} {prod.unit}, Requested: {total_requested} {prod.unit}."
+                    },
+                    status=status.HTTP_400_BAD_REQUEST,
+                )
+
+        for item_input in items_data:
+            p_id = item_input["product_id"]
+            product = locked_products[p_id]
+            qty = sales_quantize(item_input.get("quantity", 1))
+
+            unit_price = sales_quantize(product.selling_price)
+            gst_pct = sales_quantize(product.gst_percentage)
+            line_subtotal = sales_quantize(unit_price * qty)
+            gross_subtotal += line_subtotal
+
+            line_items.append({
+                "product_id": product.id,
+                "product_name": product.name,
+                "product_code": product.product_code,
+                "unit_price": unit_price,
+                "quantity": qty,
+                "gst_percentage": gst_pct,
+                "subtotal": line_subtotal,
+            })
+
+        # Discounts
+        if discount_type == "PERCENTAGE":
+            if discount_val > D("100.00"):
+                return Response({"error": "Percentage discount cannot exceed 100%."}, status=status.HTTP_400_BAD_REQUEST)
+            total_discount = sales_quantize(gross_subtotal * (discount_val / D("100.00")))
+        else:
+            if discount_val > gross_subtotal:
+                return Response({"error": "Flat discount cannot exceed cart subtotal."}, status=status.HTTP_400_BAD_REQUEST)
+            total_discount = discount_val
+
+        discounted_subtotal = gross_subtotal - total_discount
+        discount_ratio = (discounted_subtotal / gross_subtotal) if gross_subtotal > D("0.00") else D("0.00")
+
+        for item in line_items:
+            item_discount = sales_quantize(item["subtotal"] * (D("1.00") - discount_ratio))
+            item_taxable = item["subtotal"] - item_discount
+            item_tax = sales_quantize(item_taxable * (item["gst_percentage"] / D("100.00")))
+            item_total = item_taxable + item_tax
+
+            item["discount_amount"] = item_discount
+            item["tax_amount"] = item_tax
+            item["total"] = item_total
+
+            total_tax += item_tax
+
+            if is_interstate:
+                total_igst += item_tax
+            else:
+                cgst = sales_quantize(item_tax / D("2.00"))
+                sgst = item_tax - cgst
+                total_cgst += cgst
+                total_sgst += sgst
+
+        grand_total = sales_quantize(gross_subtotal - total_discount + total_tax)
+
+        # Payment computation for the quote (just show expected payment status)
+        if payments_data:
+            total_paid = sales_quantize(sum(
+                sales_quantize(p.get("amount", D("0.00"))) for p in payments_data
+            ))
+        else:
+            total_paid = grand_total
+
+        balance_due = sales_quantize(max(D("0.00"), grand_total - total_paid))
+
+        if total_paid >= grand_total:
+            payment_status_preview = "PAID"
+        elif total_paid > D("0.00"):
+            payment_status_preview = "PARTIALLY_PAID"
+        else:
+            payment_status_preview = "UNPAID"
+
+        # Credit check (informational only - no mutation)
+        credit_warning = None
+        if customer_obj and payments_data:
+            for p in payments_data:
+                if str(p.get("payment_method", "")).upper() == "CREDIT":
+                    pay_amt = sales_quantize(p.get("amount", D("0.00")))
+                    new_bal = customer_obj.credit_balance + pay_amt
+                    if customer_obj.credit_limit > D("0.00") and new_bal > customer_obj.credit_limit:
+                        credit_warning = (
+                            f"Credit limit would be exceeded for '{customer_obj.name}'. "
+                            f"Limit: ₹{customer_obj.credit_limit}, Current: ₹{customer_obj.credit_balance}, "
+                            f"Would become: ₹{new_bal}."
+                        )
+
+        response_data = {
+            "quote": {
+                "subtotal": gross_subtotal,
+                "discount_type": discount_type,
+                "discount_value": discount_val,
+                "discount_amount": total_discount,
+                "tax_amount": total_tax,
+                "cgst_amount": total_cgst,
+                "sgst_amount": total_sgst,
+                "igst_amount": total_igst,
+                "grand_total": grand_total,
+                "paid_amount": total_paid,
+                "balance_due": balance_due,
+                "payment_status_preview": payment_status_preview,
+                "is_interstate": is_interstate,
+            },
+            "items": line_items,
+        }
+
+        if customer_obj:
+            response_data["customer"] = {
+                "id": customer_obj.id,
+                "name": customer_obj.name,
+                "phone": customer_obj.phone,
+                "credit_balance": customer_obj.credit_balance,
+                "credit_limit": customer_obj.credit_limit,
+            }
+
+        if credit_warning:
+            response_data["warnings"] = [credit_warning]
+
+        return Response(response_data, status=status.HTTP_200_OK)
+
+
+class POSScannerSessionCreateAPIView(APIView):
+    """
+    Creates a temporary pairing session for phone camera scanner.
+    Resolves LAN-accessible IP/URL with zero loopback exposure.
+    Supports explicit destination routing (POS cart vs PRODUCT_FORM).
+    Access: Cashier and above.
+    """
+    permission_classes = [IsCashierOrAbove]
+
+    def post(self, request):
+        company = request.company
+        session_token = secrets.token_urlsafe(24)
+        pairing_code = f"{random.randint(100, 999)}-{random.randint(100, 999)}"
+        expires_at = timezone.now() + timedelta(minutes=60)
+        destination = request.data.get("destination", "POS").strip().upper()
+        if destination not in ("POS", "PRODUCT_FORM"):
+            destination = "POS"
+
+        session = POSScannerSession.objects.create(
+            company=company,
+            user=request.user,
+            session_token=session_token,
+            pairing_code=pairing_code,
+            destination=destination,
+            expires_at=expires_at,
+        )
+
+        url_info = get_phone_scanner_full_url(session.session_token, request=request)
+        dest_param = f"&dest={session.destination}"
+        lan_url = f"{url_info['phone_url']}{dest_param}"
+        connect_url = f"/pos/scanner/?session={session.session_token}{dest_param}"
+
+        qr_payload = {
+            "v": 1,
+            "type": "BRISK_POS_SCANNER_PAIR",
+            "session_token": session.session_token,
+            "pairing_code": session.pairing_code,
+            "destination": session.destination,
+            "base_url": url_info["base_url"],
+            "company_name": company.company_name,
+            "terminal_id": "POS-001",
+            "expires_at": session.expires_at.isoformat(),
+        }
+
+        return Response(
+            {
+                "session_token": session.session_token,
+                "pairing_code": session.pairing_code,
+                "destination": session.destination,
+                "connect_url": connect_url,
+                "lan_connect_url": lan_url,
+                "lan_ip": url_info["lan_ip"],
+                "base_url": url_info["base_url"],
+                "url_source": url_info["source"],
+                "is_configured": url_info["is_configured"],
+                "is_https": url_info["is_https"],
+                "all_lan_ips": url_info["all_lan_ips"],
+                "expires_at": session.expires_at.isoformat(),
+                "qr_payload": qr_payload,
+            },
+            status=status.HTTP_201_CREATED,
+        )
+
+
+class POSScannerSessionActiveAPIView(APIView):
+    """
+    Retrieves or establishes the active scanner session for the current terminal/user.
+    Allows seamlessly syncing paired companion devices between POS and Product Form without re-pairing.
+    Access: Cashier and above.
+    """
+    permission_classes = [IsCashierOrAbove]
+
+    def get_or_set_session(self, request):
+        company = request.company
+        now = timezone.now()
+
+        # Invalidate expired sessions
+        POSScannerSession.objects.filter(
+            company=company,
+            status="ACTIVE",
+            expires_at__lte=now
+        ).update(status="EXPIRED")
+
+        requested_dest = (
+            request.GET.get("destination") or
+            request.data.get("destination") or
+            "POS"
+        ).strip().upper()
+        if requested_dest not in ("POS", "PRODUCT_FORM"):
+            requested_dest = "POS"
+
+        active_session = POSScannerSession.objects.filter(
+            company=company,
+            user=request.user,
+            status="ACTIVE",
+            expires_at__gt=now
+        ).order_by("-created_at").first()
+
+        if active_session:
+            if requested_dest and active_session.destination != requested_dest:
+                active_session.destination = requested_dest
+                active_session.save(update_fields=["destination"])
+        else:
+            session_token = secrets.token_urlsafe(24)
+            pairing_code = f"{random.randint(100, 999)}-{random.randint(100, 999)}"
+            expires_at = now + timedelta(hours=2)
+            active_session = POSScannerSession.objects.create(
+                company=company,
+                user=request.user,
+                session_token=session_token,
+                pairing_code=pairing_code,
+                destination=requested_dest,
+                expires_at=expires_at,
+                status="ACTIVE",
+                device_info="",
+            )
+
+        url_info = get_phone_scanner_full_url(active_session.session_token, request=request)
+        dest_param = f"&dest={active_session.destination}"
+        lan_url = f"{url_info['phone_url']}{dest_param}"
+        connect_url = f"/pos/scanner/?session={active_session.session_token}{dest_param}"
+
+        time_since_ping = (now - active_session.last_ping).total_seconds()
+        is_connected = bool(
+            active_session.device_info and
+            not active_session.device_info.startswith("Terminal") and
+            time_since_ping <= 45
+        )
+
+        qr_payload = {
+            "v": 1,
+            "type": "BRISK_POS_SCANNER_PAIR",
+            "session_token": active_session.session_token,
+            "pairing_code": active_session.pairing_code,
+            "destination": active_session.destination,
+            "base_url": url_info["base_url"],
+            "company_name": company.company_name,
+            "terminal_id": "POS-001",
+            "expires_at": active_session.expires_at.isoformat(),
+        }
+
+        return Response({
+            "active": True,
+            "session_token": active_session.session_token,
+            "pairing_code": active_session.pairing_code,
+            "destination": active_session.destination,
+            "connected": is_connected,
+            "device_info": active_session.device_info if is_connected else "",
+            "connect_url": connect_url,
+            "lan_connect_url": lan_url,
+            "lan_ip": url_info["lan_ip"],
+            "base_url": url_info["base_url"],
+            "url_source": url_info["source"],
+            "expires_at": active_session.expires_at.isoformat(),
+            "qr_payload": qr_payload,
+        }, status=status.HTTP_200_OK)
+
+    def get(self, request):
+        return self.get_or_set_session(request)
+
+    def post(self, request):
+        return self.get_or_set_session(request)
+
+
+class POSScannerSessionPollAPIView(APIView):
+    """
+    Polls pending scans for an active POS scanner session.
+    Filters explicitly by destination (POS cart vs PRODUCT_FORM).
+    Tracks explicit connection state (WAITING vs CONNECTED vs DISCONNECTED).
+    Access: Cashier and above.
+    """
+    permission_classes = [IsCashierOrAbove]
+
+    def get(self, request, token):
+        company = request.company
+        session = POSScannerSession.objects.filter(
+            session_token=token,
+            company=company
+        ).first()
+
+        if not session or not session.is_valid():
+            return Response(
+                {
+                    "active": False,
+                    "status": session.status if session else "EXPIRED",
+                    "connected": False,
+                    "destination": session.destination if session else "POS",
+                    "device_info": "",
+                    "scans": [],
+                },
+                status=status.HTTP_200_OK,
+            )
+
+        destination_filter = request.GET.get("destination")
+        time_since_ping = (timezone.now() - session.last_ping).total_seconds()
+        is_connected = bool(
+            session.device_info and
+            not session.device_info.startswith("Terminal") and
+            time_since_ping <= 45
+        )
+
+        unconsumed_scans = session.scans.filter(consumed=False).order_by("created_at")
+        if destination_filter:
+            unconsumed_scans = unconsumed_scans.filter(destination=destination_filter)
+
+        scans_list = list(unconsumed_scans)
+        codes = [s.barcode for s in scans_list]
+
+        if scans_list:
+            session.scans.filter(id__in=[s.id for s in scans_list]).update(consumed=True)
+
+        return Response(
+            {
+                "active": True,
+                "status": session.status,
+                "connected": is_connected,
+                "destination": session.destination,
+                "device_info": session.device_info if is_connected else "",
+                "last_ping_seconds_ago": int(time_since_ping),
+                "scans": codes,
+            },
+            status=status.HTTP_200_OK,
+        )
+
+
+class POSScannerSessionScanAPIView(APIView):
+    """
+    Endpoint called by phone camera client to submit a scanned barcode or ping heartbeat.
+    Session-token authorized; safe for phone camera on local Wi-Fi.
+    Routes scan to the intended target destination (PRODUCT_FORM vs POS Cart).
+    """
+    permission_classes = [AllowAny]
+
+    def post(self, request, token):
+        session = POSScannerSession.objects.filter(session_token=token).first()
+        if not session:
+            clean_code = token.replace("-", "").strip()
+            session = POSScannerSession.objects.filter(pairing_code__in=[token, clean_code]).first()
+
+        if not session:
+            return Response(
+                {"error": "Scanner pairing session not found."},
+                status=status.HTTP_404_NOT_FOUND,
+            )
+
+        if not session.is_valid():
+            return Response(
+                {"error": "Scanner pairing session is invalid or expired."},
+                status=status.HTTP_404_NOT_FOUND,
+            )
+
+        now = timezone.now()
+        fields_to_update = ["last_ping"]
+        session.last_ping = now
+
+        device_info = request.data.get("device_info", "").strip()
+        if device_info and device_info != session.device_info:
+            session.device_info = device_info
+            fields_to_update.append("device_info")
+
+        if session.status != "ACTIVE":
+            session.status = "ACTIVE"
+            fields_to_update.append("status")
+
+        session.save(update_fields=fields_to_update)
+
+        barcode = request.data.get("barcode", "").strip()
+        idempotency_key = request.data.get("idempotency_key", "").strip()
+
+        # Allow handshake/heartbeat ping to establish device presence without creating dummy scan
+        if request.data.get("heartbeat") or barcode in ("__PING__", "__HEARTBEAT__"):
+            return Response(
+                {
+                    "success": True,
+                    "connected": True,
+                    "session_token": session.session_token,
+                    "pairing_code": session.pairing_code,
+                    "destination": session.destination,
+                    "company_name": session.company.company_name,
+                    "terminal_id": "POS-001",
+                    "device_info": session.device_info,
+                },
+                status=status.HTTP_200_OK,
+            )
+
+        if not barcode:
+            return Response(
+                {"error": "Barcode value is required."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        # Idempotency check for network retries
+        if idempotency_key:
+            existing_scan = POSScannerScan.objects.filter(session=session, idempotency_key=idempotency_key).first()
+            if existing_scan:
+                return Response(
+                    {
+                        "success": True,
+                        "barcode": existing_scan.barcode,
+                        "destination": existing_scan.destination,
+                        "duplicate_suppressed": True,
+                        "idempotent_replay": True,
+                        "message": "Scan already processed.",
+                    },
+                    status=status.HTTP_200_OK,
+                )
+
+        # Camera frame burst suppression (within 1.0s on the exact same barcode)
+        recent_duplicate = POSScannerScan.objects.filter(
+            session=session,
+            barcode=barcode,
+            created_at__gte=now - timedelta(seconds=1)
+        ).first()
+        if recent_duplicate:
+            return Response(
+                {
+                    "success": True,
+                    "barcode": recent_duplicate.barcode,
+                    "destination": recent_duplicate.destination,
+                    "duplicate_suppressed": True,
+                    "message": "Duplicate camera frame suppressed.",
+                },
+                status=status.HTTP_200_OK,
+            )
+
+        target_dest = (request.data.get("destination") or session.destination or "POS").strip().upper()
+
+        # ── Destination 1: PRODUCT FORM ───────────────────────────────────────
+        if target_dest == "PRODUCT_FORM":
+            product = Product.objects.filter(company=session.company, barcode=barcode).first()
+            scan = POSScannerScan.objects.create(
+                session=session,
+                barcode=barcode,
+                destination="PRODUCT_FORM",
+                idempotency_key=idempotency_key
+            )
+            return Response(
+                {
+                    "success": True,
+                    "barcode": scan.barcode,
+                    "destination": "PRODUCT_FORM",
+                    "scanned_at": scan.created_at.isoformat(),
+                    "found": bool(product),
+                    "product_name": product.name if product else None,
+                    "company_name": session.company.company_name,
+                    "message": f"Barcode '{barcode}' sent to Product Form",
+                },
+                status=status.HTTP_201_CREATED,
+            )
+
+        # ── Destination 2: POS CART ───────────────────────────────────────────
+        product = Product.objects.filter(company=session.company, barcode=barcode, status=True).first()
+        if not product:
+            product = Product.objects.filter(company=session.company, product_code=barcode, status=True).first()
+
+        if not product:
+            # Check if inactive product exists
+            inactive_prod = Product.objects.filter(company=session.company, barcode=barcode, status=False).first()
+            if not inactive_prod:
+                inactive_prod = Product.objects.filter(company=session.company, product_code=barcode, status=False).first()
+
+            if inactive_prod:
+                return Response(
+                    {
+                        "success": False,
+                        "found": True,
+                        "inactive": True,
+                        "barcode": barcode,
+                        "destination": "POS",
+                        "product_name": inactive_prod.name,
+                        "error": f"Product '{inactive_prod.name}' is inactive and cannot be sold.",
+                    },
+                    status=status.HTTP_200_OK,
+                )
+
+            # Barcode not found in catalog
+            return Response(
+                {
+                    "success": False,
+                    "found": False,
+                    "barcode": barcode,
+                    "destination": "POS",
+                    "error": f"Barcode '{barcode}' not found in store catalog.",
+                },
+                status=status.HTTP_200_OK,
+            )
+
+        # Check stock limits
+        current_stock = float(product.current_stock or 0)
+        if current_stock <= 0:
+            return Response(
+                {
+                    "success": False,
+                    "found": True,
+                    "out_of_stock": True,
+                    "barcode": barcode,
+                    "destination": "POS",
+                    "product_name": product.name,
+                    "current_stock": 0,
+                    "error": f"Product '{product.name}' is out of stock (Available: 0).",
+                },
+                status=status.HTTP_200_OK,
+            )
+
+        # Product valid and ready for POS Cart
+        scan = POSScannerScan.objects.create(
+            session=session,
+            barcode=barcode,
+            destination="POS",
+            idempotency_key=idempotency_key
+        )
+        return Response(
+            {
+                "success": True,
+                "found": True,
+                "barcode": scan.barcode,
+                "destination": "POS",
+                "scanned_at": scan.created_at.isoformat(),
+                "product_name": product.name,
+                "selling_price": float(product.selling_price),
+                "current_stock": current_stock,
+                "company_name": session.company.company_name,
+                "message": f"Added '{product.name}' to POS register",
+            },
+            status=status.HTTP_201_CREATED,
+        )
+
+
+class POSScannerSessionDisconnectAPIView(APIView):
+    """
+    Disconnects an active phone scanner pairing session.
+    AllowAny so both PC cashier and phone companion client can gracefully disconnect.
+    """
+    permission_classes = [AllowAny]
+
+    def post(self, request, token):
+        session = POSScannerSession.objects.filter(session_token=token).first()
+        if session:
+            session.status = "DISCONNECTED"
+            session.device_info = ""
+            session.save(update_fields=["status", "device_info"])
+
+        return Response({"success": True, "status": "DISCONNECTED"}, status=status.HTTP_200_OK)
+
+
+class POSScannerSessionRevokeAPIView(APIView):
+    """
+    Revokes an active pairing session immediately from the POS terminal.
+    Requires Cashier or above permissions.
+    """
+    permission_classes = [IsCashierOrAbove]
+
+    def post(self, request, token):
+        session = POSScannerSession.objects.filter(
+            session_token=token,
+            company=request.company
+        ).first()
+        if not session:
+            return Response({"error": "Session not found."}, status=status.HTTP_404_NOT_FOUND)
+
+        session.revoke()
+        return Response({"success": True, "status": "REVOKED"}, status=status.HTTP_200_OK)
+
+
+class POSScannerNetworkDiagnosticsAPIView(APIView):
+    """
+    Returns server network interface diagnostics for POS Scanner settings and companion setup.
+    Access: Cashier and above.
+    """
+    permission_classes = [IsCashierOrAbove]
+
+    def get(self, request):
+        base_info = get_pos_scanner_base_url(request=request)
+        return Response(
+            {
+                "base_url": base_info["base_url"],
+                "lan_ip": base_info["lan_ip"],
+                "port": base_info["port"],
+                "url_source": base_info["source"],
+                "is_configured": base_info["is_configured"],
+                "is_https": base_info["is_https"],
+                "all_lan_ips": base_info["all_lan_ips"],
+                "server_host": request.get_host(),
+                "windows_firewall_hint": "Ensure Python or port 8000 is allowed through Windows Defender Firewall for inbound connections.",
+                "wifi_isolation_hint": "Phone and PC must be on the same Wi-Fi network with AP/Client Isolation disabled in router.",
+            },
+            status=status.HTTP_200_OK,
+        )
+
+
+class ReturnRequestViewSet(viewsets.ModelViewSet):
+    """
+    Return and Refund Management API.
+    - Cashiers can view and submit return requests.
+    - Only Managers and above can Approve or Reject return requests.
+    - Approval restores inventory stock safely with row locking and audit trail.
+    - Historical Sale and SaleItem records are permanently preserved.
+    """
+    serializer_class = ReturnRequestSerializer
+
+    def get_permissions(self):
+        if self.action in ["list", "retrieve", "create", "approve", "reject"]:
+            return [IsCashierOrAbove()]
+        return [IsManagerOrAbove()]
+
+    def get_queryset(self):
+        qs = ReturnRequest.objects.filter(company=self.request.company).select_related(
+            "sale", "invoice", "customer", "created_by", "approved_by"
+        ).prefetch_related("items__product")
+
+        status_param = self.request.query_params.get("status")
+        if status_param:
+            qs = qs.filter(status=status_param.upper())
+
+        search = self.request.query_params.get("search", "").strip()
+        if search:
+            qs = qs.filter(
+                Q(return_number__icontains=search) |
+                Q(sale__sale_number__icontains=search) |
+                Q(customer__name__icontains=search)
+            )
+
+        return qs
+
+    def create(self, request, *args, **kwargs):
+        company = request.company
+        sale_id = request.data.get("sale_id")
+        sale_number = str(request.data.get("sale_number") or "").strip()
+        invoice_number = str(request.data.get("invoice_number") or "").strip()
+
+        with transaction.atomic():
+            sale = None
+            if sale_id:
+                sale = Sale.objects.select_for_update().filter(company=company, id=sale_id).first()
+            elif sale_number:
+                sale = Sale.objects.select_for_update().filter(company=company, sale_number=sale_number).first()
+            elif invoice_number:
+                sale = Sale.objects.select_for_update().filter(
+                    company=company
+                ).filter(
+                    Q(invoice__invoice_number=invoice_number) | Q(sale_number=invoice_number)
+                ).first()
+
+            if not sale:
+                return Response(
+                    {"error": "Original sale/invoice not found for this company."},
+                    status=status.HTTP_404_NOT_FOUND,
+                )
+
+            items_data = request.data.get("items", [])
+            if not items_data:
+                return Response(
+                    {"error": "At least one item must be selected for return."},
+                    status=status.HTTP_400_BAD_REQUEST,
+                )
+
+            reason = request.data.get("reason", "CUSTOMER_CHANGED_MIND").upper()
+            if reason not in dict(ReturnRequest.REASON_CHOICES):
+                reason = "OTHER"
+
+            notes = request.data.get("notes", "").strip()
+            refund_method = request.data.get("refund_payment_method", "CASH").upper()
+            if refund_method not in dict(Payment.PAYMENT_METHODS):
+                refund_method = "CASH"
+
+            total_refund_amount = Decimal("0.00")
+            validated_items = []
+
+            for item_entry in items_data:
+                sale_item_id = item_entry.get("sale_item_id")
+                return_qty = Decimal(str(item_entry.get("quantity", "0")))
+                restock = bool(item_entry.get("restock", True))
+
+                if return_qty <= Decimal("0.00"):
+                    continue
+
+                sale_item = SaleItem.objects.select_for_update().filter(sale=sale, id=sale_item_id).first()
+                if not sale_item:
+                    return Response(
+                        {"error": f"Item {sale_item_id} does not belong to sale {sale.sale_number}."},
+                        status=status.HTTP_400_BAD_REQUEST,
+                    )
+
+                # Check already returned quantity for this sale item
+                already_returned = ReturnItem.objects.filter(
+                    sale_item=sale_item,
+                    return_request__status__in=["PENDING", "APPROVED", "COMPLETED"]
+                ).aggregate(total=Sum("quantity"))["total"] or Decimal("0.00")
+
+                max_eligible_qty = sale_item.quantity - already_returned
+                if return_qty > max_eligible_qty:
+                    return Response(
+                        {
+                            "error": f"Requested return quantity ({return_qty}) exceeds eligible remaining quantity ({max_eligible_qty}) for '{sale_item.product_name}'."
+                        },
+                        status=status.HTTP_400_BAD_REQUEST,
+                    )
+
+                unit_refund = quantize_money(sale_item.total / sale_item.quantity)
+                line_refund = quantize_money(unit_refund * return_qty)
+                total_refund_amount += line_refund
+
+                validated_items.append({
+                    "sale_item": sale_item,
+                    "product": sale_item.product,
+                    "quantity": return_qty,
+                    "refund_unit_price": unit_refund,
+                    "refund_total": line_refund,
+                    "restock": restock,
+                })
+
+            if not validated_items:
+                return Response(
+                    {"error": "No valid return quantities specified."},
+                    status=status.HTTP_400_BAD_REQUEST,
+                )
+
+            return_number = f"RET-{company.id}-{int(time.time())}-{secrets.token_hex(4).upper()}"
+
+            # Determine if direct approval applies (Owner or Manager creates the return)
+            is_direct_approval = request.user_role in ["Admin", "Manager"]
+            initial_status = "APPROVED" if is_direct_approval else "PENDING"
+            now = timezone.now()
+
+            ret_req = ReturnRequest.objects.create(
+                company=company,
+                return_number=return_number,
+                sale=sale,
+                invoice=getattr(sale, "invoice", None),
+                customer=sale.customer,
+                status=initial_status,
+                reason=reason,
+                refund_amount=total_refund_amount,
+                refund_payment_method=refund_method,
+                notes=notes,
+                created_by=request.user,
+                approved_by=request.user if is_direct_approval else None,
+                approved_at=now if is_direct_approval else None,
+            )
+
+            for v in validated_items:
+                ReturnItem.objects.create(
+                    return_request=ret_req,
+                    sale_item=v["sale_item"],
+                    product=v["product"],
+                    quantity=v["quantity"],
+                    refund_unit_price=v["refund_unit_price"],
+                    refund_total=v["refund_total"],
+                    restock=v["restock"],
+                )
+
+            # If created by Owner/Manager, execute inventory restock and refund immediately
+            if is_direct_approval:
+                for item in ret_req.items.select_related("product"):
+                    if item.restock:
+                        StockService.adjust_stock(
+                            company=company,
+                            product=item.product,
+                            movement_type="RETURN",
+                            quantity=item.quantity,
+                            user=request.user,
+                            reference=ret_req.return_number,
+                            reason=f"Customer Return: {ret_req.get_reason_display()}",
+                        )
+                    else:
+                        StockMovement.objects.create(
+                            company=company,
+                            product=item.product,
+                            movement_type="DAMAGE",
+                            quantity=-abs(item.quantity),
+                            previous_stock=item.product.current_stock,
+                            new_stock=item.product.current_stock,
+                            reference=ret_req.return_number,
+                            user=request.user,
+                            reason=f"Defective/Damaged Return (Quarantine - Not Sellable): {ret_req.get_reason_display()}",
+                        )
+
+                Payment.objects.create(
+                    company=company,
+                    sale=ret_req.sale,
+                    payment_method=ret_req.refund_payment_method,
+                    amount=-ret_req.refund_amount,
+                    transaction_reference=f"REFUND-{ret_req.return_number}",
+                    received_by=request.user,
+                    notes=f"Direct return refund for Return {ret_req.return_number} (by {request.user.username})",
+                )
+
+        try:
+            from dashboard.sync_service import SyncService
+            SyncService.queue_return(ret_req)
+        except Exception:
+            pass
+
+        serializer = ReturnRequestSerializer(ret_req)
+        return Response(serializer.data, status=status.HTTP_201_CREATED)
+
+    @action(detail=True, methods=["post"], url_path="approve")
+    def approve(self, request, pk=None):
+        company = request.company
+
+        with transaction.atomic():
+            return_req = ReturnRequest.objects.select_for_update().filter(company=company, pk=pk).first()
+            if not return_req:
+                return Response({"error": "Return request not found."}, status=status.HTTP_404_NOT_FOUND)
+
+            if return_req.status != "PENDING":
+                return Response(
+                    {"error": f"Cannot approve return in status '{return_req.status}'."},
+                    status=status.HTTP_400_BAD_REQUEST,
+                )
+
+            # Manager Authorization Resolution:
+            approver = request.user
+            if request.user_role not in ["Admin", "Manager"]:
+                # Cashier is logged in -> verify on-site manager credentials
+                mgr_user_name = request.data.get("manager_username", "").strip()
+                mgr_pin = request.data.get("manager_pin", "").strip()
+                if not mgr_user_name or not mgr_pin:
+                    return Response(
+                        {"error": "Manager approval required. Please provide manager credentials or approval PIN."},
+                        status=status.HTTP_403_FORBIDDEN
+                    )
+
+                from django.contrib.auth import authenticate
+                authenticated_mgr = authenticate(request, username=mgr_user_name, password=mgr_pin)
+                if not authenticated_mgr:
+                    return Response(
+                        {"error": "Invalid manager credentials or PIN."},
+                        status=status.HTTP_403_FORBIDDEN
+                    )
+
+                from accounts.tenancy import get_user_role, get_user_company
+                mgr_comp = get_user_company(authenticated_mgr)
+                mgr_role = get_user_role(authenticated_mgr)
+                if mgr_comp != company or mgr_role not in ["Admin", "Manager"]:
+                    return Response(
+                        {"error": "Provided credentials do not belong to an authorized Manager for this company."},
+                        status=status.HTTP_403_FORBIDDEN
+                    )
+                approver = authenticated_mgr
+
+            # 1. Restock items that are flagged for restock
+            for item in return_req.items.select_related("product"):
+                if item.restock:
+                    StockService.adjust_stock(
+                        company=company,
+                        product=item.product,
+                        movement_type="RETURN",
+                        quantity=item.quantity,
+                        user=approver,
+                        reference=return_req.return_number,
+                        reason=f"Customer Return: {return_req.get_reason_display()}",
+                    )
+                else:
+                    StockMovement.objects.create(
+                        company=company,
+                        product=item.product,
+                        movement_type="DAMAGE",
+                        quantity=-abs(item.quantity),
+                        previous_stock=item.product.current_stock,
+                        new_stock=item.product.current_stock,
+                        reference=return_req.return_number,
+                        user=approver,
+                        reason=f"Defective/Damaged Return (Quarantine - Not Sellable): {return_req.get_reason_display()}",
+                    )
+
+            # 2. Record refund transaction / payment audit record
+            Payment.objects.create(
+                company=company,
+                sale=return_req.sale,
+                payment_method=return_req.refund_payment_method,
+                amount=-return_req.refund_amount,
+                transaction_reference=f"REFUND-{return_req.return_number}",
+                received_by=approver,
+                notes=f"Approved refund for Return {return_req.return_number} (by {approver.username})",
+            )
+
+            # 3. Update return request status
+            return_req.status = "APPROVED"
+            return_req.approved_by = approver
+            return_req.approved_at = timezone.now()
+            return_req.save()
+
+        serializer = ReturnRequestSerializer(return_req)
+        return Response(
+            {
+                "message": "Return request approved successfully. Stock restored and refund recorded.",
+                "return": serializer.data,
+            },
+            status=status.HTTP_200_OK,
+        )
+
+    @action(detail=True, methods=["post"], url_path="reject")
+    def reject(self, request, pk=None):
+        company = request.company
+
+        with transaction.atomic():
+            return_req = ReturnRequest.objects.select_for_update().filter(company=company, pk=pk).first()
+            if not return_req:
+                return Response({"error": "Return request not found."}, status=status.HTTP_404_NOT_FOUND)
+
+            if return_req.status != "PENDING":
+                return Response(
+                    {"error": f"Cannot reject return in status '{return_req.status}'."},
+                    status=status.HTTP_400_BAD_REQUEST,
+                )
+
+            # Manager Authorization Resolution:
+            approver = request.user
+            if request.user_role not in ["Admin", "Manager"]:
+                mgr_user_name = request.data.get("manager_username", "").strip()
+                mgr_pin = request.data.get("manager_pin", "").strip()
+                if not mgr_user_name or not mgr_pin:
+                    return Response(
+                        {"error": "Manager approval required. Please provide manager credentials or approval PIN."},
+                        status=status.HTTP_403_FORBIDDEN
+                    )
+
+                from django.contrib.auth import authenticate
+                authenticated_mgr = authenticate(request, username=mgr_user_name, password=mgr_pin)
+                if not authenticated_mgr:
+                    return Response(
+                        {"error": "Invalid manager credentials or PIN."},
+                        status=status.HTTP_403_FORBIDDEN
+                    )
+
+                from accounts.tenancy import get_user_role, get_user_company
+                mgr_comp = get_user_company(authenticated_mgr)
+                mgr_role = get_user_role(authenticated_mgr)
+                if mgr_comp != company or mgr_role not in ["Admin", "Manager"]:
+                    return Response(
+                        {"error": "Provided credentials do not belong to an authorized Manager for this company."},
+                        status=status.HTTP_403_FORBIDDEN
+                    )
+                approver = authenticated_mgr
+
+            rejection_reason = request.data.get("reason", "").strip() or "Rejected by manager."
+
+            return_req.status = "REJECTED"
+            return_req.rejection_reason = rejection_reason
+            return_req.approved_by = approver
+            return_req.approved_at = timezone.now()
+            return_req.save()
+
+        serializer = ReturnRequestSerializer(return_req)
+        return Response(
+            {
+                "message": "Return request rejected.",
+                "return": serializer.data,
+            },
+            status=status.HTTP_200_OK,
+        )
+

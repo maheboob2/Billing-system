@@ -6,7 +6,7 @@ from .forms import CategoryForm, SupplierForm, ProductForm
 
 
 @company_required
-@role_required(["Admin", "Manager", "Cashier"])
+@role_required(["Admin", "Manager"])
 def category_list(request):
     company = request.company
     categories = Category.objects.filter(company=company)
@@ -82,7 +82,7 @@ def deactivate_category(request, id):
 
 
 @company_required
-@role_required(["Admin", "Manager", "Cashier"])
+@role_required(["Admin", "Manager"])
 def supplier_list(request):
     company = request.company
     suppliers = Supplier.objects.filter(company=company)
@@ -158,7 +158,7 @@ def deactivate_supplier(request, id):
 
 
 @company_required
-@role_required(["Admin", "Manager", "Cashier"])
+@role_required(["Admin", "Manager", "Worker", "Stock Manager"])
 def product_list(request):
     company = request.company
     products = Product.objects.filter(company=company).select_related("category", "supplier")

@@ -1,0 +1,14 @@
+<resources>
+    <string name="app_name">Brisk POS Scanner</string>
+    <string name="pair_scanner_title">Pair with POS Terminal</string>
+    <string name="status_disconnected">Disconnected</string>
+    <string name="status_connected">Connected</string>
+    <string name="status_offline_queue">Offline (Queued)</string>
+    <string name="manual_input_hint">Enter Barcode / SKU manually…</string>
+    <string name="btn_send">Send to POS</string>
+    <string name="btn_pair">Pair with POS</string>
+    <string name="btn_disconnect">Disconnect</string>
+    <string name="btn_torch">Torch</string>
+    <string name="product_not_found">Product not found in store catalog</string>
+    <string name="scan_success">Scanned &amp; Sent to POS Cart</string>
+</resources>

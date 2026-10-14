@@ -29,6 +29,7 @@ class user_registration(models.Model):
     Role=[
         ("Manager","Manager"),
         ("Cashier","Cashier"),
+        ("Stock Manager","Stock Manager"),
         ("Worker","Worker")
     ]
 
@@ -37,12 +38,12 @@ class user_registration(models.Model):
     joining_date=models.DateField()
 
     monthaly_salary = models.DecimalField(
-    max_digits=10,
-    decimal_places=2,
-    default=0,
-    blank=False,
-    null=False
-)
+        max_digits=10,
+        decimal_places=2,
+        default=0,
+        blank=False,
+        null=False
+    )
     payment=[
         ("Paid","Paid"),
         ("Unpaid","Unpaid"),
@@ -58,8 +59,77 @@ class user_registration(models.Model):
 
     status=models.CharField(max_length=20,choices=status)
 
+    @property
+    def department(self):
+        role_map = {
+            "Manager": "Store Management",
+            "Cashier": "Front Billing & POS",
+            "Stock Manager": "Inventory & Logistics",
+            "Worker": "Store Operations",
+        }
+        return role_map.get(self.Role, "Store Operations")
+
     def __str__(self):
-                return f"{self.employee_id}"
+        return f"{self.employee_id}"
+
+
+class SalaryPayment(models.Model):
+    """
+    Authoritative monthly salary disbursement and payroll record.
+    Tracks each payment made to an employee for a specific month and year.
+    """
+    STATUS_CHOICES = [
+        ("Paid", "Paid"),
+        ("Partial", "Partially Paid"),
+        ("Unpaid", "Unpaid"),
+    ]
+
+    company = models.ForeignKey(
+        companyRegistration,
+        on_delete=models.CASCADE,
+        related_name="salary_payments"
+    )
+    employee = models.ForeignKey(
+        user_registration,
+        on_delete=models.CASCADE,
+        related_name="salary_records"
+    )
+    year = models.PositiveIntegerField()
+    month = models.PositiveSmallIntegerField()  # 1 to 12
+
+    basic_salary = models.DecimalField(max_digits=10, decimal_places=2, default=0)
+    allowances = models.DecimalField(max_digits=10, decimal_places=2, default=0)
+    deductions = models.DecimalField(max_digits=10, decimal_places=2, default=0)
+    gross_salary = models.DecimalField(max_digits=10, decimal_places=2, default=0)
+    net_payable = models.DecimalField(max_digits=10, decimal_places=2, default=0)
+    paid_amount = models.DecimalField(max_digits=10, decimal_places=2, default=0)
+
+    payment_status = models.CharField(max_length=20, choices=STATUS_CHOICES, default="Unpaid")
+    payment_method = models.CharField(max_length=30, blank=True, default="Bank Transfer")
+    payment_reference = models.CharField(max_length=100, blank=True)
+    payment_date = models.DateField(null=True, blank=True)
+    notes = models.TextField(blank=True)
+
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        unique_together = ("company", "employee", "year", "month")
+        ordering = ["-year", "-month", "employee__employee_id"]
+
+    @property
+    def pending_amount(self):
+        from decimal import Decimal
+        return max(Decimal("0.00"), self.net_payable - self.paid_amount)
+
+    @property
+    def period_display(self):
+        import calendar
+        month_name = calendar.month_name[self.month] if 1 <= self.month <= 12 else str(self.month)
+        return f"{month_name} {self.year}"
+
+    def __str__(self):
+        return f"{self.employee.employee_id} - {self.period_display} - {self.payment_status}"
 
 
 

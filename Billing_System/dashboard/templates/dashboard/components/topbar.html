@@ -1,0 +1,444 @@
+<header class="global-topbar">
+    <div class="topbar-left">
+        <button type="button" class="sidebar-toggle-btn" id="sidebar-toggle-btn" title="Toggle Navigation Sidebar (Esc to close)" aria-label="Toggle Navigation">
+            <i class="bi bi-list"></i>
+        </button>
+        <div class="topbar-brand-title">
+            {% if '/cart' in request.path %}
+                <i class="bi bi-shop-window" style="color: var(--primary); font-size: 16px;"></i>
+                <span>POS Terminal</span>
+                <span class="sep">/</span>
+                <span class="store-name">{{ company.company_name|default:"Store" }}</span>
+            {% elif '/manager_dashboard' in request.path or '/dashboard' in request.path or request.path == '/' %}
+                <i class="bi bi-speedometer2" style="color: var(--primary); font-size: 16px;"></i>
+                <span>Dashboard</span>
+                <span class="sep">/</span>
+                <span class="store-name">{{ company.company_name|default:"Store" }}</span>
+            {% elif '/product' in request.path or '/category' in request.path %}
+                <i class="bi bi-box-seam" style="color: var(--primary); font-size: 16px;"></i>
+                <span>Inventory</span>
+                <span class="sep">/</span>
+                <span class="store-name">{{ company.company_name|default:"Store" }}</span>
+            {% elif '/purchase' in request.path %}
+                <i class="bi bi-bag-check" style="color: var(--primary); font-size: 16px;"></i>
+                <span>Purchases</span>
+                <span class="sep">/</span>
+                <span class="store-name">{{ company.company_name|default:"Store" }}</span>
+            {% elif '/sales' in request.path or '/invoice' in request.path %}
+                <i class="bi bi-receipt" style="color: var(--primary); font-size: 16px;"></i>
+                <span>Sales Records</span>
+                <span class="sep">/</span>
+                <span class="store-name">{{ company.company_name|default:"Store" }}</span>
+            {% elif '/returns' in request.path %}
+                <i class="bi bi-arrow-counterclockwise" style="color: var(--primary); font-size: 16px;"></i>
+                <span>Returns & Refunds</span>
+                <span class="sep">/</span>
+                <span class="store-name">{{ company.company_name|default:"Store" }}</span>
+            {% elif '/reports' in request.path %}
+                <i class="bi bi-bar-chart-line" style="color: var(--primary); font-size: 16px;"></i>
+                <span>Reports & Analytics</span>
+                <span class="sep">/</span>
+                <span class="store-name">{{ company.company_name|default:"Store" }}</span>
+            {% elif '/employee' in request.path or '/view_employee' in request.path %}
+                <i class="bi bi-people" style="color: var(--primary); font-size: 16px;"></i>
+                <span>Employees & Team</span>
+                <span class="sep">/</span>
+                <span class="store-name">{{ company.company_name|default:"Store" }}</span>
+            {% elif '/settings' in request.path %}
+                <i class="bi bi-sliders" style="color: var(--primary); font-size: 16px;"></i>
+                <span>Settings</span>
+                <span class="sep">/</span>
+                <span class="store-name">{{ company.company_name|default:"Store" }}</span>
+            {% else %}
+                <i class="bi bi-receipt-cutoff" style="color: var(--primary); font-size: 16px;"></i>
+                <span>Retail POS</span>
+                <span class="sep">/</span>
+                <span class="store-name">{{ company.company_name|default:"Store" }}</span>
+            {% endif %}
+        </div>
+    </div>
+
+    <div class="topbar-center">
+        {% if '/cart' in request.path %}
+        <!-- POS SPECIFIC KEYBOARD SHORTCUTS (RENDERED ON POS / CART ONLY!) -->
+        <div class="pos-shortcut-pill pos-f2-pill" id="pos-topbar-f2-btn" onclick="if(window.Cart&&Cart.openProductSearchOverlay){Cart.openProductSearchOverlay();}" title="Open Product / Barcode Search (F2)" style="cursor: pointer; background: var(--primary-soft); border-color: var(--primary); color: var(--primary-strong);">
+            <kbd style="background: var(--surface); color: var(--text); border: 1px solid var(--border);">F2</kbd> Product / Barcode Search
+        </div>
+        <div class="pos-shortcut-pill" title="Press Enter after scanning or typing barcode">
+            <kbd>↵</kbd> Scan / Enter
+        </div>
+        <div class="pos-shortcut-pill" title="Press Ctrl+Enter to open Tender & Settle payment">
+            <kbd>Ctrl+↵</kbd> Tender
+        </div>
+        <div class="pos-shortcut-pill" title="Press Esc to clear scanner or close modals">
+            <kbd>Esc</kbd> Clear
+        </div>
+        {% else %}
+        <!-- Global Search Controller (F2 on non-POS routes) -->
+        {% include "dashboard/components/global_search.html" %}
+        {% endif %}
+    </div>
+
+    <div class="topbar-right">
+        <!-- Cloud Sync Status Indicator -->
+        <a href="{% url 'settings_telegram' %}" id="cloud-sync-nav-pill"
+           style="display: inline-flex; align-items: center; gap: 6px; font-size: 11px; padding: 4px 10px; border-radius: 20px; text-decoration: none;
+           {% if cloud_sync_info and cloud_sync_info.pending_count > 0 %}
+             background: rgba(245, 158, 11, 0.12); color: #f59e0b; border: 1px solid rgba(245, 158, 11, 0.25);
+           {% elif cloud_sync_info and not cloud_sync_info.is_online %}
+             background: rgba(239, 68, 68, 0.12); color: #ef4444; border: 1px solid rgba(239, 68, 68, 0.25);
+           {% elif cloud_sync_info and cloud_sync_info.total_synced_count > 0 %}
+             background: rgba(16, 185, 129, 0.12); color: #10b981; border: 1px solid rgba(16, 185, 129, 0.25);
+           {% else %}
+             background: rgba(148, 163, 184, 0.12); color: #94a3b8; border: 1px solid rgba(148, 163, 184, 0.25);
+           {% endif %}"
+           title="Store Cloud Synchronization (Last: {{ cloud_sync_info.last_sync_timestamp_display|default:'Never' }})">
+            <span class="sync-dot" style="width: 6px; height: 6px; border-radius: 50%; display: inline-block;
+                background: {% if cloud_sync_info and cloud_sync_info.pending_count > 0 %}#f59e0b{% elif cloud_sync_info and not cloud_sync_info.is_online %}#ef4444{% elif cloud_sync_info and cloud_sync_info.total_synced_count > 0 %}#10b981{% else %}#94a3b8{% endif %};"></span>
+            <span id="cloud-sync-nav-text">
+                {% if cloud_sync_info and cloud_sync_info.pending_count > 0 %}
+                    {{ cloud_sync_info.pending_count }} Pending Sync
+                {% elif cloud_sync_info and not cloud_sync_info.is_online %}
+                    Sync Offline
+                {% elif cloud_sync_info and cloud_sync_info.total_synced_count > 0 %}
+                    Cloud Synced
+                {% else %}
+                    Local DB
+                {% endif %}
+            </span>
+        </a>
+
+        <!-- Minimal Scanner Status Indicator -->
+        <div class="scanner-status-pill" id="global-scanner-status-pill" onclick="if(window.Cart&&Cart.openScannerStatusModal){Cart.openScannerStatusModal();}else{window.location.href='{% url 'settings_scanner' %}';}" title="Hardware Scanner: Driverless HID input supported. Click for Diagnostics." style="cursor: pointer;">
+            <span class="status-dot"></span>
+            <span class="scanner-status-text" id="global-scanner-status-text">HID Supported</span>
+        </div>
+
+        <!-- In-App Staff Notifications Bell -->
+        <div style="position: relative;" id="topbar-notif-container">
+            <button type="button" id="topbar-notif-btn" onclick="toggleNotifDropdown(event)"
+                    style="position: relative; display: inline-flex; align-items: center; justify-content: center; width: 30px; height: 30px; border-radius: 50%; background: var(--surface); border: 1px solid var(--border); color: var(--text); cursor: pointer; transition: all 0.15s ease;"
+                    title="Staff Notifications & Messages">
+                <i class="bi bi-bell" id="topbar-notif-bell-icon" style="font-size: 13px;"></i>
+                <span id="topbar-notif-badge" style="display: none; position: absolute; top: -3px; right: -3px; background: #ef4444; color: #fff; font-size: 10px; font-weight: 800; min-width: 17px; height: 17px; border-radius: 10px; padding: 0 4px; line-height: 17px; text-align: center; border: 2px solid var(--surface); box-shadow: 0 2px 5px rgba(239,68,68,0.4);">0</span>
+            </button>
+
+            <!-- Notifications Dropdown Menu -->
+            <div id="topbar-notif-dropdown" style="display: none; position: absolute; right: 0; top: 38px; width: 340px; max-width: 90vw; background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius-md); box-shadow: 0 12px 32px rgba(0,0,0,0.18); z-index: 10000; overflow: hidden;">
+                <div style="padding: 10px 14px; border-bottom: 1px solid var(--border); display: flex; align-items: center; justify-content: space-between; background: var(--surface-2);">
+                    <div style="font-size: 12.5px; font-weight: 700; color: var(--text); display: flex; align-items: center; gap: 6px;">
+                        <i class="bi bi-chat-left-text" style="color: var(--primary);"></i> Staff Messages
+                    </div>
+                    <div style="display: flex; gap: 6px;">
+                        <button type="button" onclick="openStaffComposeModal()" style="font-size: 11px; padding: 2px 7px; background: var(--primary); color: #fff; border: none; border-radius: 4px; cursor: pointer; font-weight: 600;">
+                            + Message
+                        </button>
+                        <button type="button" onclick="markAllNotificationsRead()" style="font-size: 11px; padding: 2px 7px; background: transparent; border: 1px solid var(--border); color: var(--muted); border-radius: 4px; cursor: pointer;">
+                            Mark all read
+                        </button>
+                    </div>
+                </div>
+
+                <div id="topbar-notif-list" style="max-height: 320px; overflow-y: auto; padding: 4px 0;">
+                    <div style="padding: 24px; text-align: center; color: var(--muted); font-size: 12px;">
+                        Loading messages...
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</header>
+
+<!-- Staff Message Compose Modal -->
+<div id="staff-compose-modal" style="display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.55); backdrop-filter: blur(3px); z-index: 100000; align-items: center; justify-content: center; padding: 16px;">
+    <div style="background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius-md); width: 100%; max-width: 440px; box-shadow: 0 18px 45px rgba(0,0,0,0.25); overflow: hidden; animation: fadeIn 0.15s ease;">
+        <div style="padding: 14px 18px; border-bottom: 1px solid var(--border); display: flex; align-items: center; justify-content: space-between; background: var(--surface-2);">
+            <div style="font-size: 13.5px; font-weight: 700; color: var(--text); display: flex; align-items: center; gap: 7px;">
+                <i class="bi bi-send" style="color: var(--primary);"></i> Send Staff Notification
+            </div>
+            <button type="button" onclick="closeStaffComposeModal()" style="background: transparent; border: none; font-size: 18px; color: var(--muted); cursor: pointer; line-height: 1;">&times;</button>
+        </div>
+        <div style="padding: 16px 18px; display: flex; flex-direction: column; gap: 12px;">
+            <div>
+                <label style="display: block; font-size: 11.5px; font-weight: 600; color: var(--muted); margin-bottom: 4px;">Recipient Role / Staff Member</label>
+                <select id="compose-recipient-select" style="width: 100%; font-size: 12.5px; padding: 8px 10px; border-radius: var(--radius-sm); border: 1px solid var(--border); background: var(--surface-2); color: var(--text);">
+                    <option value="role:Cashier">Cashier (All Active Cashiers)</option>
+                    <option value="role:Manager">Manager (Store Managers)</option>
+                    <option value="role:ALL">All Store Staff (Announcement)</option>
+                </select>
+            </div>
+            <div>
+                <label style="display: block; font-size: 11.5px; font-weight: 600; color: var(--muted); margin-bottom: 4px;">Message</label>
+                <textarea id="compose-message-text" rows="3" placeholder="e.g. Please meet me in the office, or verify pending returns..." style="width: 100%; font-size: 12.5px; padding: 8px 10px; border-radius: var(--radius-sm); border: 1px solid var(--border); background: var(--surface-2); color: var(--text); resize: vertical;"></textarea>
+            </div>
+            <div id="compose-error-msg" style="display: none; color: #ef4444; font-size: 11.5px;"></div>
+        </div>
+        <div style="padding: 12px 18px; border-top: 1px solid var(--border); background: var(--surface-2); display: flex; justify-content: flex-end; gap: 8px;">
+            <button type="button" onclick="closeStaffComposeModal()" style="font-size: 12px; padding: 6px 12px; border-radius: var(--radius-sm); border: 1px solid var(--border); background: transparent; color: var(--text); cursor: pointer;">Cancel</button>
+            <button type="button" id="btn-send-staff-msg" onclick="submitStaffMessage()" style="font-size: 12px; padding: 6px 14px; border-radius: var(--radius-sm); border: none; background: var(--primary); color: #fff; font-weight: 600; cursor: pointer; display: inline-flex; align-items: center; gap: 6px;">
+                <i class="bi bi-send-fill"></i> Send Message
+            </button>
+        </div>
+    </div>
+</div>
+
+<script>
+(function() {
+    let notifDropdownOpen = false;
+    let availableStaff = [];
+
+    window.toggleNotifDropdown = function(e) {
+        if (e) e.stopPropagation();
+        const dd = document.getElementById('topbar-notif-dropdown');
+        if (!dd) return;
+        notifDropdownOpen = !notifDropdownOpen;
+        dd.style.display = notifDropdownOpen ? 'block' : 'none';
+        if (notifDropdownOpen) {
+            fetchNotifications(true);
+        }
+    };
+
+    document.addEventListener('click', function(e) {
+        const container = document.getElementById('topbar-notif-container');
+        if (container && !container.contains(e.target)) {
+            const dd = document.getElementById('topbar-notif-dropdown');
+            if (dd) dd.style.display = 'none';
+            notifDropdownOpen = false;
+        }
+    });
+
+    function escapeHtml(str) {
+        return (str || '').replace(/[&<>"']/g, function(m) {
+            return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#039;' }[m];
+        });
+    }
+
+    function getCsrfToken() {
+        const cookie = document.cookie.split('; ').find(row => row.startsWith('csrftoken='));
+        return cookie ? cookie.split('=')[1] : '';
+    }
+
+    let seenNotificationIds = new Set();
+    let isInitialLoad = true;
+
+    function showNotificationToast(notif) {
+        let container = document.getElementById('notif-toast-container');
+        if (!container) {
+            container = document.createElement('div');
+            container.id = 'notif-toast-container';
+            container.style.cssText = 'position: fixed; top: 62px; right: 20px; z-index: 99999; display: flex; flex-direction: column; gap: 8px; pointer-events: none;';
+            document.body.appendChild(container);
+        }
+        const toast = document.createElement('div');
+        toast.style.cssText = 'pointer-events: auto; background: var(--surface, #ffffff); border: 1px solid var(--border, #e2e8f0); border-left: 4px solid #0ea5e9; border-radius: 8px; padding: 12px 14px; box-shadow: 0 10px 30px rgba(0,0,0,0.18); max-width: 340px; animation: slideIn 0.2s ease; cursor: pointer;';
+        toast.innerHTML = `
+            <div style="display: flex; justify-content: space-between; align-items: flex-start; gap: 8px;">
+                <strong style="font-size: 12px; color: var(--text, #0f172a);"><i class="bi bi-chat-left-dots-fill text-primary" style="margin-right: 4px;"></i>${escapeHtml(notif.sender_name)} (${escapeHtml(notif.sender_role)})</strong>
+                <span style="font-size: 16px; line-height: 1; color: var(--muted, #64748b); cursor: pointer;" onclick="event.stopPropagation(); this.closest('div').parentElement.remove()">&times;</span>
+            </div>
+            <p style="margin: 5px 0 0 0; font-size: 11.5px; color: var(--text, #0f172a); line-height: 1.4; word-break: break-word;">${escapeHtml(notif.message)}</p>
+            <div style="margin-top: 6px; font-size: 10px; color: var(--muted, #64748b); text-align: right;">Click to read</div>
+        `;
+        toast.onclick = function() {
+            markNotificationRead(notif.id);
+            toggleNotifDropdown();
+            toast.remove();
+        };
+        container.appendChild(toast);
+        setTimeout(function() {
+            if (toast && toast.parentNode) toast.remove();
+        }, 8000);
+    }
+
+    window.fetchNotifications = async function() {
+        try {
+            const resp = await fetch('/api/notifications/');
+            if (!resp.ok) return;
+            const data = await resp.json();
+            if (data.status === 'success') {
+                const badge = document.getElementById('topbar-notif-badge');
+                const bellIcon = document.getElementById('topbar-notif-bell-icon');
+                if (badge) {
+                    if (data.unread_count > 0) {
+                        badge.textContent = data.unread_count > 99 ? '99+' : data.unread_count;
+                        badge.style.display = 'inline-block';
+                        if (bellIcon) bellIcon.className = 'bi bi-bell-fill text-warning';
+                    } else {
+                        badge.style.display = 'none';
+                        if (bellIcon) bellIcon.className = 'bi bi-bell';
+                    }
+                }
+
+                // Show toast for newly arrived unread notifications
+                if (data.notifications && data.notifications.length > 0) {
+                    if (isInitialLoad) {
+                        data.notifications.forEach(n => {
+                            if (!n.is_read) seenNotificationIds.add(n.id);
+                        });
+                        isInitialLoad = false;
+                    } else {
+                        data.notifications.forEach(n => {
+                            if (!n.is_read && !seenNotificationIds.has(n.id)) {
+                                seenNotificationIds.add(n.id);
+                                showNotificationToast(n);
+                            }
+                        });
+                    }
+                }
+
+                renderNotificationList(data.notifications);
+                availableStaff = data.staff_members || [];
+                populateStaffSelect();
+            }
+        } catch(err) {
+            // Silently continue polling
+        }
+    };
+
+    function renderNotificationList(items) {
+        const list = document.getElementById('topbar-notif-list');
+        if (!list) return;
+        if (!items || items.length === 0) {
+            list.innerHTML = '<div style="padding: 24px; text-align: center; color: var(--muted); font-size: 12px;"><i class="bi bi-bell-slash" style="font-size: 20px; display: block; margin-bottom: 6px; opacity: 0.5;"></i>No messages right now.</div>';
+            return;
+        }
+
+        let html = '';
+        items.forEach(function(n) {
+            const unreadBg = !n.is_read ? 'background: rgba(14, 165, 233, 0.06);' : '';
+            const unreadDot = !n.is_read ? '<span style="width: 7px; height: 7px; border-radius: 50%; background: #0ea5e9; display: inline-block; flex-shrink: 0;"></span>' : '';
+            const markBtn = !n.is_read ? `<button type="button" onclick="markNotificationRead(${n.id}, event)" style="font-size: 10.5px; padding: 2px 7px; background: transparent; border: 1px solid var(--border); color: var(--muted); border-radius: 4px; cursor: pointer;">Mark Read</button>` : '<span style="font-size: 10px; color: var(--muted);"><i class="bi bi-check2"></i> Read</span>';
+
+            html += `
+            <div style="padding: 10px 14px; border-bottom: 1px solid var(--border); ${unreadBg} cursor: pointer; transition: background 0.15s ease;" onclick="markNotificationRead(${n.id}, event)" title="Click to mark as read">
+                <div style="display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 4px;">
+                    <div style="display: flex; align-items: center; gap: 6px;">
+                        ${unreadDot}
+                        <strong style="font-size: 12px; color: var(--text);">${escapeHtml(n.sender_name)}</strong>
+                        <span style="font-size: 10px; padding: 1px 5px; border-radius: 3px; background: var(--surface-2); border: 1px solid var(--border); color: var(--muted); font-weight: 600;">${escapeHtml(n.sender_role)}</span>
+                    </div>
+                    <span style="font-size: 10px; color: var(--muted);">${escapeHtml(n.created_at)}</span>
+                </div>
+                <div style="font-size: 12px; color: var(--text); line-height: 1.4; margin-bottom: 6px; word-break: break-word;">
+                    ${escapeHtml(n.message)}
+                </div>
+                <div style="display: flex; justify-content: flex-end; align-items: center;">
+                    ${markBtn}
+                </div>
+            </div>`;
+        });
+        list.innerHTML = html;
+    }
+
+    function populateStaffSelect() {
+        const select = document.getElementById('compose-recipient-select');
+        if (!select) return;
+        let html = `
+            <option value="role:Cashier">Role: Cashiers</option>
+            <option value="role:Manager">Role: Managers</option>
+            <option value="role:ALL">Role: All Store Staff (Announcement)</option>
+        `;
+        if (availableStaff && availableStaff.length > 0) {
+            html += `<optgroup label="Specific Staff Members">`;
+            availableStaff.forEach(function(s) {
+                html += `<option value="user:${s.user_id}">${escapeHtml(s.name)}</option>`;
+            });
+            html += `</optgroup>`;
+        }
+        select.innerHTML = html;
+    }
+
+    window.openStaffComposeModal = function() {
+        const dd = document.getElementById('topbar-notif-dropdown');
+        if (dd) dd.style.display = 'none';
+        notifDropdownOpen = false;
+
+        const modal = document.getElementById('staff-compose-modal');
+        if (modal) {
+            modal.style.display = 'flex';
+            document.getElementById('compose-message-text').value = '';
+            document.getElementById('compose-error-msg').style.display = 'none';
+        }
+    };
+
+    window.closeStaffComposeModal = function() {
+        const modal = document.getElementById('staff-compose-modal');
+        if (modal) modal.style.display = 'none';
+    };
+
+    window.submitStaffMessage = async function() {
+        const select = document.getElementById('compose-recipient-select');
+        const textInput = document.getElementById('compose-message-text');
+        const errBox = document.getElementById('compose-error-msg');
+        const btn = document.getElementById('btn-send-staff-msg');
+        const msg = textInput.value.trim();
+
+        if (!msg) {
+            errBox.textContent = 'Please enter a message to send.';
+            errBox.style.display = 'block';
+            return;
+        }
+
+        const selVal = select.value;
+        const payload = { message: msg };
+        if (selVal.startsWith('role:')) {
+            payload.recipient_role = selVal.replace('role:', '');
+        } else if (selVal.startsWith('user:')) {
+            payload.recipient_user_id = selVal.replace('user:', '');
+        }
+
+        btn.disabled = true;
+        btn.innerHTML = '<i class="bi bi-hourglass-split"></i> Sending...';
+
+        try {
+            const resp = await fetch('/api/notifications/', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'X-CSRFToken': getCsrfToken()
+                },
+                body: JSON.stringify(payload)
+            });
+            const data = await resp.json();
+            if (resp.ok && data.status === 'success') {
+                closeStaffComposeModal();
+                fetchNotifications();
+            } else {
+                errBox.textContent = data.error || 'Failed to dispatch notification.';
+                errBox.style.display = 'block';
+            }
+        } catch(err) {
+            errBox.textContent = 'Network error sending notification.';
+            errBox.style.display = 'block';
+        } finally {
+            btn.disabled = false;
+            btn.innerHTML = '<i class="bi bi-send-fill"></i> Send Message';
+        }
+    };
+
+    window.markNotificationRead = async function(id, e) {
+        if (e) e.stopPropagation();
+        try {
+            await fetch(`/api/notifications/${id}/read/`, {
+                method: 'POST',
+                headers: { 'X-CSRFToken': getCsrfToken() }
+            });
+            fetchNotifications();
+        } catch(err) {}
+    };
+
+    window.markAllNotificationsRead = async function() {
+        try {
+            await fetch('/api/notifications/mark-all-read/', {
+                method: 'POST',
+                headers: { 'X-CSRFToken': getCsrfToken() }
+            });
+            fetchNotifications();
+        } catch(err) {}
+    };
+
+    // Auto-poll notifications every 12 seconds
+    fetchNotifications();
+    setInterval(fetchNotifications, 12000);
+})();
+</script>

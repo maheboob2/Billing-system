@@ -171,6 +171,71 @@ class Sale(models.Model):
     def __str__(self):
         return f"{self.sale_number} - ₹{self.grand_total}"
 
+    @property
+    def customer_display_name(self):
+        """
+        Returns the registered customer's name, or 'Counter Sale' if no customer is attached.
+        Never fabricates a customer name.
+        """
+        if self.customer and self.customer.name:
+            return self.customer.name
+        return "Counter Sale"
+
+    @property
+    def payment_mode_display(self):
+        """
+        Derives the human-readable payment method or split tender breakdown
+        directly from persisted Payment records for this exact sale.
+        Examples:
+          - Cash -> 'Cash'
+          - UPI -> 'UPI'
+          - Card -> 'Card'
+          - Store credit -> 'Store Credit'
+          - Split tender -> 'Cash ₹200 + UPI ₹100'
+          - No records -> 'Not recorded'
+        """
+        method_labels = {
+            "CASH": "Cash",
+            "UPI": "UPI",
+            "CARD": "Card",
+            "CREDIT": "Store Credit",
+        }
+
+        # Check pre-fetched or existing Payment records in chronological order
+        payments = list(self.payments.all().order_by("id"))
+        if payments:
+            if len(payments) == 1:
+                p = payments[0]
+                return method_labels.get(p.payment_method.upper(), p.payment_method)
+            else:
+                parts = []
+                for p in payments:
+                    label = method_labels.get(p.payment_method.upper(), p.payment_method)
+                    amt = p.amount
+                    amt_str = f"₹{amt:,.0f}" if amt == amt.to_integral() else f"₹{amt:,.2f}"
+                    parts.append(f"{label} {amt_str}")
+                return " + ".join(parts)
+
+        # Fallback to Invoice payment_summary if payments table record is missing
+        try:
+            if hasattr(self, "invoice") and self.invoice and self.invoice.payment_summary:
+                summary = self.invoice.payment_summary.strip()
+                if summary:
+                    if summary.upper() in method_labels:
+                        return method_labels[summary.upper()]
+                    return summary
+        except Exception:
+            pass
+
+        import logging
+        logging.getLogger(__name__).warning(f"Sale #{self.sale_number} has no recorded payment details in database.")
+        return "Not recorded"
+
+    @property
+    def payment_method(self):
+        """Alias for payment_mode_display for template and serializer compatibility."""
+        return self.payment_mode_display
+
 
 class SaleItem(models.Model):
     sale = models.ForeignKey(
@@ -307,7 +372,7 @@ class Invoice(models.Model):
     )
     invoice_date = models.DateTimeField(auto_now_add=True)
 
-    customer_name = models.CharField(max_length=150, blank=True, default="Walk-in Customer")
+    customer_name = models.CharField(max_length=150, blank=True, default="Counter Sale")
     customer_phone = models.CharField(max_length=20, blank=True, default="")
     customer_address = models.TextField(blank=True, default="")
 
@@ -327,7 +392,7 @@ class Invoice(models.Model):
     balance_due = models.DecimalField(max_digits=12, decimal_places=2)
 
     cashier_name = models.CharField(max_length=150)
-    payment_summary = models.CharField(max_length=100, default="CASH")
+    payment_summary = models.CharField(max_length=100, default="Cash")
 
     class Meta:
         ordering = ["-invoice_date"]
@@ -338,6 +403,14 @@ class Invoice(models.Model):
 
     def __str__(self):
         return f"Invoice {self.invoice_number} (₹{self.grand_total})"
+
+    @property
+    def customer_display_name(self):
+        if self.customer_name and self.customer_name.strip() and self.customer_name.strip() not in ["Walk-in Customer", "Walk-in"]:
+            return self.customer_name.strip()
+        if hasattr(self, "sale") and self.sale and self.sale.customer and self.sale.customer.name:
+            return self.sale.customer.name
+        return "Counter Sale"
 
 
 class CheckoutIdempotency(models.Model):
@@ -390,4 +463,221 @@ class CheckoutIdempotency(models.Model):
 
     def __str__(self):
         return f"{self.company.company_name} - {self.idempotency_key} ({self.status})"
+
+
+class POSScannerSession(models.Model):
+    STATUS_CHOICES = [
+        ("ACTIVE", "Active"),
+        ("DISCONNECTED", "Disconnected"),
+        ("EXPIRED", "Expired"),
+        ("REVOKED", "Revoked"),
+    ]
+    DESTINATION_CHOICES = [
+        ("POS", "POS Cart"),
+        ("PRODUCT_FORM", "Product Form"),
+    ]
+    company = models.ForeignKey(
+        companyRegistration,
+        on_delete=models.CASCADE,
+        related_name="scanner_sessions"
+    )
+    user = models.ForeignKey(
+        User,
+        on_delete=models.CASCADE,
+        related_name="scanner_sessions"
+    )
+    session_token = models.CharField(max_length=64, unique=True, db_index=True)
+    pairing_code = models.CharField(max_length=10, db_index=True)
+    status = models.CharField(max_length=20, choices=STATUS_CHOICES, default="ACTIVE")
+    destination = models.CharField(max_length=30, choices=DESTINATION_CHOICES, default="POS")
+    device_info = models.CharField(max_length=255, blank=True, default="")
+    created_at = models.DateTimeField(auto_now_add=True)
+    expires_at = models.DateTimeField()
+    last_ping = models.DateTimeField(auto_now=True)
+
+    def is_valid(self):
+        from django.utils import timezone
+        return self.status == "ACTIVE" and self.expires_at > timezone.now()
+
+    def revoke(self):
+        """Immediately revokes pairing credentials and terminates active connection."""
+        self.status = "REVOKED"
+        self.device_info = ""
+        self.save(update_fields=["status", "device_info"])
+
+    def __str__(self):
+        return f"ScannerSession {self.pairing_code} ({self.status}) [{self.destination}] - {self.company.company_name}"
+
+
+class POSScannerScan(models.Model):
+    session = models.ForeignKey(
+        POSScannerSession,
+        on_delete=models.CASCADE,
+        related_name="scans"
+    )
+    barcode = models.CharField(max_length=100)
+    destination = models.CharField(max_length=30, choices=POSScannerSession.DESTINATION_CHOICES, default="POS")
+    idempotency_key = models.CharField(max_length=64, blank=True, default="")
+    consumed = models.BooleanField(default=False)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ["created_at"]
+
+    def __str__(self):
+        return f"Scan: {self.barcode} [{self.destination}] (consumed={self.consumed})"
+
+
+class ReturnRequest(models.Model):
+    STATUS_CHOICES = [
+        ("PENDING", "Pending Approval"),
+        ("APPROVED", "Approved"),
+        ("REJECTED", "Rejected"),
+        ("COMPLETED", "Completed"),
+    ]
+    REASON_CHOICES = [
+        ("DAMAGED", "Damaged"),
+        ("WRONG_PRODUCT", "Wrong Product"),
+        ("EXPIRED", "Expired"),
+        ("QUALITY_ISSUE", "Quality Issue"),
+        ("CUSTOMER_CHANGED_MIND", "Customer Changed Mind"),
+        ("OTHER", "Other"),
+    ]
+
+    company = models.ForeignKey(
+        companyRegistration,
+        on_delete=models.CASCADE,
+        related_name="return_requests"
+    )
+    return_number = models.CharField(max_length=64, unique=True, db_index=True)
+    sale = models.ForeignKey(
+        Sale,
+        on_delete=models.PROTECT,
+        related_name="return_requests"
+    )
+    invoice = models.ForeignKey(
+        Invoice,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="return_requests"
+    )
+    customer = models.ForeignKey(
+        Customer,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="return_requests"
+    )
+    status = models.CharField(
+        max_length=20,
+        choices=STATUS_CHOICES,
+        default="PENDING"
+    )
+    reason = models.CharField(
+        max_length=30,
+        choices=REASON_CHOICES,
+        default="CUSTOMER_CHANGED_MIND"
+    )
+    refund_amount = models.DecimalField(
+        max_digits=12,
+        decimal_places=2,
+        default=Decimal("0.00"),
+        validators=[MinValueValidator(Decimal("0.00"))]
+    )
+    refund_payment_method = models.CharField(
+        max_length=20,
+        choices=Payment.PAYMENT_METHODS,
+        default="CASH"
+    )
+    notes = models.TextField(blank=True, default="")
+    created_by = models.ForeignKey(
+        User,
+        on_delete=models.PROTECT,
+        related_name="created_returns"
+    )
+    approved_by = models.ForeignKey(
+        User,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="approved_returns"
+    )
+    approved_at = models.DateTimeField(null=True, blank=True)
+    rejection_reason = models.TextField(blank=True, default="")
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ["-created_at"]
+        indexes = [
+            models.Index(fields=["company", "created_at"]),
+            models.Index(fields=["company", "status"]),
+            models.Index(fields=["company", "return_number"]),
+        ]
+
+    @property
+    def created_by_label(self):
+        if not self.created_by:
+            return "Added by System"
+        from accounts.tenancy import get_user_role
+        role = get_user_role(self.created_by) or "Staff"
+        if role == "Admin":
+            role = "Owner"
+        return f"Added by {role} — {self.created_by.username}"
+
+    @property
+    def approved_by_label(self):
+        if not self.approved_by:
+            return None
+        from accounts.tenancy import get_user_role
+        role = get_user_role(self.approved_by) or "Staff"
+        if role == "Admin":
+            role = "Owner"
+        if self.status == "REJECTED":
+            return f"Rejected by {role} — {self.approved_by.username}"
+        return f"Approved by {role} — {self.approved_by.username}"
+
+    def __str__(self):
+        return f"{self.return_number} - {self.status} (₹{self.refund_amount})"
+
+
+class ReturnItem(models.Model):
+    return_request = models.ForeignKey(
+        ReturnRequest,
+        on_delete=models.CASCADE,
+        related_name="items"
+    )
+    sale_item = models.ForeignKey(
+        SaleItem,
+        on_delete=models.PROTECT,
+        related_name="return_records"
+    )
+    product = models.ForeignKey(
+        Product,
+        on_delete=models.PROTECT,
+        related_name="returned_items"
+    )
+    quantity = models.DecimalField(
+        max_digits=10,
+        decimal_places=2,
+        validators=[MinValueValidator(Decimal("0.01"))]
+    )
+    refund_unit_price = models.DecimalField(
+        max_digits=10,
+        decimal_places=2,
+        validators=[MinValueValidator(Decimal("0.00"))]
+    )
+    refund_total = models.DecimalField(
+        max_digits=12,
+        decimal_places=2,
+        validators=[MinValueValidator(Decimal("0.00"))]
+    )
+    restock = models.BooleanField(
+        default=True,
+        help_text="If true, item is returned to sellable stock. If false (e.g. damaged/expired), stock is not restored."
+    )
+
+    def __str__(self):
+        return f"ReturnItem: {self.product.name} x {self.quantity} (₹{self.refund_total})"
 

@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="utf-8"?>
+<network-security-config>
+    <!--
+      Permits cleartext HTTP traffic at the platform level so the app can communicate
+      with dynamic private LAN POS terminals (e.g. 192.168.x.x, 10.x.x.x, 172.16-31.x.x).
+      Android Network Security Config does NOT support CIDR/subnet matching in <domain> tags.
+      Therefore, strict private-LAN network scoping and public WAN protection are enforced
+      at the application level in NetworkHostValidator.kt before any HTTP request is dispatched.
+    -->
+    <base-config cleartextTrafficPermitted="true">
+        <trust-anchors>
+            <certificates src="system" />
+            <certificates src="user" />
+        </trust-anchors>
+    </base-config>
+</network-security-config>
+

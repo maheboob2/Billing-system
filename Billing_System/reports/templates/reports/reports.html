@@ -1,12 +1,756 @@
+{% extends "dashboard/main_nav.html" %}
 {% load static %}
-<!DOCTYPE html>
-<html lang="en">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Document</title>
-</head>
-<body>
-    <h1>Reports</h1>
-</body>
-</html>
+
+{% block content %}
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+
+<style>
+    .reports-container {
+        padding: 22px 20px;
+        max-width: 1400px;
+        margin: 0 auto;
+    }
+
+    /* Date Filter Bar */
+    .filter-bar {
+        background: var(--surface);
+        border: 1px solid var(--border);
+        border-radius: var(--radius-md);
+        padding: 12px 18px;
+        display: flex;
+        align-items: center;
+        gap: 14px;
+        margin-bottom: 18px;
+        flex-wrap: wrap;
+    }
+
+    .filter-bar label {
+        font-size: 12px;
+        color: var(--muted);
+        font-weight: 600;
+        text-transform: uppercase;
+        letter-spacing: 0.4px;
+    }
+
+    .filter-bar input[type=date] {
+        background: var(--surface-2);
+        border: 1px solid var(--border);
+        border-radius: var(--radius-sm);
+        padding: 6px 12px;
+        color: var(--text);
+        font-size: 12px;
+        font-family: var(--font-mono);
+        outline: none;
+    }
+
+    .filter-bar input[type=date]:focus {
+        border-color: var(--primary);
+    }
+
+    .btn-filter {
+        background: var(--primary);
+        border: none;
+        border-radius: var(--radius-sm);
+        color: white;
+        padding: 7px 16px;
+        font-size: 12px;
+        font-weight: 600;
+        cursor: pointer;
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        transition: background-color var(--transition);
+    }
+
+    .btn-filter:hover {
+        background: var(--primary-strong);
+    }
+
+    /* Report Panels */
+    .report-panel {
+        display: none;
+    }
+
+    .report-panel.active {
+        display: block;
+    }
+
+    /* Summary cards */
+    .cards {
+        display: grid;
+        grid-template-columns: repeat(auto-fill, minmax(210px, 1fr));
+        gap: 14px;
+        margin-bottom: 18px;
+    }
+
+    .card {
+        background: var(--surface);
+        border: 1px solid var(--border);
+        border-radius: var(--radius-md);
+        padding: 16px 18px;
+    }
+
+    .card .label {
+        font-size: 11px;
+        color: var(--muted);
+        font-weight: 700;
+        text-transform: uppercase;
+        letter-spacing: .5px;
+        margin-bottom: 6px;
+    }
+
+    .card .val {
+        font-size: 22px;
+        font-weight: 700;
+        font-family: var(--font-mono);
+        color: var(--text);
+    }
+
+    .card .sub {
+        font-size: 11px;
+        color: var(--muted);
+        margin-top: 4px;
+    }
+
+    .card.green .val { color: var(--success); }
+    .card.blue .val  { color: #0284c7; }
+    .card.purple .val { color: #9333ea; }
+    .card.yellow .val { color: #d97706; }
+    .card.red .val   { color: var(--danger); }
+
+    /* Layout rows */
+    .row-2 {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 16px;
+        margin-bottom: 16px;
+    }
+
+    .panel {
+        background: var(--surface);
+        border: 1px solid var(--border);
+        border-radius: var(--radius-md);
+        padding: 18px 20px;
+    }
+
+    .panel h3 {
+        margin: 0 0 14px 0;
+        font-size: 14px;
+        font-weight: 600;
+        color: var(--text);
+        display: flex;
+        align-items: center;
+        gap: 8px;
+    }
+
+    .chart-wrap {
+        position: relative;
+        height: 250px;
+        width: 100%;
+    }
+
+    /* Tables */
+    .rpt-table {
+        width: 100%;
+        border-collapse: collapse;
+        font-size: 12px;
+    }
+
+    .rpt-table th {
+        text-align: left;
+        padding: 8px 12px;
+        font-weight: 600;
+        color: var(--muted);
+        border-bottom: 1px solid var(--border);
+        background: var(--surface-2);
+    }
+
+    .rpt-table td {
+        padding: 9px 12px;
+        border-bottom: 1px solid var(--border);
+    }
+
+    .rpt-table tr:hover td {
+        background: var(--surface-2);
+    }
+
+    .loading-msg {
+        color: var(--muted);
+        font-size: 13px;
+        text-align: center;
+        padding: 36px;
+    }
+
+    .error-msg {
+        color: var(--danger);
+        font-size: 13px;
+        text-align: center;
+        padding: 16px;
+        background: rgba(220, 38, 38, 0.08);
+        border-radius: var(--radius-sm);
+        border: 1px solid rgba(220, 38, 38, 0.2);
+    }
+
+    @media (max-width: 900px) {
+        .row-2 { grid-template-columns: 1fr; }
+    }
+</style>
+
+<div class="reports-container">
+    <!-- Header Block -->
+    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 18px; flex-wrap: wrap; gap: 12px;">
+        <div>
+            <h1 style="font-size: 22px; font-weight: 700; color: var(--text); margin: 0 0 4px 0;">Analytics & Business Reports</h1>
+            <p style="margin: 0; font-size: 13px; color: var(--muted);">Multi-dimensional performance analysis for {{ company.company_name }}.</p>
+        </div>
+    </div>
+
+    <!-- Date Filter Bar with Animated Segmented Range Toggle -->
+    <div class="filter-bar">
+        <label>From</label>
+        <input type="date" id="start-date">
+        <label>To</label>
+        <input type="date" id="end-date">
+        <button class="btn-filter" onclick="Reports.load()"><i class="bi bi-arrow-clockwise"></i> Apply</button>
+
+        <div style="margin-left: auto;">
+            <!-- Segmented Range Toggle with Sliding Indicator -->
+            <div class="segmented-toggle" id="range-toggle">
+                <button type="button" data-range="today">Today</button>
+                <button type="button" data-range="7">7D</button>
+                <button type="button" data-range="30" class="active">30D</button>
+                <button type="button" data-range="month">Month</button>
+                <button type="button" data-range="365">1Y</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Animated Segmented Report Type Tabs -->
+    <div style="margin-bottom: 18px;">
+        <div class="segmented-toggle" id="report-type-toggle" style="width: 100%; display: flex;">
+            <button type="button" data-tab="sales" class="active" style="flex: 1;"><i class="bi bi-cash-stack"></i> Sales</button>
+            <button type="button" data-tab="financial" style="flex: 1;"><i class="bi bi-graph-up-arrow"></i> Financial</button>
+            <button type="button" data-tab="inventory" style="flex: 1;"><i class="bi bi-boxes"></i> Inventory</button>
+            <button type="button" data-tab="purchases" style="flex: 1;"><i class="bi bi-bag-check"></i> Purchases</button>
+            <button type="button" data-tab="tax" style="flex: 1;"><i class="bi bi-receipt"></i> Tax / GST</button>
+        </div>
+    </div>
+
+    <!-- SALES PANEL -->
+    <div class="report-panel active" id="panel-sales" data-toggle-panel="sales">
+        <div class="cards" id="sales-cards"><div class="loading-msg"><i class="bi bi-arrow-repeat"></i> Loading...</div></div>
+        <div class="row-2">
+            <div class="panel"><h3><i class="bi bi-graph-up"></i> Daily Revenue</h3><div class="chart-wrap"><canvas id="chart-daily"></canvas></div></div>
+            <div class="panel"><h3><i class="bi bi-pie-chart"></i> Payment Methods</h3><div class="chart-wrap"><canvas id="chart-payment"></canvas></div></div>
+        </div>
+        <div class="row-2">
+            <div class="panel"><h3><i class="bi bi-trophy"></i> Top Selling Products</h3><div id="tbl-top-products"><div class="loading-msg">Loading...</div></div></div>
+            <div class="panel"><h3><i class="bi bi-check-circle"></i> Sales Status</h3><div id="tbl-sale-status"><div class="loading-msg">Loading...</div></div></div>
+        </div>
+    </div>
+
+    <!-- FINANCIAL PANEL -->
+    <div class="report-panel" id="panel-financial" data-toggle-panel="financial">
+        <div class="cards" id="fin-cards"><div class="loading-msg">Loading...</div></div>
+        <div class="row-2">
+            <div class="panel"><h3><i class="bi bi-graph-up-arrow"></i> Monthly Revenue Trend</h3><div class="chart-wrap"><canvas id="chart-monthly"></canvas></div></div>
+            <div class="panel"><h3><i class="bi bi-credit-card"></i> Cash Flow by Method</h3><div id="tbl-cashflow"><div class="loading-msg">Loading...</div></div></div>
+        </div>
+    </div>
+
+    <!-- INVENTORY PANEL -->
+    <div class="report-panel" id="panel-inventory" data-toggle-panel="inventory">
+        <div class="cards" id="inv-cards"><div class="loading-msg">Loading...</div></div>
+        <div class="row-2">
+            <div class="panel"><h3><i class="bi bi-exclamation-triangle"></i> Low Stock Alert</h3><div id="tbl-low-stock"><div class="loading-msg">Loading...</div></div></div>
+            <div class="panel"><h3><i class="bi bi-arrow-left-right"></i> Stock Movements</h3><div id="tbl-movements"><div class="loading-msg">Loading...</div></div></div>
+        </div>
+    </div>
+
+    <!-- PURCHASES PANEL -->
+    <div class="report-panel" id="panel-purchases" data-toggle-panel="purchases">
+        <div class="cards" id="pur-cards"><div class="loading-msg">Loading...</div></div>
+        <div class="row-2">
+            <div class="panel"><h3><i class="bi bi-truck"></i> Spend by Supplier</h3><div id="tbl-suppliers"><div class="loading-msg">Loading...</div></div></div>
+            <div class="panel"><h3><i class="bi bi-box-seam"></i> Top Purchased Products</h3><div id="tbl-pur-products"><div class="loading-msg">Loading...</div></div></div>
+        </div>
+    </div>
+
+    <!-- TAX PANEL -->
+    <div class="report-panel" id="panel-tax" data-toggle-panel="tax">
+        <div class="cards" id="tax-cards"><div class="loading-msg">Loading...</div></div>
+        <div class="row-2">
+            <div class="panel"><h3><i class="bi bi-bar-chart"></i> Tax Collected by GST Slab</h3><div id="tbl-tax-slab"><div class="loading-msg">Loading...</div></div></div>
+            <div class="panel"><h3><i class="bi bi-calendar3"></i> Monthly GST Trend</h3><div class="chart-wrap"><canvas id="chart-tax"></canvas></div></div>
+        </div>
+    </div>
+</div>
+
+<script>
+const CSRF = '{{ csrf_token }}';
+
+// Chart.js Animation Presets (700ms easeOutQuart & 220ms active transition)
+const chartAnimation = {
+    duration: 700,
+    easing: "easeOutQuart"
+};
+
+const chartOptions = {
+    responsive: true,
+    maintainAspectRatio: false,
+    animation: chartAnimation,
+    transitions: {
+        active: {
+            animation: {
+                duration: 220
+            }
+        }
+    }
+};
+
+const Reports = (() => {
+    let charts = {};
+    let activeTab = 'sales';
+    let cache = {};
+
+    function fmt(n) {
+        const num = parseFloat(n) || 0;
+        return '₹' + num.toFixed(2).replace(/\B(?=(\d{3})+(?!\d))/g, ',');
+    }
+    function fmtN(n) {
+        return (parseFloat(n) || 0).toFixed(2);
+    }
+    function esc(s) {
+        return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+    }
+
+    function getDateRange() {
+        const s = document.getElementById('start-date').value;
+        const e = document.getElementById('end-date').value;
+        return s && e ? `?start_date=${s}&end_date=${e}` : '';
+    }
+
+    function setRangePreset(preset) {
+        const today = new Date();
+        const start = new Date();
+
+        if (preset === 'today') {
+            // Same day
+        } else if (preset === 'month') {
+            start.setDate(1); // 1st of current month
+        } else {
+            const days = parseInt(preset) || 30;
+            start.setDate(start.getDate() - days + 1);
+        }
+
+        document.getElementById('end-date').value = today.toISOString().slice(0, 10);
+        document.getElementById('start-date').value = start.toISOString().slice(0, 10);
+
+        // Update active class on range buttons
+        const rangeToggle = document.getElementById('range-toggle');
+        if (rangeToggle) {
+            rangeToggle.querySelectorAll('button').forEach(b => {
+                b.classList.toggle('active', b.dataset.range === preset);
+            });
+            const activeBtn = rangeToggle.querySelector('button.active');
+            const ind = rangeToggle.querySelector('.indicator');
+            if (ind && activeBtn) {
+                const tr = rangeToggle.getBoundingClientRect();
+                const br = activeBtn.getBoundingClientRect();
+                ind.style.transform = `translateX(${br.left - tr.left - 4}px)`;
+                ind.style.width = `${br.width}px`;
+            }
+        }
+
+        load();
+    }
+
+    function switchTab(tab) {
+        activeTab = tab;
+        const toggle = document.getElementById('report-type-toggle');
+        if (toggle) {
+            toggle.querySelectorAll('button').forEach(b => {
+                b.classList.toggle('active', b.dataset.tab === tab);
+            });
+            const activeBtn = toggle.querySelector('button.active');
+            const ind = toggle.querySelector('.indicator');
+            if (ind && activeBtn) {
+                const tr = toggle.getBoundingClientRect();
+                const br = activeBtn.getBoundingClientRect();
+                ind.style.transform = `translateX(${br.left - tr.left - 4}px)`;
+                ind.style.width = `${br.width}px`;
+            }
+        }
+
+        document.querySelectorAll('.report-panel').forEach(p => {
+            if (p.id === 'panel-' + tab) {
+                p.style.display = 'block';
+                p.classList.add('active');
+                p.animate(
+                    [
+                        { opacity: 0, transform: "translateY(8px) scale(.985)" },
+                        { opacity: 1, transform: "translateY(0) scale(1)" }
+                    ],
+                    { duration: 260, easing: "cubic-bezier(.2,.8,.2,1)" }
+                );
+            } else {
+                p.style.display = 'none';
+                p.classList.remove('active');
+            }
+        });
+
+        load();
+    }
+
+    async function apiFetch(path) {
+        const qs = getDateRange();
+        const url = `/api/reports/${path}/${qs}`;
+        if (cache[url]) return cache[url];
+        const res = await fetch(url, { credentials: 'same-origin', headers: { 'X-CSRFToken': CSRF } });
+        if (!res.ok) throw new Error(`HTTP ${res.status}`);
+        const data = await res.json();
+        cache[url] = data;
+        return data;
+    }
+
+    function destroyChart(id) {
+        if (charts[id]) { charts[id].destroy(); delete charts[id]; }
+    }
+
+    async function load() {
+        cache = {};
+        if (activeTab === 'sales') await loadSales();
+        else if (activeTab === 'financial') await loadFinancial();
+        else if (activeTab === 'inventory') await loadInventory();
+        else if (activeTab === 'purchases') await loadPurchases();
+        else if (activeTab === 'tax') await loadTax();
+    }
+
+    // ── SALES ──
+    async function loadSales() {
+        const el = id => document.getElementById(id);
+        el('sales-cards').innerHTML = '<div class="loading-msg"><i class="bi bi-arrow-repeat"></i> Loading...</div>';
+        try {
+            const d = await apiFetch('sales');
+            const s = d.summary || {};
+
+            el('sales-cards').innerHTML = `
+                <div class="card green"><div class="label">Revenue</div><div class="val">${fmt(s.total_revenue)}</div><div class="sub">${s.transaction_count || 0} transactions</div></div>
+                <div class="card blue"><div class="label">Avg Order Value</div><div class="val">${fmt(s.avg_order_value)}</div></div>
+                <div class="card yellow"><div class="label">Discount Given</div><div class="val">${fmt(s.total_discount)}</div></div>
+                <div class="card purple"><div class="label">Tax Collected</div><div class="val">${fmt(s.total_tax)}</div><div class="sub">CGST ${fmt(s.total_cgst)} · SGST ${fmt(s.total_sgst)}</div></div>
+                <div class="card"><div class="label">Balance Due</div><div class="val" style="color:var(--danger)">${fmt(s.total_balance_due)}</div></div>
+            `;
+
+            // Daily revenue chart
+            destroyChart('daily');
+            const daily = d.daily_breakdown || [];
+            const dailyDates = daily.length ? daily.map(r => r.date) : ['No Sales Recorded'];
+            const dailyRevs = daily.length ? daily.map(r => parseFloat(r.revenue || 0)) : [0];
+            const ctx1 = document.getElementById('chart-daily').getContext('2d');
+            charts['daily'] = new Chart(ctx1, {
+                type: 'bar',
+                data: {
+                    labels: dailyDates,
+                    datasets: [{
+                        label: 'Revenue',
+                        data: dailyRevs,
+                        backgroundColor: daily.length ? 'rgba(2, 132, 199, 0.7)' : 'rgba(148, 163, 184, 0.2)',
+                        borderColor: daily.length ? '#0284c7' : 'rgba(148, 163, 184, 0.4)',
+                        borderRadius: 5
+                    }]
+                },
+                options: {
+                    ...chartOptions,
+                    plugins: { legend: { display: false } },
+                    scales: {
+                        x: { ticks: { color: '#94a3b8', maxRotation: 45 }, grid: { color: 'rgba(148, 163, 184, 0.15)' } },
+                        y: { ticks: { color: '#94a3b8', callback: v => '₹'+v.toLocaleString() }, grid: { color: 'rgba(148, 163, 184, 0.15)' } }
+                    }
+                }
+            });
+
+            // Payment method donut
+            destroyChart('payment');
+            const pmBreakdown = d.payment_method_breakdown || [];
+            const pmLabels = pmBreakdown.length ? pmBreakdown.map(r => r.payment_method) : ['No Transactions'];
+            const pmData = pmBreakdown.length ? pmBreakdown.map(r => parseFloat(r.total_amount || 0)) : [1];
+            const pmColors = pmBreakdown.length ? ['#16a34a', '#0284c7', '#9333ea', '#d97706'] : ['rgba(148, 163, 184, 0.2)'];
+            const ctx2 = document.getElementById('chart-payment').getContext('2d');
+            charts['payment'] = new Chart(ctx2, {
+                type: 'doughnut',
+                data: {
+                    labels: pmLabels,
+                    datasets: [{
+                        data: pmData,
+                        backgroundColor: pmColors,
+                        borderColor: 'var(--surface)',
+                        borderWidth: 2
+                    }]
+                },
+                options: {
+                    ...chartOptions,
+                    plugins: {
+                        legend: { position: 'bottom', labels: { color: '#94a3b8', padding: 14, font: { size: 12 } } },
+                        tooltip: {
+                            callbacks: {
+                                label: ctx => pmBreakdown.length ? ` ${ctx.label}: ₹${parseFloat(ctx.raw).toFixed(2)}` : ' No payment data'
+                            }
+                        }
+                    }
+                }
+            });
+
+            // Top products table
+            const topProds = d.top_products || [];
+            el('tbl-top-products').innerHTML = topProds.length ? `
+                <table class="rpt-table">
+                    <tr><th>#</th><th>Product</th><th>Qty Sold</th><th>Revenue</th></tr>
+                    ${topProds.map((p,i) => `<tr><td>${i+1}</td><td><strong>${esc(p.product_name || p.product__name || 'Unknown')}</strong></td><td>${fmtN(p.total_qty || p.total_quantity || 0)}</td><td style="font-weight:700;color:var(--success)">${fmt(p.total_revenue || 0)}</td></tr>`).join('')}
+                </table>` : '<div class="loading-msg">No sales data in this period.</div>';
+
+            // Sale status table (matches API response contract: by_sale_status)
+            const saleStatuses = d.by_sale_status || d.sale_status_breakdown || [];
+            el('tbl-sale-status').innerHTML = saleStatuses.length ? `
+                <table class="rpt-table">
+                    <tr><th>Status</th><th>Transactions</th><th>Total Value</th></tr>
+                    ${saleStatuses.map(r => `<tr><td><span class="badge ${r.sale_status==='COMPLETED'?'badge-success':'badge-warning'}">${r.sale_status}</span></td><td>${r.count || 0}</td><td style="font-weight:700">${fmt(r.total || r.total_amount || 0)}</td></tr>`).join('')}
+                </table>` : '<div class="loading-msg">No sales data.</div>';
+
+        } catch(e) {
+            console.error('Reports loadSales error:', e);
+            el('sales-cards').innerHTML = `<div class="error-msg"><i class="bi bi-exclamation-triangle"></i> Failed to load sales report: ${e.message}</div>`;
+        }
+    }
+
+    // ── FINANCIAL ──
+    async function loadFinancial() {
+        const el = id => document.getElementById(id);
+        el('fin-cards').innerHTML = '<div class="loading-msg"><i class="bi bi-arrow-repeat"></i> Loading...</div>';
+        try {
+            const d = await apiFetch('financial');
+            // Matches API contract: profit_loss & receivables
+            const pl = d.profit_loss || {};
+            const rec = d.receivables || {};
+
+            el('fin-cards').innerHTML = `
+                <div class="card green"><div class="label">Gross Revenue</div><div class="val">${fmt(pl.total_revenue)}</div></div>
+                <div class="card blue"><div class="label">COGS (Product Cost)</div><div class="val">${fmt(pl.total_cogs)}</div></div>
+                <div class="card green"><div class="label">Gross Profit</div><div class="val">${fmt(pl.gross_profit)}</div><div class="sub">${fmtN(pl.gross_margin_pct)}% margin</div></div>
+                <div class="card purple"><div class="label">Purchases Inward Cost</div><div class="val">${fmt(pl.total_purchase_cost)}</div></div>
+                <div class="card yellow"><div class="label">Receivables Balance</div><div class="val" style="color:var(--danger)">${fmt(rec.total_balance_due)}</div><div class="sub">Credit ${fmt(rec.credit_outstanding_total)}</div></div>
+            `;
+
+            destroyChart('monthly');
+            const mTrend = d.monthly_revenue_trend || d.monthly_trend || [];
+            const mLabels = mTrend.length ? mTrend.map(r => {
+                const dt = new Date(r.month);
+                return isNaN(dt.getTime()) ? r.month : dt.toLocaleDateString('en-IN', {month:'short', year:'2-digit'});
+            }) : ['No Data'];
+            const mRevenue = mTrend.length ? mTrend.map(r => parseFloat(r.revenue || 0)) : [0];
+            const ctx = document.getElementById('chart-monthly').getContext('2d');
+            charts['monthly'] = new Chart(ctx, {
+                type: 'line',
+                data: {
+                    labels: mLabels,
+                    datasets: [{
+                        label: 'Revenue',
+                        data: mRevenue,
+                        borderColor: '#0284c7',
+                        backgroundColor: 'rgba(2, 132, 199, 0.1)',
+                        fill: true,
+                        tension: 0.3
+                    }]
+                },
+                options: {
+                    ...chartOptions,
+                    plugins: { legend: { display: false } },
+                    scales: {
+                        x: { ticks: { color: '#94a3b8' }, grid: { color: 'rgba(148, 163, 184, 0.15)' } },
+                        y: { ticks: { color: '#94a3b8', callback: v => '₹'+v.toLocaleString() }, grid: { color: 'rgba(148, 163, 184, 0.15)' } }
+                    }
+                }
+            });
+
+            const cfList = d.cash_flow_by_method || [];
+            el('tbl-cashflow').innerHTML = cfList.length ? `
+                <table class="rpt-table">
+                    <tr><th>Method</th><th>Transactions</th><th>Total</th></tr>
+                    ${cfList.map(r => `<tr><td><span class="badge badge-primary">${r.payment_method}</span></td><td>${r.count || 0}</td><td style="font-weight:700;color:var(--success)">${fmt(r.total || r.total_amount || 0)}</td></tr>`).join('')}
+                </table>` : '<div class="loading-msg" style="padding:20px">No payments in this period.</div>';
+        } catch(e) {
+            console.error('Reports loadFinancial error:', e);
+            el('fin-cards').innerHTML = `<div class="error-msg"><i class="bi bi-exclamation-triangle"></i> Failed to load financial report: ${e.message}</div>`;
+        }
+    }
+
+    // ── INVENTORY ──
+    async function loadInventory() {
+        const el = id => document.getElementById(id);
+        el('inv-cards').innerHTML = '<div class="loading-msg"><i class="bi bi-arrow-repeat"></i> Loading...</div>';
+        try {
+            const d = await apiFetch('inventory');
+            const s = d.summary || {};
+            el('inv-cards').innerHTML = `
+                <div class="card blue"><div class="label">Total Products</div><div class="val">${s.total_products || 0}</div><div class="sub">${s.active_products || 0} active</div></div>
+                <div class="card red"><div class="label">Out of Stock</div><div class="val">${s.out_of_stock_count || 0}</div></div>
+                <div class="card yellow"><div class="label">Low Stock</div><div class="val">${s.low_stock_count || 0}</div></div>
+                <div class="card green"><div class="label">Stock Value (Cost)</div><div class="val">${fmt(s.total_cost_value)}</div></div>
+                <div class="card purple"><div class="label">Stock Value (Sell)</div><div class="val">${fmt(s.total_selling_value)}</div></div>
+            `;
+            const lowStock = d.low_stock_products || [];
+            el('tbl-low-stock').innerHTML = lowStock.length ? `
+                <table class="rpt-table">
+                    <tr><th>Product</th><th>Stock</th><th>Min</th><th>Status</th></tr>
+                    ${lowStock.map(p => `<tr>
+                        <td><strong>${esc(p.name)}</strong><br><span style="color:var(--muted);font-size:11px;">${esc(p.product_code)}</span></td>
+                        <td style="font-weight:700;color:var(--danger)">${fmtN(p.current_stock)} ${p.unit || ''}</td>
+                        <td>${fmtN(p.minimum_stock)}</td>
+                        <td>${parseFloat(p.current_stock)<=0?'<span class="badge badge-danger">OUT</span>':'<span class="badge badge-warning">LOW</span>'}</td>
+                    </tr>`).join('')}
+                </table>` : '<div class="loading-msg" style="padding:20px"><i class="bi bi-check-circle" style="color:var(--success)"></i> No low-stock products.</div>';
+
+            const movements = d.movement_by_type || [];
+            el('tbl-movements').innerHTML = movements.length ? `
+                <table class="rpt-table">
+                    <tr><th>Movement Type</th><th>Transactions</th><th>Total Qty</th></tr>
+                    ${movements.map(r => `<tr><td><span class="badge badge-primary">${r.movement_type}</span></td><td>${r.count || 0}</td><td>${fmtN(r.total_qty || 0)}</td></tr>`).join('')}
+                </table>` : '<div class="loading-msg" style="padding:20px">No movements in this period.</div>';
+        } catch(e) {
+            console.error('Reports loadInventory error:', e);
+            el('inv-cards').innerHTML = `<div class="error-msg"><i class="bi bi-exclamation-triangle"></i> Failed to load inventory report: ${e.message}</div>`;
+        }
+    }
+
+    // ── PURCHASES ──
+    async function loadPurchases() {
+        const el = id => document.getElementById(id);
+        el('pur-cards').innerHTML = '<div class="loading-msg"><i class="bi bi-arrow-repeat"></i> Loading...</div>';
+        try {
+            const d = await apiFetch('purchases');
+            const s = d.summary || {};
+            el('pur-cards').innerHTML = `
+                <div class="card blue"><div class="label">Total POs</div><div class="val">${s.total_purchases || 0}</div><div class="sub">${s.received_count || 0} received · ${s.draft_count || 0} draft</div></div>
+                <div class="card green"><div class="label">Purchase Amount</div><div class="val">${fmt(s.total_subtotal)}</div></div>
+                <div class="card yellow"><div class="label">GST Paid</div><div class="val">${fmt(s.total_gst)}</div></div>
+                <div class="card purple"><div class="label">Grand Total</div><div class="val">${fmt(s.grand_total)}</div></div>
+            `;
+            const suppliers = d.by_supplier || [];
+            el('tbl-suppliers').innerHTML = suppliers.length ? `
+                <table class="rpt-table">
+                    <tr><th>Supplier</th><th>Orders</th><th>Total Spend</th></tr>
+                    ${suppliers.map(r => `<tr><td><strong>${esc(r.purchase__supplier__name || 'Unknown')}</strong></td><td>${r.order_count || 0}</td><td style="font-weight:700">${fmt(r.total_spend || 0)}</td></tr>`).join('')}
+                </table>` : '<div class="loading-msg" style="padding:20px">No purchase data in this period.</div>';
+
+            const purProds = d.top_products || [];
+            el('tbl-pur-products').innerHTML = purProds.length ? `
+                <table class="rpt-table">
+                    <tr><th>Product</th><th>Qty</th><th>Spend</th></tr>
+                    ${purProds.map(r => `<tr><td><strong>${esc(r.product__name || 'Unknown')}</strong></td><td>${fmtN(r.total_qty || 0)}</td><td style="font-weight:700">${fmt(r.total_spend || 0)}</td></tr>`).join('')}
+                </table>` : '<div class="loading-msg" style="padding:20px">No product data in this period.</div>';
+        } catch(e) {
+            console.error('Reports loadPurchases error:', e);
+            el('pur-cards').innerHTML = `<div class="error-msg"><i class="bi bi-exclamation-triangle"></i> Failed to load purchases report: ${e.message}</div>`;
+        }
+    }
+
+    // ── TAX ──
+    async function loadTax() {
+        const el = id => document.getElementById(id);
+        el('tax-cards').innerHTML = '<div class="loading-msg"><i class="bi bi-arrow-repeat"></i> Loading...</div>';
+        try {
+            const d = await apiFetch('tax');
+            const o = d.output_tax || {};
+            const inp = d.input_tax || {};
+            el('tax-cards').innerHTML = `
+                <div class="card green"><div class="label">Output Tax (Sales)</div><div class="val">${fmt(o.total_tax_collected)}</div><div class="sub">${o.transaction_count || 0} sales</div></div>
+                <div class="card blue"><div class="label">CGST</div><div class="val">${fmt(o.total_cgst)}</div></div>
+                <div class="card purple"><div class="label">SGST</div><div class="val">${fmt(o.total_sgst)}</div></div>
+                <div class="card yellow"><div class="label">IGST</div><div class="val">${fmt(o.total_igst)}</div></div>
+                <div class="card"><div class="label">Input Tax (Purchases)</div><div class="val" style="color:var(--muted)">${fmt(inp.total_purchase_tax)}</div></div>
+                <div class="card ${parseFloat(d.net_gst_payable||0)>0?'red':'green'}"><div class="label">Net GST Payable</div><div class="val">${fmt(d.net_gst_payable)}</div></div>
+            `;
+
+            const slabs = d.tax_by_slab || [];
+            el('tbl-tax-slab').innerHTML = slabs.length ? `
+                <table class="rpt-table">
+                    <tr><th>GST Rate</th><th>Taxable Amount</th><th>Tax Collected</th><th>Items</th></tr>
+                    ${slabs.map(r => `<tr><td><span class="badge badge-primary">${r.gst_percentage}%</span></td><td>${fmt(r.taxable_amount)}</td><td style="font-weight:700;color:var(--success)">${fmt(r.total_tax)}</td><td>${r.items_count || 0}</td></tr>`).join('')}
+                </table>` : '<div class="loading-msg" style="padding:20px">No tax data in this period.</div>';
+
+            destroyChart('tax');
+            const mTax = d.monthly_tax_trend || [];
+            const mLabels = mTax.length ? mTax.map(r => {
+                const dt = new Date(r.month);
+                return isNaN(dt.getTime()) ? r.month : dt.toLocaleDateString('en-IN', {month:'short', year:'2-digit'});
+            }) : ['No Data'];
+            const ctx = document.getElementById('chart-tax').getContext('2d');
+            charts['tax'] = new Chart(ctx, {
+                type: 'bar',
+                data: {
+                    labels: mLabels,
+                    datasets: [
+                        { label: 'CGST', data: mTax.length ? mTax.map(r => parseFloat(r.cgst||0)) : [0], backgroundColor: 'rgba(2, 132, 199, 0.75)', borderRadius: 4 },
+                        { label: 'SGST', data: mTax.length ? mTax.map(r => parseFloat(r.sgst||0)) : [0], backgroundColor: 'rgba(147, 51, 234, 0.75)', borderRadius: 4 },
+                        { label: 'IGST', data: mTax.length ? mTax.map(r => parseFloat(r.igst||0)) : [0], backgroundColor: 'rgba(217, 119, 6, 0.75)', borderRadius: 4 },
+                    ]
+                },
+                options: {
+                    ...chartOptions,
+                    plugins: { legend: { labels: { color: '#94a3b8' } } },
+                    scales: {
+                        x: { stacked: true, ticks: { color: '#94a3b8' }, grid: { color: 'rgba(148, 163, 184, 0.15)' } },
+                        y: { stacked: true, ticks: { color: '#94a3b8', callback: v => '₹'+v }, grid: { color: 'rgba(148, 163, 184, 0.15)' } }
+                    }
+                }
+            });
+        } catch(e) {
+            console.error('Reports loadTax error:', e);
+            el('tax-cards').innerHTML = `<div class="error-msg"><i class="bi bi-exclamation-triangle"></i> Failed to load tax report: ${e.message}</div>`;
+        }
+    }
+
+    // ── Init ──
+    function init() {
+        const today = new Date();
+        const past = new Date();
+        past.setDate(past.getDate() - 29);
+        document.getElementById('end-date').value = today.toISOString().slice(0, 10);
+        document.getElementById('start-date').value = past.toISOString().slice(0, 10);
+
+        // Initialize segmented toggle indicators
+        if (typeof initSegmentedToggles === 'function') {
+            initSegmentedToggles();
+        }
+
+        // Wire segmented range toggle
+        const rangeToggle = document.getElementById('range-toggle');
+        if (rangeToggle) {
+            rangeToggle.querySelectorAll('button').forEach(btn => {
+                btn.addEventListener('click', () => {
+                    const r = btn.dataset.range;
+                    setRangePreset(r);
+                });
+            });
+        }
+
+        // Wire report type toggle
+        const repToggle = document.getElementById('report-type-toggle');
+        if (repToggle) {
+            repToggle.querySelectorAll('button').forEach(btn => {
+                btn.addEventListener('click', () => {
+                    const tab = btn.dataset.tab;
+                    switchTab(tab);
+                });
+            });
+        }
+
+        load();
+    }
+
+    return { load, switchTab, init };
+})();
+
+document.addEventListener('DOMContentLoaded', Reports.init);
+</script>
+{% endblock content %}

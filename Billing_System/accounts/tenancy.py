@@ -67,8 +67,8 @@ def get_user_role(user):
     employee = user_registration.objects.filter(user=user).first()
     if employee:
         # Standardize capitalization
-        role = employee.Role.strip().capitalize()
-        if role in ["Manager", "Cashier", "Worker"]:
+        role = employee.Role.strip().title()
+        if role in ["Manager", "Cashier", "Worker", "Stock Manager"]:
             return role
         return employee.Role
 
@@ -185,3 +185,4 @@ class IsCashierOrAbove(permissions.BasePermission):
         request.company = company
         request.user_role = role
         return True
+    
