@@ -232,12 +232,17 @@
             <div style="width: 48px; height: 48px; border-radius: 50%; background: rgba(245, 158, 11, 0.15); border: 1px solid rgba(245, 158, 11, 0.3); display: flex; align-items: center; justify-content: center; color: #f59e0b; font-size: 24px;">
                 <i class="bi bi-camera-video-off"></i>
             </div>
-            <h2 style="font-size: 15px; font-weight: 700; color: #ffffff;" id="camera-notice-title">Camera Blocked by Browser (HTTP)</h2>
+            <h2 style="font-size: 15px; font-weight: 700; color: #ffffff;" id="camera-notice-title">Camera Blocked by Mobile Browser (HTTP)</h2>
             <p style="font-size: 12px; color: #94a3b8; max-width: 320px; line-height: 1.5;" id="camera-notice-desc">
-                Physical phone browsers (Safari / Chrome) strictly require <strong>HTTPS</strong> to allow hardware camera access over Wi-Fi.
+                Mobile phone browsers (Safari / Chrome) strictly require <strong>HTTPS</strong> with a trusted certificate to allow hardware camera access over Wi-Fi LAN.
             </p>
-            <div style="background: #1e293b; border: 1px solid #334155; border-radius: 8px; padding: 10px 14px; font-size: 12px; color: #38bdf8; max-width: 320px;">
-                💡 <strong>Manual Barcode Input:</strong> Type or paste any barcode below to instantly add it to the cashier cart.
+            <div style="background: #1e293b; border: 1px solid #334155; border-radius: 8px; padding: 10px 14px; font-size: 12px; color: #38bdf8; max-width: 320px; text-align: left;">
+                <div style="font-weight: 700; margin-bottom: 4px;"><i class="bi bi-shield-lock"></i> Testing HTTPS on LAN:</div>
+                <div style="color: #94a3b8; font-size: 11px; line-height: 1.4;">
+                    1. Generate a trusted certificate using <code>mkcert</code> or local proxy.<br>
+                    2. Install the local CA certificate on your phone device.<br>
+                    3. Or use <strong>Manual Barcode Input</strong> below for immediate testing without SSL setup.
+                </div>
             </div>
         </div>
     </div>
@@ -270,6 +275,7 @@
         (function() {
             const urlParams = new URLSearchParams(window.location.search);
             const sessionToken = urlParams.get('session') || '{{ session.session_token|default:"" }}';
+            const targetDest = urlParams.get('dest') || '{{ session.destination|default:"POS" }}';
             const toast = document.getElementById('toast');
             const recentList = document.getElementById('recent-scans');
             const manualInput = document.getElementById('manual-barcode');
@@ -317,13 +323,16 @@
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({
                         barcode: code,
-                        device_info: navigator.userAgent.slice(0, 80)
+                        destination: targetDest,
+                        device_info: (navigator.userAgent.includes('Mobile') ? 'Mobile Phone' : 'Companion Browser') + ' (' + navigator.userAgent.slice(0, 30) + ')'
                     })
                 })
                 .then(r => r.json())
                 .then(data => {
                     if (data.success) {
-                        showToast(`Sent "${code}" to POS Terminal!`, true);
+                        const targetLabel = data.destination === 'PRODUCT_FORM' ? 'Product Form' : 'POS Register';
+                        const itemLabel = data.product_name ? `${data.product_name} (${code})` : `Barcode "${code}"`;
+                        showToast(`✓ Sent to ${targetLabel}: ${itemLabel}!`, true);
                         addRecent(code);
                         if (manualInput) manualInput.value = '';
                     } else {
@@ -393,8 +402,8 @@
                 if (!window.isSecureContext && !isLocal) {
                     console.warn('Camera blocked: insecure HTTP context on mobile/remote host.');
                     showCameraNotice(
-                        'Camera Blocked by Browser (HTTP)',
-                        'Mobile browsers (Chrome &amp; Safari) strictly require <strong>HTTPS</strong> to access phone camera hardware over Wi-Fi.<br><br>Use the <strong>Manual Barcode Input</strong> below to send scans directly to the POS terminal.'
+                        'Camera Blocked by Mobile Browser (HTTP)',
+                        'Mobile browsers strictly restrict hardware camera access over plain HTTP LAN addresses (' + location.origin + ').<br><br>The laser viewfinder has been paused. Use the <strong>Manual Barcode Input</strong> below to scan items into the POS cart.'
                     );
                     return;
                 }

@@ -348,3 +348,48 @@ class POSPolishV3TestSuite(TestCase):
         self.assertIn("One-Time Pairing Code", content)
         self.assertIn("create-qr-code", content)
         self.assertIn("mkcert", content)  # Local HTTPS workflow documented
+
+    def test_scanner_handshake_via_session_token_and_pairing_code(self):
+        """Scanner handshake works using session_token, pairing_code, and heartbeat route."""
+        from sales.models import POSScannerSession
+        from django.utils import timezone
+        from datetime import timedelta
+        session = POSScannerSession.objects.create(
+            company=self.company,
+            user=self.owner_user,
+            session_token="test_token_abc_123",
+            pairing_code="123-456",
+            expires_at=timezone.now() + timedelta(hours=1),
+            device_info="Android Test Device"
+        )
+
+        # 1. Handshake via session_token on /scan/
+        res1 = self.api_client.post(
+            f"/api/pos/scanner-session/{session.session_token}/scan/",
+            {"heartbeat": True, "device_info": "Brisk Android Native"},
+            format="json"
+        )
+        self.assertEqual(res1.status_code, 200)
+        self.assertTrue(res1.data["connected"])
+        self.assertEqual(res1.data["session_token"], session.session_token)
+        self.assertEqual(res1.data["pairing_code"], session.pairing_code)
+
+        # 2. Handshake via pairing_code on /scan/
+        res2 = self.api_client.post(
+            f"/api/pos/scanner-session/{session.pairing_code}/scan/",
+            {"heartbeat": True, "device_info": "Brisk Android Native"},
+            format="json"
+        )
+        self.assertEqual(res2.status_code, 200)
+        self.assertTrue(res2.data["connected"])
+        self.assertEqual(res2.data["session_token"], session.session_token)
+
+        # 3. Handshake via /heartbeat/ route alias
+        res3 = self.api_client.post(
+            f"/api/pos/scanner-session/{session.session_token}/heartbeat/",
+            {"heartbeat": True},
+            format="json"
+        )
+        self.assertEqual(res3.status_code, 200)
+        self.assertTrue(res3.data["connected"])
+

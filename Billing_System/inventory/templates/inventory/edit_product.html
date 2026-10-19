@@ -47,8 +47,8 @@
                 </div>
                 <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 14px;">
                     <div>
-                        <label style="display: block; font-size: 12px; font-weight: 600; color: var(--text); margin-bottom: 6px;">Product Code / SKU *</label>
-                        <input type="text" id="id_product_code" name="product_code" value="{{ form.product_code.value|default:product.product_code }}" required style="width: 100%; padding: 10px 12px; background: var(--surface-2); border: 1px solid var(--border); border-radius: var(--radius-sm); color: var(--text); font-size: 14px; outline: none;">
+                        <label style="display: block; font-size: 12px; font-weight: 600; color: var(--text); margin-bottom: 6px;">Product Code / SKU (Auto-generated if left blank)</label>
+                        <input type="text" id="id_product_code" name="product_code" value="{{ form.product_code.value|default:product.product_code }}" placeholder="Leave blank to auto-generate unique SKU" style="width: 100%; padding: 10px 12px; background: var(--surface-2); border: 1px solid var(--border); border-radius: var(--radius-sm); color: var(--text); font-size: 14px; outline: none;">
                     </div>
                     <div>
                         <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px;">
@@ -163,6 +163,8 @@
         </form>
     </div>
 </div>
+
+
 
 <!-- Print Barcode Label Modal -->
 <div id="print-label-modal" style="display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.7); z-index: 9999; align-items: center; justify-content: center; padding: 16px;">
@@ -287,17 +289,103 @@ document.addEventListener('DOMContentLoaded', () => {
         debounceTimer = setTimeout(() => checkBarcodeAvailability(code), 250);
     });
 
+    // Inline Phone Companion Scanner Controller (Direct, no intrusive modal or broken external QR)
+    let prodScannerToken = null;
+    let prodScannerPollTimer = null;
+    let isConnectingScanner = false;
+
+    function initInlineProductScanner() {
+        if (isConnectingScanner) return;
+        isConnectingScanner = true;
+
+        if (scanHint) {
+            scanHint.style.display = 'inline-flex';
+            scanHint.style.alignItems = 'center';
+            scanHint.style.gap = '4px';
+            scanHint.style.color = '#38bdf8';
+            scanHint.innerHTML = `<span class="pulse-dot" style="display:inline-block; width:6px; height:6px; border-radius:50%; background:#38bdf8;"></span> Connecting scanner...`;
+        }
+
+        // Fetch active companion scanner session registered for PRODUCT_FORM
+        fetch('/api/pos/scanner-session/active/?destination=PRODUCT_FORM')
+            .then(r => r.json())
+            .then(data => {
+                isConnectingScanner = false;
+                if (data && data.session_token) {
+                    prodScannerToken = data.session_token;
+                    if (scanHint) {
+                        scanHint.style.color = '#10b981';
+                        scanHint.innerHTML = `<span class="pulse-dot" style="display:inline-block; width:6px; height:6px; border-radius:50%; background:#10b981;"></span> Phone scanner ready`;
+                    }
+                    if (prodScannerPollTimer) clearInterval(prodScannerPollTimer);
+                    prodScannerPollTimer = setInterval(pollInlineProductScanner, 800);
+                } else {
+                    if (scanHint) {
+                        scanHint.style.color = '#94a3b8';
+                        scanHint.innerHTML = `<i class="bi bi-info-circle"></i> Ready for manual entry or USB/HID scanner`;
+                    }
+                }
+            })
+            .catch(() => {
+                isConnectingScanner = false;
+                if (scanHint) {
+                    scanHint.style.color = '#94a3b8';
+                    scanHint.innerHTML = `<i class="bi bi-info-circle"></i> Ready for barcode input`;
+                }
+            });
+    }
+
+    function pollInlineProductScanner() {
+        if (!prodScannerToken) return;
+        fetch(`/api/pos/scanner-session/${encodeURIComponent(prodScannerToken)}/poll/?destination=PRODUCT_FORM`)
+            .then(r => r.json())
+            .then(data => {
+                if (!data.active) {
+                    if (prodScannerPollTimer) clearInterval(prodScannerPollTimer);
+                    prodScannerPollTimer = null;
+                    return;
+                }
+
+                if (data.scans && data.scans.length > 0) {
+                    const latestScan = data.scans[data.scans.length - 1];
+                    applyScannedBarcode(latestScan);
+                }
+            })
+            .catch(() => {});
+    }
+
+    function applyScannedBarcode(code) {
+        if (!code) return;
+        barcodeInput.value = code;
+        barcodeInput.dispatchEvent(new Event('input', { bubbles: true }));
+        barcodeInput.dispatchEvent(new Event('change', { bubbles: true }));
+        checkBarcodeAvailability(code);
+
+        if (scanHint) {
+            scanHint.style.display = 'inline-flex';
+            scanHint.style.alignItems = 'center';
+            scanHint.style.gap = '4px';
+            scanHint.style.color = '#10b981';
+            scanHint.innerHTML = `<i class="bi bi-check-circle-fill"></i> Captured: <strong>${code}</strong>`;
+        }
+        barcodeInput.style.borderColor = '#10b981';
+        barcodeInput.style.boxShadow = '0 0 0 3px rgba(16, 185, 129, 0.25)';
+        setTimeout(() => {
+            barcodeInput.style.boxShadow = 'none';
+        }, 1500);
+    }
+
     scanBtn.addEventListener('click', () => {
         barcodeInput.focus();
         barcodeInput.select();
         barcodeInput.style.borderColor = '#60a5fa';
         barcodeInput.style.boxShadow = '0 0 0 3px rgba(59, 130, 246, 0.25)';
-        scanHint.style.display = 'inline-block';
-        setTimeout(() => {
-            barcodeInput.style.boxShadow = 'none';
-            scanHint.style.display = 'none';
-        }, 5000);
+        setTimeout(() => { barcodeInput.style.boxShadow = 'none'; }, 1000);
+        initInlineProductScanner();
     });
+
+    // Auto-listen if companion scanner session is already running
+    initInlineProductScanner();
 
     let hidBuffer = '';
     let lastKeyTime = 0;

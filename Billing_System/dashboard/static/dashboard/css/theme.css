@@ -467,6 +467,8 @@ table.table-theme tr:last-child td {
 
 .segmented-toggle button.active {
   color: #ffffff !important;
+  background: var(--primary);
+  border-radius: 7px;
 }
 
 .segmented-toggle button:hover:not(.active) {
@@ -639,6 +641,22 @@ table.table-theme tr:last-child td {
   flex: 1;
   min-height: 0;
   width: 100%;
+  animation: appPageFadeIn 180ms cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+@keyframes appPageFadeIn {
+  from {
+    opacity: 0.88;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .app-content-area {
+    animation: none !important;
+  }
 }
 
 /* ── Minimalist Topbar ───────────────────────────────────────────────────────── */
@@ -1253,7 +1271,10 @@ table.table-theme tr:last-child td {
   max-width: 0 !important;
   padding: 0 !important;
   margin: 0 !important;
-  border-right: 0px solid transparent !important;
+  border: none !important;
+  border-right: none !important;
+  outline: none !important;
+  box-shadow: none !important;
   overflow: hidden !important;
   visibility: hidden !important;
   opacity: 0 !important;

@@ -53,7 +53,10 @@
                 <tr style="border-bottom: 1px solid var(--border);">
                     <td style="padding: 12px 16px; font-family: var(--font-mono); font-weight: 600; color: var(--text);">
                         {{ ret.return_number }}
-                        <div style="font-size: 11px; color: var(--muted); font-family: var(--font-sans);">{{ ret.created_at|date:"d M Y, H:i" }}</div>
+                        <div style="font-size: 11px; color: var(--muted); font-family: var(--font-sans); margin-top: 2px;">{{ ret.created_at|date:"d M Y, H:i" }}</div>
+                        <div style="font-size: 11px; color: var(--primary); font-family: var(--font-sans); font-weight: 500; margin-top: 2px;">
+                            <i class="bi bi-person-check"></i> {{ ret.created_by_label }}
+                        </div>
                     </td>
                     <td style="padding: 12px 16px;">
                         <a href="{% if ret.invoice %}{% url 'invoice_detail' ret.invoice.invoice_number %}{% else %}#{% endif %}" style="color: var(--primary); text-decoration: none; font-weight: 600; font-family: var(--font-mono);">
@@ -61,7 +64,7 @@
                         </a>
                     </td>
                     <td style="padding: 12px 16px; color: var(--text);">
-                        {{ ret.customer.name|default:"Walk-in Customer" }}
+                        {{ ret.customer.name|default:"Counter Sale" }}
                     </td>
                     <td style="padding: 12px 16px;">
                         <span style="font-size: 12px; color: var(--text);">{{ ret.get_reason_display }}</span>
@@ -84,8 +87,14 @@
                     <td style="padding: 12px 16px; text-align: center;">
                         {% if ret.status == 'APPROVED' or ret.status == 'COMPLETED' %}
                             <span style="background: rgba(22, 163, 74, 0.12); color: var(--success); border: 1px solid rgba(22, 163, 74, 0.3); padding: 4px 10px; border-radius: 20px; font-size: 11px; font-weight: 600;">Approved</span>
+                            {% if ret.approved_by_label %}
+                            <div style="font-size: 11px; color: var(--muted); margin-top: 3px;">{{ ret.approved_by_label }}</div>
+                            {% endif %}
                         {% elif ret.status == 'REJECTED' %}
                             <span style="background: rgba(220, 38, 38, 0.12); color: var(--danger); border: 1px solid rgba(220, 38, 38, 0.3); padding: 4px 10px; border-radius: 20px; font-size: 11px; font-weight: 600;">Rejected</span>
+                            {% if ret.approved_by_label %}
+                            <div style="font-size: 11px; color: var(--danger); margin-top: 3px;">{{ ret.approved_by_label }}</div>
+                            {% endif %}
                         {% else %}
                             <span style="background: rgba(245, 158, 11, 0.12); color: var(--warning); border: 1px solid rgba(245, 158, 11, 0.3); padding: 4px 10px; border-radius: 20px; font-size: 11px; font-weight: 600;">Pending</span>
                         {% endif %}
@@ -104,7 +113,7 @@
                             </button>
                         {% else %}
                             <span style="font-size: 11px; color: var(--muted);">
-                                {% if ret.approved_by %}By {{ ret.approved_by.username }}{% else %}&mdash;{% endif %}
+                                {% if ret.approved_by %}{{ ret.approved_by.username }}{% else %}&mdash;{% endif %}
                             </span>
                         {% endif %}
                     </td>
@@ -123,64 +132,88 @@
 </div>
 
 <!-- Modal: Create Return Request -->
-<div id="create-return-modal" style="display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.7); z-index: 1000; align-items: center; justify-content: center; padding: 16px;">
-    <div style="background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius-md); width: 100%; max-width: 640px; max-height: 90vh; overflow-y: auto; padding: 24px; box-shadow: 0 12px 32px rgba(0,0,0,0.5);">
-        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px; border-bottom: 1px solid var(--border); padding-bottom: 12px;">
-            <h3 style="font-size: 18px; font-weight: 700; color: var(--text); margin: 0;">Submit Customer Return Request</h3>
-            <button type="button" onclick="closeReturnModal()" style="background: none; border: none; font-size: 20px; color: var(--muted); cursor: pointer;">&times;</button>
+<div id="create-return-modal" role="dialog" aria-modal="true" aria-labelledby="ret-modal-title" style="display: none; position: fixed; inset: 0; background: rgba(0, 0, 0, 0.75); backdrop-filter: blur(4px); -webkit-backdrop-filter: blur(4px); z-index: 100000; align-items: center; justify-content: center; padding: 16px; box-sizing: border-box;">
+    <div class="return-dialog" style="background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius-md); width: 100%; max-width: 680px; max-height: calc(100vh - 40px); display: flex; flex-direction: column; box-shadow: 0 20px 60px rgba(0,0,0,0.55); overflow: hidden; position: relative;">
+        <!-- Pinned Header -->
+        <div style="display: flex; justify-content: space-between; align-items: center; padding: 18px 24px; border-bottom: 1px solid var(--border); background: var(--surface); flex-shrink: 0;">
+            <div>
+                <h3 id="ret-modal-title" style="font-size: 18px; font-weight: 700; color: var(--text); margin: 0 0 2px 0; display: flex; align-items: center; gap: 8px;">
+                    <i class="bi bi-arrow-counterclockwise" style="color: var(--primary);"></i> Submit Customer Return Request
+                </h3>
+                <p style="margin: 0; font-size: 12px; color: var(--muted);">Search by invoice number or sale ID to authorize refund & restock items.</p>
+            </div>
+            <button type="button" class="btn-close-return" onclick="closeReturnModal()" aria-label="Close modal" style="background: transparent; border: none; font-size: 24px; line-height: 1; color: var(--muted); cursor: pointer; padding: 4px 8px; border-radius: 6px; transition: color 0.15s, background-color 0.15s;">&times;</button>
         </div>
 
-        <div id="return-step-1">
-            <label style="display: block; font-size: 12px; font-weight: 600; color: var(--text); margin-bottom: 6px;">Enter Invoice # or Sale #</label>
-            <div style="display: flex; gap: 8px; margin-bottom: 14px;">
-                <input type="text" id="ret-search-invoice" placeholder="e.g. INV-1001 or SALE-..." style="flex: 1; padding: 10px 12px; background: var(--surface-2); border: 1px solid var(--border); border-radius: var(--radius-sm); color: var(--text); font-size: 14px; outline: none;">
-                <button type="button" class="btn btn-primary" id="btn-fetch-sale">Search Invoice</button>
+        <!-- Scrollable Modal Body -->
+        <div style="padding: 24px; overflow-y: auto; flex: 1; min-height: 0;">
+            <div id="return-step-1">
+                <label for="ret-search-invoice" style="display: block; font-size: 12px; font-weight: 600; color: var(--text); margin-bottom: 6px;">
+                    Invoice # or Sale # <span style="color: var(--muted); font-weight: normal;">(e.g. INV-2026-001 or SALE-...)</span>
+                </label>
+                <div style="display: flex; flex-wrap: wrap; gap: 10px; margin-bottom: 14px; align-items: stretch;">
+                    <div style="position: relative; flex: 1 1 260px; min-width: 0;">
+                        <i class="bi bi-search" style="position: absolute; left: 12px; top: 50%; transform: translateY(-50%); color: var(--muted); font-size: 14px;"></i>
+                        <input type="text" id="ret-search-invoice" placeholder="Enter invoice number or sale ID..." style="width: 100%; box-sizing: border-box; padding: 10px 12px 10px 36px; background: var(--surface-2); border: 1px solid var(--border); border-radius: var(--radius-sm); color: var(--text); font-size: 13.5px; outline: none; font-family: inherit;">
+                    </div>
+                    <button type="button" class="btn btn-primary" id="btn-fetch-sale" style="display: inline-flex; align-items: center; justify-content: center; gap: 6px; padding: 10px 18px; font-size: 13px; white-space: nowrap; flex: 0 0 auto;">
+                        <i class="bi bi-arrow-right-circle" id="fetch-sale-icon"></i> <span id="fetch-sale-label">Search Invoice</span>
+                    </button>
+                </div>
+                <div id="ret-error" style="display: none; background: rgba(220, 38, 38, 0.12); color: var(--danger); border: 1px solid rgba(220, 38, 38, 0.3); padding: 12px 14px; border-radius: var(--radius-sm); font-size: 12.5px; margin-bottom: 12px;"></div>
             </div>
-            <div id="ret-error" style="display: none; background: rgba(220, 38, 38, 0.12); color: var(--danger); padding: 10px; border-radius: var(--radius-sm); font-size: 12px; margin-bottom: 12px;"></div>
+
+            <div id="return-step-2" style="display: none;">
+                <div style="background: var(--surface-2); border: 1px solid var(--border); padding: 14px 16px; border-radius: var(--radius-sm); margin-bottom: 18px; font-size: 13px; display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 10px;">
+                    <div><span style="color: var(--muted); font-size: 11px; text-transform: uppercase; font-weight: 600; display: block;">Sale ID</span> <strong style="font-family: var(--font-mono); color: var(--text);" id="ret-display-sale"></strong></div>
+                    <div><span style="color: var(--muted); font-size: 11px; text-transform: uppercase; font-weight: 600; display: block;">Customer</span> <strong id="ret-display-customer"></strong></div>
+                    <div><span style="color: var(--muted); font-size: 11px; text-transform: uppercase; font-weight: 600; display: block;">Date</span> <span id="ret-display-date" style="color: var(--muted);"></span></div>
+                </div>
+
+                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px;">
+                    <h4 style="font-size: 13px; font-weight: 700; color: var(--text); margin: 0; text-transform: uppercase; letter-spacing: 0.5px;">Select Items & Quantities to Return:</h4>
+                    <span style="font-size: 11px; color: var(--muted);">Specify units returning to stock</span>
+                </div>
+                <div id="ret-items-list" style="display: flex; flex-direction: column; gap: 10px; margin-bottom: 18px;"></div>
+
+                <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 12px; margin-bottom: 14px;">
+                    <div>
+                        <label for="ret-reason" style="display: block; font-size: 12px; font-weight: 600; color: var(--text); margin-bottom: 6px;">Return Reason *</label>
+                        <select id="ret-reason" style="width: 100%; box-sizing: border-box; padding: 9px 12px; background: var(--surface-2); border: 1px solid var(--border); border-radius: var(--radius-sm); color: var(--text); font-size: 13px;">
+                            <option value="CUSTOMER_CHANGED_MIND">Customer Changed Mind</option>
+                            <option value="DAMAGED">Damaged / Broken</option>
+                            <option value="WRONG_PRODUCT">Wrong Product Delivered</option>
+                            <option value="EXPIRED">Expired Stock</option>
+                            <option value="QUALITY_ISSUE">Quality Issue</option>
+                            <option value="OTHER">Other Reason</option>
+                        </select>
+                    </div>
+                    <div>
+                        <label for="ret-refund-method" style="display: block; font-size: 12px; font-weight: 600; color: var(--text); margin-bottom: 6px;">Refund Payment Method</label>
+                        <select id="ret-refund-method" style="width: 100%; box-sizing: border-box; padding: 9px 12px; background: var(--surface-2); border: 1px solid var(--border); border-radius: var(--radius-sm); color: var(--text); font-size: 13px;">
+                            <option value="CASH">Cash Refund</option>
+                            <option value="UPI">UPI Transfer</option>
+                            <option value="CARD">Card Reversal</option>
+                            <option value="CREDIT">Store Credit</option>
+                        </select>
+                    </div>
+                </div>
+
+                <div style="margin-bottom: 10px;">
+                    <label for="ret-notes" style="display: block; font-size: 12px; font-weight: 600; color: var(--text); margin-bottom: 6px;">Audit Notes / Remarks</label>
+                    <input type="text" id="ret-notes" placeholder="Reason details, package condition, or supervisor note..." style="width: 100%; box-sizing: border-box; padding: 9px 12px; background: var(--surface-2); border: 1px solid var(--border); border-radius: var(--radius-sm); color: var(--text); font-size: 13px;">
+                </div>
+
+                <!-- Inline Submission Feedback Banners -->
+                <div id="ret-submit-error" style="display: none; background: rgba(220, 38, 38, 0.12); color: var(--danger); border: 1px solid rgba(220, 38, 38, 0.3); padding: 12px 14px; border-radius: var(--radius-sm); font-size: 12.5px; margin-top: 14px;"></div>
+                <div id="ret-submit-success" style="display: none; background: rgba(22, 163, 74, 0.12); color: var(--success); border: 1px solid rgba(22, 163, 74, 0.3); padding: 12px 14px; border-radius: var(--radius-sm); font-size: 12.5px; margin-top: 14px;"></div>
+            </div>
         </div>
 
-        <div id="return-step-2" style="display: none;">
-            <div style="background: var(--surface-2); padding: 12px; border-radius: var(--radius-sm); margin-bottom: 16px; font-size: 13px;">
-                <div><strong>Sale:</strong> <span id="ret-display-sale"></span></div>
-                <div><strong>Customer:</strong> <span id="ret-display-customer"></span></div>
-                <div><strong>Date:</strong> <span id="ret-display-date"></span></div>
-            </div>
-
-            <h4 style="font-size: 13px; font-weight: 600; color: var(--text); margin-bottom: 10px;">Select Items & Quantities to Return:</h4>
-            <div id="ret-items-list" style="display: flex; flex-direction: column; gap: 10px; margin-bottom: 16px;"></div>
-
-            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-bottom: 14px;">
-                <div>
-                    <label style="display: block; font-size: 12px; font-weight: 600; color: var(--text); margin-bottom: 6px;">Return Reason *</label>
-                    <select id="ret-reason" style="width: 100%; padding: 8px 10px; background: var(--surface-2); border: 1px solid var(--border); border-radius: var(--radius-sm); color: var(--text); font-size: 13px;">
-                        <option value="CUSTOMER_CHANGED_MIND">Customer Changed Mind</option>
-                        <option value="DAMAGED">Damaged / Broken</option>
-                        <option value="WRONG_PRODUCT">Wrong Product Delivered</option>
-                        <option value="EXPIRED">Expired Stock</option>
-                        <option value="QUALITY_ISSUE">Quality Issue</option>
-                        <option value="OTHER">Other Reason</option>
-                    </select>
-                </div>
-                <div>
-                    <label style="display: block; font-size: 12px; font-weight: 600; color: var(--text); margin-bottom: 6px;">Refund Payment Method</label>
-                    <select id="ret-refund-method" style="width: 100%; padding: 8px 10px; background: var(--surface-2); border: 1px solid var(--border); border-radius: var(--radius-sm); color: var(--text); font-size: 13px;">
-                        <option value="CASH">Cash Refund</option>
-                        <option value="UPI">UPI Transfer</option>
-                        <option value="CARD">Card Reversal</option>
-                        <option value="CREDIT">Store Credit</option>
-                    </select>
-                </div>
-            </div>
-
-            <div style="margin-bottom: 18px;">
-                <label style="display: block; font-size: 12px; font-weight: 600; color: var(--text); margin-bottom: 6px;">Notes / Remarks</label>
-                <input type="text" id="ret-notes" placeholder="Explanation or condition note" style="width: 100%; padding: 8px 10px; background: var(--surface-2); border: 1px solid var(--border); border-radius: var(--radius-sm); color: var(--text); font-size: 13px;">
-            </div>
-
-            <div style="display: flex; justify-content: flex-end; gap: 10px; border-top: 1px solid var(--border); padding-top: 14px;">
-                <button type="button" class="btn btn-secondary" onclick="closeReturnModal()">Cancel</button>
-                <button type="button" class="btn btn-primary" id="btn-submit-return">Submit Return Request</button>
-            </div>
+        <!-- Pinned Footer -->
+        <div style="display: flex; justify-content: flex-end; gap: 10px; border-top: 1px solid var(--border); padding: 14px 24px; background: var(--surface-2); flex-shrink: 0;">
+            <button type="button" class="btn btn-secondary" onclick="closeReturnModal()" style="padding: 8px 16px; font-size: 13px;">Cancel</button>
+            <button type="button" class="btn btn-primary" id="btn-submit-return" style="padding: 8px 18px; font-size: 13px; display: none;">Submit Return Request</button>
         </div>
     </div>
 </div>
@@ -190,63 +223,192 @@
     const openBtn = document.getElementById('btn-open-return-modal');
     const fetchBtn = document.getElementById('btn-fetch-sale');
     const submitBtn = document.getElementById('btn-submit-return');
+    const invoiceInput = document.getElementById('ret-search-invoice');
     let loadedSale = null;
+    let savedScrollPosition = 0;
 
-    if (openBtn) openBtn.addEventListener('click', () => { modal.style.display = 'flex'; });
-    function closeReturnModal() { modal.style.display = 'none'; }
+    // Ensure modals are appended directly to body to avoid ancestor transform or stacking context traps
+    document.addEventListener('DOMContentLoaded', () => {
+        if (modal && modal.parentElement !== document.body) {
+            document.body.appendChild(modal);
+        }
+        const pinModal = document.getElementById('manager-pin-modal');
+        if (pinModal && pinModal.parentElement !== document.body) {
+            document.body.appendChild(pinModal);
+        }
+    });
 
-    fetchBtn.addEventListener('click', () => {
-        const query = document.getElementById('ret-search-invoice').value.trim();
+    function openReturnModal() {
+        savedScrollPosition = window.scrollY || document.documentElement.scrollTop;
+        modal.style.display = 'flex';
+        document.body.style.overflow = 'hidden';
+        if (invoiceInput) {
+            invoiceInput.value = '';
+            document.getElementById('ret-error').style.display = 'none';
+            document.getElementById('return-step-2').style.display = 'none';
+            submitBtn.style.display = 'none';
+            setTimeout(() => invoiceInput.focus(), 80);
+        }
+    }
+
+    function closeReturnModal() {
+        modal.style.display = 'none';
+        document.body.style.overflow = '';
+        window.scrollTo(0, savedScrollPosition);
+    }
+
+    if (openBtn) openBtn.addEventListener('click', openReturnModal);
+
+    // Close on backdrop click (clicking outside the dialog)
+    modal.addEventListener('click', (e) => {
+        if (e.target === modal) {
+            closeReturnModal();
+        }
+    });
+
+    // Close on Escape key press
+    document.addEventListener('keydown', (e) => {
+        if (e.key === 'Escape') {
+            if (modal.style.display === 'flex') {
+                closeReturnModal();
+            } else {
+                const pinModal = document.getElementById('manager-pin-modal');
+                if (pinModal && pinModal.style.display === 'flex') {
+                    closeManagerPinModal();
+                }
+            }
+        }
+    });
+
+    // Support Enter key in invoice search input
+    if (invoiceInput) {
+        invoiceInput.addEventListener('keydown', (e) => {
+            if (e.key === 'Enter') {
+                e.preventDefault();
+                fetchSaleByQuery();
+            }
+        });
+    }
+
+    if (fetchBtn) fetchBtn.addEventListener('click', fetchSaleByQuery);
+
+    function fetchSaleByQuery() {
+        const rawQuery = (invoiceInput.value || '').trim();
         const err = document.getElementById('ret-error');
         err.style.display = 'none';
 
-        if (!query) return;
+        if (!rawQuery) {
+            err.textContent = 'Please enter an invoice number or sale ID.';
+            err.style.display = 'block';
+            return;
+        }
+
+        // Clean query: strip leading '#' or spaces
+        const query = rawQuery.replace(/^#/, '').trim();
+
+        // Loading state
+        fetchBtn.disabled = true;
+        const icon = document.getElementById('fetch-sale-icon');
+        const label = document.getElementById('fetch-sale-label');
+        if (icon) icon.className = 'bi bi-arrow-repeat spin-icon';
+        if (label) label.textContent = 'Searching...';
 
         fetch(`/api/sales/?search=${encodeURIComponent(query)}`)
-            .then(r => r.json())
+            .then(r => {
+                if (!r.ok) throw new Error(`HTTP_${r.status}`);
+                return r.json();
+            })
             .then(data => {
                 const results = data.results || data;
                 if (!results || results.length === 0) {
-                    err.textContent = `No sales found matching "${query}".`;
+                    err.innerHTML = `<i class="bi bi-info-circle"></i> No sales or invoices found matching <strong>"${rawQuery}"</strong>. Please verify the invoice number (e.g. <code>INV-2026-...</code>) or sale ID.`;
                     err.style.display = 'block';
+                    document.getElementById('return-step-2').style.display = 'none';
+                    submitBtn.style.display = 'none';
                     return;
                 }
                 const sale = results[0];
                 loadedSale = sale;
-                document.getElementById('ret-display-sale').textContent = `${sale.sale_number} (Grand Total: ₹${sale.grand_total})`;
-                document.getElementById('ret-display-customer').textContent = sale.customer_name || 'Walk-in';
+                document.getElementById('ret-display-sale').textContent = `${sale.sale_number} (₹${sale.grand_total})`;
+                document.getElementById('ret-display-customer').textContent = sale.customer_display_name || sale.customer_name || 'Counter Sale';
                 document.getElementById('ret-display-date').textContent = new Date(sale.created_at).toLocaleString();
 
                 const list = document.getElementById('ret-items-list');
                 list.innerHTML = (sale.items || []).map(it => `
-                    <div style="background: var(--surface-2); border: 1px solid var(--border); border-radius: var(--radius-sm); padding: 10px; display: grid; grid-template-columns: 2fr 1fr 1fr auto; gap: 8px; align-items: center;">
-                        <div>
-                            <div style="font-weight: 600; color: var(--text);">${it.product_name}</div>
-                            <div style="font-size: 11px; color: var(--muted);">Unit: ₹${it.unit_price} | Bought: ${it.quantity}</div>
+                    <div style="background: var(--surface-2); border: 1px solid var(--border); border-radius: var(--radius-sm); padding: 12px; display: flex; flex-wrap: wrap; gap: 12px; align-items: center; justify-content: space-between;">
+                        <div style="flex: 1 1 200px; min-width: 0;">
+                            <div style="font-weight: 600; color: var(--text); word-break: break-word;">${it.product_name}</div>
+                            <div style="font-size: 11px; color: var(--muted); margin-top: 2px;">Unit: ₹${it.unit_price} &bull; Sold: <strong>${it.quantity}</strong></div>
                         </div>
-                        <div>
-                            <label style="font-size: 11px; color: var(--muted); display: block;">Return Qty</label>
-                            <input type="number" class="ret-item-qty" data-id="${it.id}" max="${it.quantity}" min="0" step="1" value="0" style="width: 100%; padding: 6px; background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius-sm); color: var(--text); font-size: 13px;">
+                        <div style="flex: 0 1 120px;">
+                            <label style="font-size: 11px; color: var(--muted); display: block; margin-bottom: 3px;">Return Qty</label>
+                            <input type="number" class="ret-item-qty" data-id="${it.id}" max="${it.quantity}" min="0" step="1" value="0" style="width: 100%; box-sizing: border-box; padding: 6px 10px; background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius-sm); color: var(--text); font-size: 13px;">
                         </div>
-                        <div>
-                            <label style="font-size: 11px; color: var(--muted); display: block;">Restock?</label>
-                            <label style="font-size: 12px; color: var(--text); cursor: pointer; display: flex; align-items: center; gap: 4px;">
-                                <input type="checkbox" class="ret-item-restock" data-id="${it.id}" checked style="accent-color: var(--primary);"> Yes
+                        <div style="flex: 0 1 100px;">
+                            <label style="font-size: 11px; color: var(--muted); display: block; margin-bottom: 3px;">Restock?</label>
+                            <label style="font-size: 12px; color: var(--text); cursor: pointer; display: flex; align-items: center; gap: 6px; padding-top: 4px;">
+                                <input type="checkbox" class="ret-item-restock" data-id="${it.id}" checked style="accent-color: var(--primary);"> Restock
                             </label>
                         </div>
                     </div>
                 `).join('');
 
                 document.getElementById('return-step-2').style.display = 'block';
+                submitBtn.style.display = 'inline-flex';
             })
             .catch(e => {
-                err.textContent = 'Error fetching invoice.';
+                err.innerHTML = '<i class="bi bi-exclamation-triangle-fill"></i> Unable to query invoice records due to a network or server issue. Please try again.';
                 err.style.display = 'block';
+            })
+            .finally(() => {
+                fetchBtn.disabled = false;
+                if (icon) icon.className = 'bi bi-arrow-right-circle';
+                if (label) label.textContent = 'Search Invoice';
             });
-    });
+    }
+
+    function showInlineReturnError(msg) {
+        const errSubmit = document.getElementById('ret-submit-error');
+        const succSubmit = document.getElementById('ret-submit-success');
+        if (succSubmit) succSubmit.style.display = 'none';
+        if (errSubmit) {
+            errSubmit.innerHTML = `<i class="bi bi-exclamation-triangle-fill"></i> ${msg}`;
+            errSubmit.style.display = 'block';
+        }
+    }
+
+    function showInlineReturnSuccess(msg) {
+        const errSubmit = document.getElementById('ret-submit-error');
+        const succSubmit = document.getElementById('ret-submit-success');
+        if (errSubmit) errSubmit.style.display = 'none';
+        if (succSubmit) {
+            succSubmit.innerHTML = `<i class="bi bi-check-circle-fill"></i> ${msg}`;
+            succSubmit.style.display = 'block';
+        }
+    }
+
+    function getCookie(name) {
+        let cookieValue = null;
+        if (document.cookie && document.cookie !== '') {
+            const cookies = document.cookie.split(';');
+            for (let i = 0; i < cookies.length; i++) {
+                const cookie = cookies[i].trim();
+                if (cookie.substring(0, name.length + 1) === (name + '=')) {
+                    cookieValue = decodeURIComponent(cookie.substring(name.length + 1));
+                    break;
+                }
+            }
+        }
+        return cookieValue;
+    }
 
     submitBtn.addEventListener('click', () => {
         if (!loadedSale) return;
+        const errSubmit = document.getElementById('ret-submit-error');
+        const succSubmit = document.getElementById('ret-submit-success');
+        if (errSubmit) errSubmit.style.display = 'none';
+        if (succSubmit) succSubmit.style.display = 'none';
+
         const items = [];
         document.querySelectorAll('.ret-item-qty').forEach(qInput => {
             const qty = parseFloat(qInput.value) || 0;
@@ -262,15 +424,21 @@
         });
 
         if (items.length === 0) {
-            alert('Please select at least one item with quantity greater than 0 to return.');
+            showInlineReturnError('Please enter a return quantity greater than 0 for at least one item.');
             return;
         }
+
+        submitBtn.disabled = true;
+        const originalText = submitBtn.innerHTML;
+        submitBtn.innerHTML = '<i class="bi bi-arrow-repeat spin-icon"></i> Submitting...';
+
+        const csrfToken = getCookie('csrftoken') || '{{ csrf_token }}';
 
         fetch('/api/sales/returns/', {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json',
-                'X-CSRFToken': '{{ csrf_token }}'
+                'X-CSRFToken': csrfToken
             },
             body: JSON.stringify({
                 sale_id: loadedSale.id,
@@ -280,17 +448,26 @@
                 items: items
             })
         })
-        .then(r => r.json())
-        .then(data => {
-            if (data.id) {
-                alert(`Return Request ${data.return_number} submitted successfully!`);
-                window.location.reload();
+        .then(r => r.json().then(data => ({ ok: r.ok, status: r.status, data: data })))
+        .then(res => {
+            if (res.ok && res.data.id) {
+                showInlineReturnSuccess(`Return Request <strong>${res.data.return_number}</strong> created successfully (${res.data.status})!`);
+                submitBtn.style.display = 'none';
+                setTimeout(() => {
+                    closeReturnModal();
+                    window.location.reload();
+                }, 1200);
             } else {
-                alert(data.error || 'Failed to submit return request.');
+                const errMsg = res.data.error || res.data.detail || (typeof res.data === 'string' ? res.data : 'Failed to submit return request.');
+                showInlineReturnError(errMsg);
+                submitBtn.disabled = false;
+                submitBtn.innerHTML = originalText;
             }
         })
         .catch(e => {
-            alert('Error submitting return request.');
+            showInlineReturnError('Unable to connect to server. Please verify network connection and try again.');
+            submitBtn.disabled = false;
+            submitBtn.innerHTML = originalText;
         });
     });
 
@@ -330,18 +507,32 @@
             } else {
                 alert(data.error || 'Failed to reject return.');
             }
+        })
+        .catch(e => {
+            alert('Error rejecting return.');
         });
+    }
+
     let pinReturnId = null;
     function openManagerPinModal(id) {
         pinReturnId = id;
-        document.getElementById('manager-pin-modal').style.display = 'flex';
-        document.getElementById('mgr-pin-input').value = '';
-        document.getElementById('mgr-pin-error').style.display = 'none';
-        document.getElementById('mgr-user-input').focus();
+        const modal = document.getElementById('manager-pin-modal');
+        if (modal) {
+            modal.style.display = 'flex';
+            document.body.style.overflow = 'hidden';
+            document.getElementById('mgr-pin-input').value = '';
+            document.getElementById('mgr-pin-error').style.display = 'none';
+            const userInput = document.getElementById('mgr-user-input');
+            if (userInput) setTimeout(() => userInput.focus(), 60);
+        }
     }
     function closeManagerPinModal() {
         pinReturnId = null;
-        document.getElementById('manager-pin-modal').style.display = 'none';
+        const modal = document.getElementById('manager-pin-modal');
+        if (modal) {
+            modal.style.display = 'none';
+            document.body.style.overflow = '';
+        }
     }
     function submitManagerPinApproval() {
         const username = document.getElementById('mgr-user-input').value.trim();
@@ -368,6 +559,7 @@
         .then(res => {
             if (res.status === 200) {
                 alert(res.data.message || 'Return approved by manager.');
+                closeManagerPinModal();
                 window.location.reload();
             } else {
                 errDiv.innerText = res.data.error || 'Manager authentication failed.';
@@ -382,25 +574,25 @@
 </script>
 
 <!-- Modal: Manager In-Person Override PIN -->
-<div id="manager-pin-modal" style="display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.75); z-index: 1050; align-items: center; justify-content: center; padding: 16px;">
-    <div style="background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius-md); width: 100%; max-width: 440px; padding: 24px; box-shadow: 0 16px 40px rgba(0,0,0,0.6);">
+<div id="manager-pin-modal" role="dialog" aria-modal="true" aria-labelledby="mgr-modal-title" style="display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.75); backdrop-filter: blur(4px); -webkit-backdrop-filter: blur(4px); z-index: 100050; align-items: center; justify-content: center; padding: 16px; box-sizing: border-box;">
+    <div style="background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius-md); width: 100%; max-width: 440px; padding: 24px; box-shadow: 0 16px 40px rgba(0,0,0,0.6); position: relative;">
         <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px; border-bottom: 1px solid var(--border); padding-bottom: 12px;">
             <div style="display: flex; align-items: center; gap: 8px;">
                 <i class="bi bi-shield-lock" style="font-size: 20px; color: var(--accent);"></i>
-                <h3 style="font-size: 16px; font-weight: 700; color: var(--text); margin: 0;">Manager On-Site Authorization</h3>
+                <h3 id="mgr-modal-title" style="font-size: 16px; font-weight: 700; color: var(--text); margin: 0;">Manager On-Site Authorization</h3>
             </div>
-            <button type="button" onclick="closeManagerPinModal()" style="background: transparent; border: none; color: var(--muted); cursor: pointer; font-size: 18px;">&times;</button>
+            <button type="button" onclick="closeManagerPinModal()" aria-label="Close" style="background: transparent; border: none; color: var(--muted); cursor: pointer; font-size: 20px;">&times;</button>
         </div>
         <p style="font-size: 13px; color: var(--muted); margin: 0 0 16px 0;">
             A store Manager or Owner must authenticate to authorize this return and inventory refund.
         </p>
         <div id="mgr-pin-error" style="display: none; background: rgba(220,38,38,0.12); color: var(--danger); border: 1px solid rgba(220,38,38,0.3); padding: 8px 12px; border-radius: 6px; font-size: 12px; margin-bottom: 14px;"></div>
         <div style="margin-bottom: 14px;">
-            <label style="display: block; font-size: 12px; font-weight: 600; color: var(--text); margin-bottom: 6px;">Manager Username</label>
-            <input type="text" id="mgr-user-input" class="form-control" placeholder="e.g. audit_mgr_a" style="width: 100%;">
+            <label for="mgr-user-input" style="display: block; font-size: 12px; font-weight: 600; color: var(--text); margin-bottom: 6px;">Manager Username / Employee ID / Email</label>
+            <input type="text" id="mgr-user-input" class="form-control" placeholder="e.g. manager, EMP-101, or email" style="width: 100%;">
         </div>
         <div style="margin-bottom: 20px;">
-            <label style="display: block; font-size: 12px; font-weight: 600; color: var(--text); margin-bottom: 6px;">Manager PIN / Password</label>
+            <label for="mgr-pin-input" style="display: block; font-size: 12px; font-weight: 600; color: var(--text); margin-bottom: 6px;">Manager Password / PIN</label>
             <input type="password" id="mgr-pin-input" class="form-control" placeholder="••••••••" style="width: 100%;">
         </div>
         <div style="display: flex; justify-content: flex-end; gap: 10px;">

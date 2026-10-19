@@ -1,5 +1,6 @@
 import time
 import json
+import ssl
 import urllib.request
 import urllib.parse
 from django.core.management.base import BaseCommand
@@ -9,6 +10,7 @@ from dashboard.telegram_service import (
     handle_telegram_command,
     dispatch_outbound_messages,
     test_telegram_connection,
+    record_worker_heartbeat,
 )
 
 
@@ -58,9 +60,43 @@ class Command(BaseCommand):
 
         poll_timeout = options["timeout"]
         run_once = options["once"]
-        last_update_id = None
+        if run_once and options.get("timeout") == 15:
+            # For test --once, use shorter polling timeout if default
+            poll_timeout = 2
+
+        import os
+
+        def _get_last_update_filepath():
+            return os.path.join(settings.BASE_DIR, ".telegram_last_update.json")
+
+        def _read_last_update_id():
+            path = _get_last_update_filepath()
+            if os.path.exists(path):
+                try:
+                    with open(path, "r", encoding="utf-8") as f:
+                        data = json.load(f)
+                        return data.get("last_update_id")
+                except Exception:
+                    pass
+            return None
+
+        def _save_last_update_id(upd_id):
+            path = _get_last_update_filepath()
+            try:
+                with open(path, "w", encoding="utf-8") as f:
+                    json.dump({"last_update_id": upd_id}, f)
+            except Exception:
+                pass
+
+        last_update_id = _read_last_update_id()
+        processed_update_ids = set()
+        if last_update_id is not None:
+            processed_update_ids.add(last_update_id)
+
+        ssl_ctx = ssl.create_default_context()
 
         while True:
+            record_worker_heartbeat()
             try:
                 # 1. Fetch updates from Telegram Bot API (getUpdates)
                 url = f"https://api.telegram.org/bot{token}/getUpdates?timeout={poll_timeout}"
@@ -73,7 +109,7 @@ class Command(BaseCommand):
                 )
 
                 try:
-                    with urllib.request.urlopen(req, timeout=poll_timeout + 5) as resp:
+                    with urllib.request.urlopen(req, timeout=poll_timeout + 5, context=ssl_ctx) as resp:
                         data = json.loads(resp.read().decode("utf-8"))
                 except Exception as net_err:
                     self.stdout.write(f"Connection timeout or temporary error: {net_err}. Retrying...")
@@ -93,10 +129,16 @@ class Command(BaseCommand):
                 for upd in updates:
                     update_id = upd.get("update_id")
                     if update_id is not None:
+                        if update_id in processed_update_ids:
+                            continue
+                        processed_update_ids.add(update_id)
+                        if len(processed_update_ids) > 10000:
+                            processed_update_ids = set(list(processed_update_ids)[-5000:])
                         last_update_id = update_id
+                        _save_last_update_id(last_update_id)
 
-                    # Check for text message
-                    message = upd.get("message") or upd.get("edited_message")
+                    # Strictly ignore edited_message, channel_post, etc. Only process new incoming user messages
+                    message = upd.get("message")
                     if not message:
                         continue
 

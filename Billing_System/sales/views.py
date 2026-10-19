@@ -1,3 +1,4 @@
+from decimal import Decimal
 from django.shortcuts import render, get_object_or_404
 from django.db.models import Q
 from accounts.tenancy import company_required, role_required
@@ -11,7 +12,7 @@ def sales(request):
     sales_list = (
         Sale.objects.filter(company=company)
         .select_related("customer", "cashier", "invoice")
-        .prefetch_related("items")
+        .prefetch_related("items", "payments")
         .order_by("-created_at")
     )
     return render(
@@ -30,10 +31,13 @@ def sales(request):
 def invoice_detail(request, invoice_number):
     company = request.company
     invoice = get_object_or_404(
-        Invoice.objects.select_related("sale").prefetch_related("sale__items"),
+        Invoice.objects.select_related("sale__customer", "sale__cashier")
+        .prefetch_related("sale__items", "sale__payments"),
         invoice_number=invoice_number,
         company=company
     )
+    payments = list(invoice.sale.payments.all()) if hasattr(invoice.sale, "payments") else []
+    change_amount = max(Decimal("0.00"), (invoice.paid_amount or Decimal("0.00")) - (invoice.grand_total or Decimal("0.00")))
     return render(
         request,
         "sales/invoice_detail.html",
@@ -42,6 +46,8 @@ def invoice_detail(request, invoice_number):
             "invoice": invoice,
             "sale": invoice.sale,
             "items": invoice.sale.items.all(),
+            "payments": payments,
+            "change_amount": change_amount,
         }
     )
 
@@ -50,12 +56,27 @@ def invoice_detail(request, invoice_number):
 @role_required(["Admin", "Manager", "Cashier"])
 def cart(request):
     """POS Cart / Checkout page."""
+    from sales.models import POSScannerSession
+    from django.utils import timezone
+
+    active_session = POSScannerSession.objects.filter(
+        company=request.company,
+        user=request.user,
+        status="ACTIVE",
+        expires_at__gt=timezone.now()
+    ).order_by("-created_at").first()
+
+    if active_session and active_session.destination != "POS":
+        active_session.destination = "POS"
+        active_session.save(update_fields=["destination"])
+
     return render(
         request,
         "sales/cart.html",
         {
             "company": request.company,
             "user_role": request.user_role,
+            "active_session_token": active_session.session_token if active_session else "",
         }
     )
 
@@ -88,6 +109,10 @@ def pos_phone_scanner(request):
 
     if session:
         company = session.company
+        dest = request.GET.get("dest", "").strip().upper()
+        if dest in ("POS", "PRODUCT_FORM") and session.destination != dest:
+            session.destination = dest
+            session.save(update_fields=["destination"])
 
     return render(
         request,
@@ -95,6 +120,7 @@ def pos_phone_scanner(request):
         {
             "session": session,
             "company": company,
+            "destination": session.destination if session else (request.GET.get("dest") or "POS"),
             "terminal_id": session.device_info if session else "POS-001",
         }
     )

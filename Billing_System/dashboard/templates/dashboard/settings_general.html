@@ -21,10 +21,12 @@
         <a href="{% url 'settings_scanner' %}" class="settings-tab">
             <i class="bi bi-upc-scan"></i> Scanner & POS Devices
         </a>
-        {% if is_owner %}
+        {% if is_owner or user_role == "Admin" %}
         <a href="{% url 'settings_company' %}" class="settings-tab">
             <i class="bi bi-building"></i> Company Profile
         </a>
+        {% endif %}
+        {% if is_owner %}
         <a href="{% url 'settings_telegram' %}" class="settings-tab">
             <i class="bi bi-telegram"></i> Telegram Bot & Sync
         </a>
@@ -54,7 +56,8 @@
                         Week Starts On:
                     </label>
 
-                    <div class="segmented-toggle" id="week-toggle" style="margin-bottom: 12px;">
+                    <div class="segmented-toggle" id="week-toggle" style="margin-bottom: 12px;" data-active="{% if current_week_start == 'monday' %}second{% else %}first{% endif %}">
+                        <div class="indicator"></div>
                         <button type="button" data-val="sunday" class="{% if current_week_start == 'sunday' %}active{% endif %}">
                             <i class="bi bi-calendar-event"></i> Sunday
                         </button>
@@ -86,30 +89,55 @@ document.addEventListener("DOMContentLoaded", () => {
     const input = document.getElementById("week-start-input");
     const display = document.getElementById("current-week-display");
 
-    // Sync with localStorage if present
-    const localSaved = localStorage.getItem("pos_week_start");
-    if (localSaved && (localSaved === "sunday" || localSaved === "monday")) {
-        input.value = localSaved;
-        if (display) display.textContent = localSaved.charAt(0).toUpperCase() + localSaved.slice(1);
+    function setWeekSelection(val) {
+        if (!val || (val !== "sunday" && val !== "monday")) val = "sunday";
+        if (input) input.value = val;
+        if (display) {
+            display.textContent = val.charAt(0).toUpperCase() + val.slice(1);
+        }
+        if (toggle) {
+            toggle.setAttribute("data-active", val === "monday" ? "second" : "first");
+            const buttons = toggle.querySelectorAll("button");
+            buttons.forEach(btn => {
+                const isActive = btn.dataset.val === val;
+                btn.classList.toggle("active", isActive);
+            });
+            const indicator = toggle.querySelector(".indicator");
+            const activeBtn = toggle.querySelector(`button[data-val="${val}"]`);
+            if (indicator && activeBtn) {
+                const toggleRect = toggle.getBoundingClientRect();
+                const btnRect = activeBtn.getBoundingClientRect();
+                if (btnRect.width > 0) {
+                    const leftOffset = btnRect.left - toggleRect.left - 4;
+                    indicator.style.transform = `translateX(${leftOffset}px)`;
+                    indicator.style.width = `${btnRect.width}px`;
+                }
+            }
+        }
+        localStorage.setItem("pos_week_start", val);
+        if (typeof setWeekStart === "function") {
+            setWeekStart(val);
+        }
     }
+
+    // Initialize with server-rendered value
+    let initialVal = input ? input.value : "sunday";
+    setWeekSelection(initialVal);
 
     if (toggle) {
         toggle.querySelectorAll("button").forEach(btn => {
             btn.addEventListener("click", () => {
-                const val = btn.dataset.val;
-                input.value = val;
-                if (display) display.textContent = val.charAt(0).toUpperCase() + val.slice(1);
-                localStorage.setItem("pos_week_start", val);
-                if (typeof setWeekStart === "function") {
-                    setWeekStart(val);
-                }
+                setWeekSelection(btn.dataset.val);
             });
         });
     }
 
-    document.getElementById("week-start-form").addEventListener("submit", () => {
-        localStorage.setItem("pos_week_start", input.value);
-    });
+    const form = document.getElementById("week-start-form");
+    if (form) {
+        form.addEventListener("submit", () => {
+            if (input) localStorage.setItem("pos_week_start", input.value);
+        });
+    }
 });
 </script>
 {% endblock content %}

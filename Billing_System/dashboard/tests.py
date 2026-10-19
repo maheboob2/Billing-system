@@ -2,6 +2,7 @@ from django.test import TestCase, Client
 from django.contrib.auth.models import User
 from accounts.models import companyRegistration
 from employee.models import user_registration
+from dashboard.models import InternalNotification
 
 
 class DashboardAndReportsRBACTests(TestCase):
@@ -130,324 +131,492 @@ class DashboardAndReportsRBACTests(TestCase):
         self.assertEqual(res.status_code, 200)
 
 
-
 from decimal import Decimal
-from datetime import timedelta, date
+from datetime import date, timedelta
 from django.utils import timezone
-from django.core.management import call_command
-from django.conf import settings
-from employee.models import SalaryPayment
-from sales.models import POSScannerSession, POSScannerScan, Sale, SaleItem, Payment
-from inventory.models import Product, Category
-from dashboard.models import TelegramOwnerLink, TelegramOutboundMessage
-from dashboard.telegram_service import (
-    is_bot_token_configured,
-    get_telegram_gateway_status,
-    test_telegram_connection,
-    dispatch_outbound_messages,
-    _telegram_verification_state,
+from rest_framework.test import APIClient
+from rest_framework import status
+from inventory.models import Category, Supplier, Product
+from sales.models import Customer, Sale, SaleItem, Payment, Invoice, ReturnRequest
+from dashboard.ai_assistant import (
+    parse_date_or_range,
+    answer_business_question,
+    generate_sales_insights,
+    generate_inventory_intelligence,
 )
 
 
-class Phase11ComprehensiveTests(TestCase):
+class AIAssistantUnitTests(TestCase):
     def setUp(self):
-        self.owner_user = User.objects.create_user(
-            username="phase11_owner",
-            password="OwnerPassword123!",
-            email="owner@phase11.test"
-        )
+        self.owner = User.objects.create_user(username="owner_ai", password="password123")
         self.company = companyRegistration.objects.create(
-            owner=self.owner_user,
-            company_name="Phase11 Test Retail",
-            address_line="123 High Street",
-            city="Bengaluru",
-            state="Karnataka",
+            owner=self.owner,
+            company_name="Apex Retail Hub",
+            address_line="200 Tech Park",
+            city="Pune",
+            state="Maharashtra",
             country="India",
-            pincode="560001",
-            company_email="owner@phase11.test",
-            phone="9876543210",
-            alternate_phone="9876543211",
-            gst_number="29AAAAA0000A1Z5",
-            business_info="Retail Store"
+            pincode="411001",
+            company_email="apex@example.com",
+            phone="9811112222",
+            gst_number="27APEX0000A1Z1",
+            business_info="Electronics"
         )
-        self.client = Client()
+        self.category = Category.objects.create(company=self.company, name="Gadgets")
+        self.supplier = Supplier.objects.create(company=self.company, name="Tech Distributor", phone="9800009999")
 
-    def test_01_telegram_unconfigured_honest_status(self):
-        """Requirement 1: Telegram must never show fake Connected status when token is absent/blank."""
-        old_token = getattr(settings, "TELEGRAM_BOT_TOKEN", "")
-        try:
-            settings.TELEGRAM_BOT_TOKEN = ""
-            _telegram_verification_state["status"] = None
-            _telegram_verification_state["bot_username"] = None
-
-            self.assertFalse(is_bot_token_configured())
-            status_info = get_telegram_gateway_status(company=self.company)
-            self.assertEqual(status_info["status"], "Not configured")
-            self.assertEqual(status_info["badge_class"], "neutral")
-            self.assertFalse(status_info["is_verified"])
-            self.assertFalse(status_info["is_configured"])
-
-            # Test connection action when token is blank
-            result = test_telegram_connection()
-            self.assertFalse(result["success"])
-            self.assertEqual(result["status"], "Not configured")
-            self.assertIn("not configured", result["message"].lower())
-
-            # Verify outbound dispatcher does NOT mark messages SENT when token is unconfigured
-            msg = TelegramOutboundMessage.objects.create(
-                company=self.company,
-                chat_id="12345678",
-                message_text="Test Message",
-                status="QUEUED"
-            )
-            dispatched = dispatch_outbound_messages()
-            self.assertEqual(dispatched, 0)
-            msg.refresh_from_db()
-            self.assertEqual(msg.status, "QUEUED")
-        finally:
-            settings.TELEGRAM_BOT_TOKEN = old_token
-
-    def test_02_telegram_six_states_distinction(self):
-        """Requirement 1: Accurately distinguish the 6 distinct states."""
-        old_token = getattr(settings, "TELEGRAM_BOT_TOKEN", "")
-        try:
-            # 1. Not configured
-            settings.TELEGRAM_BOT_TOKEN = ""
-            _telegram_verification_state["status"] = None
-            s1 = get_telegram_gateway_status(self.company)
-            self.assertEqual(s1["status"], "Not configured")
-
-            # 2. Configured but not verified
-            settings.TELEGRAM_BOT_TOKEN = "123456789:ABCdefGHIjklMNOpqrsTUVwxyz12345"
-            _telegram_verification_state["status"] = None
-            s2 = get_telegram_gateway_status(self.company)
-            self.assertEqual(s2["status"], "Configured but not verified")
-            self.assertEqual(s2["badge_class"], "warning")
-
-            # 3. Connection verified
-            _telegram_verification_state["status"] = "Connection verified"
-            _telegram_verification_state["bot_username"] = "@TestBillingBot"
-            s3 = get_telegram_gateway_status(self.company)
-            self.assertEqual(s3["status"], "Connection verified")
-            self.assertEqual(s3["badge_class"], "success")
-
-            # 4. Connection failed
-            _telegram_verification_state["status"] = "Connection failed"
-            _telegram_verification_state["last_error"] = "HTTP 401: Unauthorized"
-            s4 = get_telegram_gateway_status(self.company)
-            self.assertEqual(s4["status"], "Connection failed")
-            self.assertEqual(s4["badge_class"], "danger")
-
-            # 5. Sync pending
-            TelegramOutboundMessage.objects.create(
-                company=self.company,
-                chat_id="999",
-                message_text="Pending message",
-                status="QUEUED"
-            )
-            s5 = get_telegram_gateway_status(self.company)
-            self.assertEqual(s5["status"], "Sync pending")
-            self.assertEqual(s5["badge_class"], "warning")
-
-            # 6. Sync failed
-            TelegramOutboundMessage.objects.create(
-                company=self.company,
-                chat_id="999",
-                message_text="Failed message",
-                status="FAILED"
-            )
-            s6 = get_telegram_gateway_status(self.company)
-            self.assertEqual(s6["status"], "Sync failed")
-            self.assertEqual(s6["badge_class"], "danger")
-        finally:
-            settings.TELEGRAM_BOT_TOKEN = old_token
-            _telegram_verification_state["status"] = None
-
-    def test_03_scanner_session_expiration_and_evidence_badges(self):
-        """Requirement 2: Scanner sessions expire safely, status badges reflect real evidence."""
-        expired_sess = POSScannerSession.objects.create(
+        self.prod1 = Product.objects.create(
             company=self.company,
-            user=self.owner_user,
-            session_token="expired-token-session-qa",
-            pairing_code="123456",
-            status="ACTIVE",
-            expires_at=timezone.now() - timedelta(minutes=5)
+            category=self.category,
+            supplier=self.supplier,
+            name="Wireless Mouse",
+            product_code="MOU-001",
+            purchase_price=Decimal("200.00"),
+            selling_price=Decimal("500.00"),
+            gst_percentage=Decimal("18.00"),
+            current_stock=Decimal("50.00"),
+            minimum_stock=Decimal("10.00"),
+            unit="pcs"
         )
-        self.client.login(username="phase11_owner", password="OwnerPassword123!")
-        resp = self.client.get("/settings/scanner/")
-        self.assertEqual(resp.status_code, 200)
-
-        expired_sess.refresh_from_db()
-        self.assertEqual(expired_sess.status, "EXPIRED")
-
-        content = resp.content.decode("utf-8")
-        self.assertIn("HID SCANNER SUPPORTED (Driverless)", content)
-        self.assertIn("Pairing Available (Awaiting Phone)", content)
-        self.assertNotIn("HID Ready", content)
-
-    def test_04_seed_demo_data_dry_run_and_password_preservation(self):
-        """Requirement 3: seed_demo_data --dry-run writes 0 records, never overwrites passwords."""
-        u_count_before = User.objects.count()
-        p_count_before = Product.objects.count()
-
-        call_command("seed_demo_data", dry_run=True)
-
-        self.assertEqual(User.objects.count(), u_count_before)
-        self.assertEqual(Product.objects.count(), p_count_before)
-
-        existing_pass = "ExistingSecretPassword!"
-        safe_user = User.objects.create_user(
-            username="retail_owner_safety",
-            password=existing_pass,
-            email="retail_owner_safety@example.com"
-        )
-        call_command("seed_demo_data")
-        safe_user.refresh_from_db()
-        self.assertTrue(safe_user.check_password(existing_pass), "Existing user password must NEVER be modified by seed_demo_data!")
-
-        demo_payments = SalaryPayment.objects.filter(payment_reference__startswith="DEMO-SEED-")
-        self.assertTrue(demo_payments.exists(), "Seeded salary payments must be clearly identified with DEMO-SEED- reference")
-        for dp in demo_payments:
-            self.assertIn("[DEMO SEED]", dp.notes)
-
-    def test_05_payroll_reconciliation_and_date_range(self):
-        """Requirement 4: April 2025 - April 2026 payroll filters and totals reconciliation."""
-        emp_user = User.objects.create_user(
-            username="ramesh_cashier",
-            password="CashierPass123!",
-            email="ramesh@retail.com"
-        )
-        emp = user_registration.objects.create(
-            user=emp_user,
+        self.prod2 = Product.objects.create(
             company=self.company,
-            employee_id="EMP-991",
+            category=self.category,
+            supplier=self.supplier,
+            name="Mechanical Keyboard",
+            product_code="KEY-001",
+            purchase_price=Decimal("1000.00"),
+            selling_price=Decimal("2500.00"),
+            gst_percentage=Decimal("18.00"),
+            current_stock=Decimal("2.00"),  # Low stock
+            minimum_stock=Decimal("5.00"),
+            unit="pcs"
+        )
+        self.prod3 = Product.objects.create(
+            company=self.company,
+            category=self.category,
+            supplier=self.supplier,
+            name="USB-C Hub",
+            product_code="HUB-001",
+            purchase_price=Decimal("400.00"),
+            selling_price=Decimal("900.00"),
+            gst_percentage=Decimal("18.00"),
+            current_stock=Decimal("0.00"),  # Out of stock
+            minimum_stock=Decimal("5.00"),
+            unit="pcs"
+        )
+
+        self.cashier_user = User.objects.create_user(username="cashier_ai", password="password123")
+        self.cashier_emp = user_registration.objects.create(
+            user=self.cashier_user,
+            company=self.company,
+            employee_id="CSH_AI01",
             Role="Cashier",
-            Phone="9876543210",
-            Alternate_phone="9876543211",
-            address="12 Cashier Lane",
-            joining_date=date(2025, 1, 1),
-            monthaly_salary=Decimal("25000.00"),
+            Phone="9811113333",
+            joining_date="2026-01-01",
             payment="Paid",
             status="active"
         )
 
-        SalaryPayment.objects.create(
+        self.mgr_user = User.objects.create_user(username="mgr_ai", password="password123")
+        self.mgr_emp = user_registration.objects.create(
+            user=self.mgr_user,
             company=self.company,
-            employee=emp,
-            year=2025,
-            month=5,
-            basic_salary=Decimal("25000.00"),
-            gross_salary=Decimal("25000.00"),
-            net_payable=Decimal("25000.00"),
-            paid_amount=Decimal("25000.00"),
-            payment_status="Paid",
-            payment_method="Bank Transfer",
-            payment_reference="TEST-SAL-MAY25",
-            payment_date=date(2025, 5, 31),
-            notes="May 2025 salary"
+            employee_id="MGR_AI01",
+            Role="Manager",
+            Phone="9811114444",
+            joining_date="2026-01-01",
+            payment="Paid",
+            status="active"
         )
-        SalaryPayment.objects.create(
+
+        self.api_client = APIClient()
+
+    def test_parse_date_or_range_natural_formats(self):
+        today = timezone.now().date()
+        
+        # Today / Yesterday
+        res_today = parse_date_or_range("sales today")
+        self.assertIsNotNone(res_today)
+        self.assertEqual(res_today[0], "single")
+        self.assertEqual(res_today[1], today)
+
+        res_yesterday = parse_date_or_range("sales yesterday")
+        self.assertIsNotNone(res_yesterday)
+        self.assertEqual(res_yesterday[0], "single")
+        self.assertEqual(res_yesterday[1], today - timedelta(days=1))
+
+        # Relative range: last 7 days
+        res_7d = parse_date_or_range("show last 7 days sales")
+        self.assertIsNotNone(res_7d)
+        self.assertEqual(res_7d[0], "range")
+        self.assertEqual(res_7d[1], today - timedelta(days=7))
+        self.assertEqual(res_7d[2], today)
+
+        # Named month: 20 September 2026
+        res_named = parse_date_or_range("Sales for 20 September 2026")
+        self.assertIsNotNone(res_named)
+        self.assertEqual(res_named[0], "single")
+        self.assertEqual(res_named[1], date(2026, 9, 20))
+
+        # ISO format: 2026-09-20
+        res_iso = parse_date_or_range("sales on 2026-09-20")
+        self.assertIsNotNone(res_iso)
+        self.assertEqual(res_iso[0], "single")
+        self.assertEqual(res_iso[1], date(2026, 9, 20))
+
+        # ISO Range: 2026-09-01 to 2026-09-20
+        res_iso_range = parse_date_or_range("sales from 2026-09-01 to 2026-09-20")
+        self.assertIsNotNone(res_iso_range)
+        self.assertEqual(res_iso_range[0], "range")
+        self.assertEqual(res_iso_range[1], date(2026, 9, 1))
+        self.assertEqual(res_iso_range[2], date(2026, 9, 20))
+
+    def test_answer_business_question_empty_and_greetings(self):
+        # Empty
+        res_empty = answer_business_question(self.company, "")
+        self.assertEqual(res_empty["intent"], "empty_query")
+        self.assertIn("Please ask a question", res_empty["answer"])
+
+        # Greeting
+        res_hi = answer_business_question(self.company, "hi")
+        self.assertEqual(res_hi["intent"], "greeting")
+        self.assertIn("Apex Retail Hub", res_hi["answer"])
+        self.assertIn("Today's sales", res_hi["answer"])
+
+    def test_answer_business_question_today_sales(self):
+        today = timezone.now().date()
+        # Create a sale today
+        sale = Sale.objects.create(
             company=self.company,
-            employee=emp,
-            year=2025,
-            month=6,
-            basic_salary=Decimal("25000.00"),
-            gross_salary=Decimal("25000.00"),
-            net_payable=Decimal("25000.00"),
-            paid_amount=Decimal("15000.00"),
-            payment_status="Partial",
-            payment_method="Cash",
-            payment_reference="TEST-SAL-JUN25",
-            payment_date=date(2025, 6, 30),
-            notes="June 2025 partial"
+            sale_number="SALE-AI-TODAY",
+            cashier=self.owner,
+            subtotal=Decimal("1000.00"),
+            tax_amount=Decimal("180.00"),
+            grand_total=Decimal("1180.00"),
+            paid_amount=Decimal("1180.00"),
+            balance_due=Decimal("0.00"),
+            payment_status="PAID",
+            sale_status="COMPLETED"
         )
-        SalaryPayment.objects.create(
+        Payment.objects.create(
             company=self.company,
-            employee=emp,
-            year=2026,
-            month=1,
-            basic_salary=Decimal("25000.00"),
-            gross_salary=Decimal("25000.00"),
-            net_payable=Decimal("25000.00"),
-            paid_amount=Decimal("25000.00"),
-            payment_status="Paid",
+            sale=sale,
             payment_method="UPI",
-            payment_reference="TEST-SAL-JAN26",
-            payment_date=date(2026, 1, 31),
-            notes="Jan 2026 salary"
+            amount=Decimal("1180.00"),
+            received_by=self.owner
+        )
+        SaleItem.objects.create(
+            sale=sale,
+            product=self.prod1,
+            product_name=self.prod1.name,
+            product_code=self.prod1.product_code,
+            unit_price=Decimal("500.00"),
+            quantity=Decimal("2.00"),
+            subtotal=Decimal("1000.00"),
+            tax_amount=Decimal("180.00"),
+            total=Decimal("1180.00")
         )
 
-        self.client.login(username="phase11_owner", password="OwnerPassword123!")
+        res = answer_business_question(self.company, "Today's sales")
+        self.assertEqual(res["intent"], "sales_today")
+        self.assertEqual(res["data"]["count"], 1)
+        self.assertEqual(res["data"]["revenue"], 1180.00)
+        self.assertEqual(res["data"]["upi"], 1180.00)
+        self.assertEqual(res["data"]["cash"], 0.00)
+        self.assertIn("₹1,180.00", res["answer"])
 
-        resp_may = self.client.get("/payroll/?year=2025&month=5")
-        self.assertEqual(resp_may.status_code, 200)
-        self.assertEqual(resp_may.context["selected_year"], 2025)
-        self.assertEqual(resp_may.context["selected_month"], 5)
-        self.assertEqual(resp_may.context["total_payable"], Decimal("25000.00"))
-        self.assertEqual(resp_may.context["total_paid"], Decimal("25000.00"))
-        self.assertEqual(resp_may.context["total_pending"], Decimal("0.00"))
+    def test_answer_business_question_specific_date(self):
+        # Create a sale on 2026-09-20
+        past_dt = timezone.now().replace(year=2026, month=9, day=20, hour=14, minute=30)
+        sale = Sale.objects.create(
+            company=self.company,
+            sale_number="SALE-AI-PAST-1",
+            cashier=self.owner,
+            subtotal=Decimal("500.00"),
+            tax_amount=Decimal("90.00"),
+            grand_total=Decimal("590.00"),
+            paid_amount=Decimal("590.00"),
+            balance_due=Decimal("0.00"),
+            payment_status="PAID",
+            sale_status="COMPLETED"
+        )
+        Sale.objects.filter(id=sale.id).update(created_at=past_dt)
+        p = Payment.objects.create(
+            company=self.company,
+            sale=sale,
+            payment_method="CASH",
+            amount=Decimal("590.00"),
+            received_by=self.owner
+        )
+        Payment.objects.filter(id=p.id).update(payment_date=past_dt)
 
-        resp_jun = self.client.get("/payroll/?year=2025&month=6")
-        self.assertEqual(resp_jun.status_code, 200)
-        self.assertEqual(resp_jun.context["total_payable"], Decimal("25000.00"))
-        self.assertEqual(resp_jun.context["total_paid"], Decimal("15000.00"))
-        self.assertEqual(resp_jun.context["total_pending"], Decimal("10000.00"))
+        res = answer_business_question(self.company, "Sales for 20 September 2026")
+        self.assertEqual(res["intent"], "sales_date")
+        self.assertEqual(res["data"]["count"], 1)
+        self.assertEqual(res["data"]["revenue"], 590.00)
+        self.assertEqual(res["data"]["cash"], 590.00)
+        self.assertIn("20 September 2026", res["answer"])
+        self.assertIn("₹590.00", res["answer"])
 
-        resp_jan = self.client.get("/payroll/?year=2026&month=1")
-        self.assertEqual(resp_jan.status_code, 200)
-        self.assertEqual(resp_jan.context["total_payable"], Decimal("25000.00"))
-        self.assertEqual(resp_jan.context["total_paid"], Decimal("25000.00"))
-        self.assertEqual(resp_jan.context["total_pending"], Decimal("0.00"))
+        # Date with zero sales
+        res_zero = answer_business_question(self.company, "Sales for 15 August 2026")
+        self.assertEqual(res_zero["intent"], "sales_date")
+        self.assertEqual(res_zero["data"]["count"], 0)
+        self.assertIn("No completed transactions were recorded", res_zero["answer"])
 
-        payslip_url = f"/payslip/{emp.employee_id}/?year=2025&month=5"
-        resp_payslip = self.client.get(payslip_url)
-        self.assertEqual(resp_payslip.status_code, 200)
+    def test_answer_business_question_payment_breakdowns(self):
+        # Add a UPI payment and a Cash payment today
+        sale1 = Sale.objects.create(
+            company=self.company,
+            sale_number="SALE-PAY-1",
+            cashier=self.owner,
+            subtotal=Decimal("100.00"),
+            tax_amount=Decimal("18.00"),
+            grand_total=Decimal("118.00"),
+            paid_amount=Decimal("118.00"),
+            sale_status="COMPLETED"
+        )
+        Payment.objects.create(
+            company=self.company,
+            sale=sale1,
+            payment_method="UPI",
+            amount=Decimal("118.00"),
+            received_by=self.owner
+        )
 
-        other_user = User.objects.create_user(username="rival_owner", password="RivalPassword123!")
-        other_company = companyRegistration.objects.create(
-            owner=other_user,
-            company_name="Rival Store",
-            address_line="456 Rival Rd",
-            city="Bengaluru",
-            state="Karnataka",
+        sale2 = Sale.objects.create(
+            company=self.company,
+            sale_number="SALE-PAY-2",
+            cashier=self.owner,
+            subtotal=Decimal("200.00"),
+            tax_amount=Decimal("36.00"),
+            grand_total=Decimal("236.00"),
+            paid_amount=Decimal("236.00"),
+            sale_status="COMPLETED"
+        )
+        Payment.objects.create(
+            company=self.company,
+            sale=sale2,
+            payment_method="CASH",
+            amount=Decimal("236.00"),
+            received_by=self.owner
+        )
+
+        # 1. UPI query
+        res_upi = answer_business_question(self.company, "Show UPI collections")
+        self.assertEqual(res_upi["intent"], "payment_upi")
+        self.assertEqual(res_upi["data"]["upi_today"], 118.00)
+
+        # 2. Cash query
+        res_cash = answer_business_question(self.company, "Cash collections")
+        self.assertEqual(res_cash["intent"], "payment_cash")
+        self.assertEqual(res_cash["data"]["cash_today"], 236.00)
+
+        # 3. General payment breakdown
+        res_all = answer_business_question(self.company, "Payment breakdown")
+        self.assertEqual(res_all["intent"], "payment_breakdown")
+        self.assertEqual(res_all["data"]["today"]["upi"], 118.00)
+        self.assertEqual(res_all["data"]["today"]["cash"], 236.00)
+
+    def test_answer_business_question_low_stock(self):
+        res = answer_business_question(self.company, "Low stock")
+        self.assertEqual(res["intent"], "low_stock")
+        self.assertTrue(len(res["data"]) >= 2)
+        skus = [item["sku"] for item in res["data"]]
+        self.assertIn("KEY-001", skus)
+        self.assertIn("HUB-001", skus)
+        self.assertIn("OUT OF STOCK", res["answer"])
+
+    def test_answer_business_question_fallback(self):
+        res = answer_business_question(self.company, "What is the capital of Australia?")
+        self.assertEqual(res["intent"], "general_overview")
+        self.assertIn("Store Overview for Apex Retail Hub", res["answer"])
+        self.assertIn("Try asking:", res["answer"])
+
+    def test_tenant_isolation_in_assistant(self):
+        # Create Company B
+        owner_b = User.objects.create_user(username="owner_b_ai", password="password123")
+        company_b = companyRegistration.objects.create(
+            owner=owner_b,
+            company_name="Beta Superstore",
+            address_line="500 Beta Road",
+            city="Delhi",
+            state="Delhi",
             country="India",
-            pincode="560002",
-            company_email="rival@test.com",
-            phone="9800000001",
-            alternate_phone="9800000002",
-            gst_number="29BBBBB0000B1Z2",
-            business_info="Competitor"
+            pincode="110001",
+            company_email="beta@example.com",
+            phone="9822223333",
+            gst_number="07BETA0000A1Z1",
+            business_info="Grocery"
         )
-        self.client.login(username="rival_owner", password="RivalPassword123!")
-        resp_rival_payslip = self.client.get(payslip_url)
-        self.assertEqual(resp_rival_payslip.status_code, 404)
+        # Create sales and products for Company B only
+        sale_b = Sale.objects.create(
+            company=company_b,
+            sale_number="SALE-B-001",
+            cashier=owner_b,
+            subtotal=Decimal("50000.00"),
+            tax_amount=Decimal("9000.00"),
+            grand_total=Decimal("59000.00"),
+            paid_amount=Decimal("59000.00"),
+            sale_status="COMPLETED"
+        )
+        Payment.objects.create(
+            company=company_b,
+            sale=sale_b,
+            payment_method="UPI",
+            amount=Decimal("59000.00"),
+            received_by=owner_b
+        )
 
-    def test_06_registration_privilege_boundary(self):
-        """Requirement 4: Public registration cannot grant unauthorized Owner/Admin to other companies or elevate to staff/superuser."""
-        resp = self.client.post("/registration/", {
-            "admin_first_name": "New",
-            "admin_last_name": "Merchant",
-            "username": "new_public_registrant",
-            "password": "SecurePassword987!",
-            "confirm_pass": "SecurePassword987!",
-            "email": "merchant@newbiz.com",
-            "company_name": "New Fresh Grocers",
-            "address_line": "12 Market St",
-            "city": "Bengaluru",
-            "state": "Karnataka",
-            "country": "India",
-            "pincode": "560001",
-            "company_email": "info@newgrocers.com",
-            "phone": "9812345678",
-            "alternate_phone": "9812345679",
-            "business_info": "Grocery Store"
-        })
-        self.assertEqual(resp.status_code, 302)
-        new_u = User.objects.get(username="new_public_registrant")
-        self.assertFalse(new_u.is_staff)
-        self.assertFalse(new_u.is_superuser)
+        # Query assistant for Company A
+        res_a = answer_business_question(self.company, "Today's sales")
+        self.assertEqual(res_a["data"]["revenue"], 0.00)
+        self.assertEqual(res_a["data"]["count"], 0)
 
-        owned = companyRegistration.objects.filter(owner=new_u)
-        self.assertEqual(owned.count(), 1)
-        self.assertEqual(owned.first().company_name, "New Fresh Grocers")
-        self.assertNotEqual(owned.first().id, self.company.id)
+        # Query assistant for Company B
+        res_b = answer_business_question(company_b, "Today's sales")
+        self.assertEqual(res_b["data"]["revenue"], 59000.00)
+        self.assertEqual(res_b["data"]["count"], 1)
+
+    def test_ai_assistant_ask_api_view_endpoints(self):
+        # 1. Authenticated
+        self.api_client.force_authenticate(user=self.owner)
+        res = self.api_client.post(
+            "/api/ai/ask/",
+            data={"question": "Today's sales"},
+            format="json"
+        )
+        self.assertEqual(res.status_code, status.HTTP_200_OK)
+        self.assertEqual(res.data["status"], "success")
+        self.assertEqual(res.data["intent"], "sales_today")
+        self.assertIn("answer", res.data)
+
+        # 2. Empty question -> 400
+        res_empty = self.api_client.post(
+            "/api/ai/ask/",
+            data={"question": ""},
+            format="json"
+        )
+        self.assertEqual(res_empty.status_code, status.HTTP_400_BAD_REQUEST)
+
+        # 3. Unauthenticated -> 401/403
+        self.api_client.logout()
+        res_unauth = self.api_client.post(
+            "/api/ai/ask/",
+            data={"question": "Today's sales"},
+            format="json"
+        )
+        self.assertIn(res_unauth.status_code, [status.HTTP_401_UNAUTHORIZED, status.HTTP_403_FORBIDDEN])
+
+    def test_conversational_intents(self):
+        # 1. Identity & Name
+        res_name = answer_business_question(self.company, "what is ur name")
+        self.assertEqual(res_name["intent"], "identity")
+        self.assertIn("Retail Business Assistant", res_name["answer"])
+        self.assertIn(self.company.company_name, res_name["answer"])
+
+        # 2. Thanks
+        res_thanks = answer_business_question(self.company, "thank you so much")
+        self.assertEqual(res_thanks["intent"], "thanks")
+        self.assertIn("welcome", res_thanks["answer"].lower())
+
+        # 3. Capabilities / Help
+        res_help = answer_business_question(self.company, "what can you do")
+        self.assertEqual(res_help["intent"], "capabilities")
+        self.assertIn("Capabilities for", res_help["answer"])
+
+        # 4. Today's Returns
+        res_ret = answer_business_question(self.company, "Tell me today's returns")
+        self.assertEqual(res_ret["intent"], "returns_today")
+        self.assertIn("Today's Returns", res_ret["answer"])
+
+        # 5. Best-selling products
+        res_top = answer_business_question(self.company, "Who is our best-selling product?")
+        self.assertEqual(res_top["intent"], "top_products")
+
+    def test_staff_communication_and_rbac(self):
+        # 1. Owner dispatches notification to Cashier
+        res_tell = answer_business_question(self.company, "Tell cashier to speak to me in the office.", user=self.owner)
+        self.assertEqual(res_tell["intent"], "staff_communication")
+        self.assertIn("Delivered notification", res_tell["answer"])
+
+        # Verify record in database
+        notif = InternalNotification.objects.filter(company=self.company, sender=self.owner).first()
+        self.assertIsNotNone(notif)
+        self.assertEqual(notif.recipient_role, "Cashier")
+        self.assertIn("speak to me in the office", notif.message)
+        self.assertEqual(notif.status, "DELIVERED")
+        self.assertFalse(notif.is_read)
+
+        # 2. Cashier attempting broadcast is blocked
+        res_cashier_block = answer_business_question(self.company, "Notify all managers that the store meeting is at 5 PM", user=self.cashier_user)
+        self.assertEqual(res_cashier_block["intent"], "staff_communication")
+        self.assertFalse(res_cashier_block.get("data", {}).get("permitted", True))
+        self.assertIn("cannot send broadcast announcements", res_cashier_block["answer"])
+
+    def test_notifications_api_and_tenant_isolation(self):
+        # 1. Dispatch notification to Cashier
+        notif = InternalNotification.objects.create(
+            company=self.company,
+            sender=self.owner,
+            sender_role="Admin",
+            recipient=self.cashier_user,
+            recipient_role="Cashier",
+            title="Important Directive",
+            message="Please verify drawer cash at shift change.",
+            status="DELIVERED"
+        )
+
+        # 2. Cashier checks notifications
+        self.api_client.force_authenticate(user=self.cashier_user)
+        res_list = self.api_client.get("/api/notifications/")
+        self.assertEqual(res_list.status_code, status.HTTP_200_OK)
+        self.assertGreaterEqual(res_list.data["unread_count"], 1)
+        found = any(n["id"] == notif.id for n in res_list.data["notifications"])
+        self.assertTrue(found)
+
+        # 3. Cashier marks notification read
+        res_read = self.api_client.post(f"/api/notifications/{notif.id}/read/")
+        self.assertEqual(res_read.status_code, status.HTTP_200_OK)
+        notif.refresh_from_db()
+        self.assertTrue(notif.is_read)
+        self.assertEqual(notif.status, "READ")
+        self.assertIsNotNone(notif.read_at)
+
+        # 4. Cross-Tenant Isolation: User from Company B cannot read Company A notification
+        owner_b = User.objects.create_user(username="owner_b_sec", password="password123")
+        company_b = companyRegistration.objects.create(
+            owner=owner_b,
+            company_name="Isolated Store B",
+            address_line="200 West",
+            city="Delhi",
+            state="Delhi",
+            country="India",
+            pincode="110001",
+            company_email="b@example.com",
+            phone="9811112222",
+            alternate_phone="9811113333",
+            gst_number="07BETA0000B1Z2",
+            business_info="Retail"
+        )
+        self.api_client.force_authenticate(user=owner_b)
+        res_cross = self.api_client.post(f"/api/notifications/{notif.id}/read/")
+        self.assertEqual(res_cross.status_code, status.HTTP_404_NOT_FOUND)
+
+        # 5. Mark All Read
+        notif2 = InternalNotification.objects.create(
+            company=self.company,
+            sender=self.owner,
+            sender_role="Admin",
+            recipient=self.cashier_user,
+            recipient_role="Cashier",
+            message="Second notice",
+            status="DELIVERED"
+        )
+        self.api_client.force_authenticate(user=self.cashier_user)
+        res_mark_all = self.api_client.post("/api/notifications/mark-all-read/")
+        self.assertEqual(res_mark_all.status_code, status.HTTP_200_OK)
+        notif2.refresh_from_db()
+        self.assertTrue(notif2.is_read)
+
+

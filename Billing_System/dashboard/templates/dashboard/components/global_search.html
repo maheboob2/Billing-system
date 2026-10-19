@@ -73,12 +73,14 @@
                 <span>Scanner & POS Devices</span>
                 <span class="search-result-sub">Settings</span>
             </a>
-            {% if is_owner or user_role == 'Admin' %}
+            {% if is_owner %}
             <a href="{% url 'settings_telegram' %}" class="search-result-item" data-keywords="telegram bot owner reports mobile alerts">
                 <i class="bi bi-telegram"></i>
                 <span>Telegram Bot Integration</span>
                 <span class="search-result-sub">Settings</span>
             </a>
+            {% endif %}
+            {% if is_owner or user_role == 'Admin' %}
             <a href="{% url 'settings_company' %}" class="search-result-item" data-keywords="company profile business address gstin">
                 <i class="bi bi-building"></i>
                 <span>Company Profile</span>

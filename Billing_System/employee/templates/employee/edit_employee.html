@@ -126,9 +126,42 @@
                     </div>
                 </div>
 
-                <div style="margin-bottom: 12px;">
-                    <label style="display: block; font-size: 12px; font-weight: 600; color: var(--text); margin-bottom: 6px;">Address *</label>
-                    <textarea name="address" required rows="2" style="width: 100%;">{{ employee.address }}</textarea>
+                <div style="background: var(--surface-2); border: 1px solid var(--border); border-radius: var(--radius-sm); padding: 14px; margin-bottom: 12px;">
+                    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px;">
+                        <label style="font-size: 12px; font-weight: 700; color: var(--text); text-transform: uppercase; letter-spacing: 0.5px;">
+                            <i class="bi bi-geo-alt-fill" style="color: var(--primary);"></i> Residential Address *
+                        </label>
+                        <span id="pin-status-badge" style="font-size: 11px; color: var(--muted); font-weight: 600; display: inline-flex; align-items: center; gap: 4px;"></span>
+                    </div>
+
+                    <div style="display: grid; grid-template-columns: 140px 1fr 1fr; gap: 10px; margin-bottom: 10px;">
+                        <div>
+                            <label style="display: block; font-size: 11px; font-weight: 600; color: var(--muted); margin-bottom: 4px;">PIN Code</label>
+                            <input type="text" name="pincode" id="emp_pincode" placeholder="6-digit PIN" maxlength="10" style="width: 100%; font-family: var(--font-mono); font-size: 13px;">
+                        </div>
+                        <div>
+                            <label style="display: block; font-size: 11px; font-weight: 600; color: var(--muted); margin-bottom: 4px;">City / District</label>
+                            <input type="text" name="city" id="emp_city" placeholder="City / District" style="width: 100%; font-size: 13px;">
+                        </div>
+                        <div>
+                            <label style="display: block; font-size: 11px; font-weight: 600; color: var(--muted); margin-bottom: 4px;">State</label>
+                            <input type="text" name="state" id="emp_state" placeholder="State" style="width: 100%; font-size: 13px;">
+                        </div>
+                    </div>
+
+                    <!-- Multi-Locality Match Selector -->
+                    <div id="locality-selector-row" style="display: none; margin-bottom: 10px; background: rgba(59, 130, 246, 0.08); border: 1px solid rgba(59, 130, 246, 0.25); border-radius: var(--radius-sm); padding: 8px 12px;">
+                        <label style="display: block; font-size: 11px; font-weight: 600; color: var(--primary, #3b82f6); margin-bottom: 4px;">
+                            <i class="bi bi-geo-alt-fill"></i> Multiple localities match this PIN — choose your post office / locality:
+                        </label>
+                        <select id="emp_locality_select" style="width: 100%; font-size: 13px; padding: 6px 10px; background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius-sm); color: var(--text);">
+                        </select>
+                    </div>
+
+                    <div>
+                        <label style="display: block; font-size: 11px; font-weight: 600; color: var(--muted); margin-bottom: 4px;">Street Address / Details *</label>
+                        <textarea name="address" id="emp_address" required rows="2" style="width: 100%; font-size: 13px;">{{ employee.address }}</textarea>
+                    </div>
                 </div>
 
                 <div>
@@ -221,4 +254,121 @@
         </form>
     </div>
 </div>
+
+<!-- Debounced Indian Postal PIN Code Auto-Fill Client Script -->
+<script>
+(function() {
+    const pinInput = document.getElementById('emp_pincode');
+    const cityInput = document.getElementById('emp_city');
+    const stateInput = document.getElementById('emp_state');
+    const badge = document.getElementById('pin-status-badge');
+    const localityRow = document.getElementById('locality-selector-row');
+    const localitySelect = document.getElementById('emp_locality_select');
+
+    if (!pinInput || !cityInput || !stateInput || !badge) return;
+
+    const pinCache = {};
+    let debounceTimer = null;
+
+    cityInput.addEventListener('input', function() {
+        this.dataset.manuallyEdited = 'true';
+        this.dataset.autofilled = 'false';
+    });
+    stateInput.addEventListener('input', function() {
+        this.dataset.manuallyEdited = 'true';
+        this.dataset.autofilled = 'false';
+    });
+
+    pinInput.addEventListener('input', function() {
+        const raw = this.value.trim();
+        const digits = raw.replace(/\D/g, '');
+        if (raw !== digits) {
+            this.value = digits;
+        }
+        const val = digits;
+
+        clearTimeout(debounceTimer);
+
+        if (localityRow) localityRow.style.display = 'none';
+
+        if (val.length === 0) {
+            badge.innerHTML = '';
+            return;
+        }
+
+        // Rejection for codes longer than 6 digits (e.g. 7 digits like 4132477)
+        if (val.length > 6) {
+            badge.innerHTML = `<span style="color: var(--danger, #ef4444); font-weight: 700;">⚠ Invalid PIN: Indian postal codes must be exactly 6 digits (got ${val.length} digits).</span>`;
+            return;
+        }
+
+        if (val.length < 6) {
+            badge.innerHTML = `<span style="color: var(--muted);">${6 - val.length} more digit(s) needed</span>`;
+            return;
+        }
+
+        if (!/^[1-9]\d{5}$/.test(val)) {
+            badge.innerHTML = '<span style="color: var(--danger, #ef4444); font-weight: 700;">⚠ Invalid Indian PIN (must start with digits 1–9)</span>';
+            return;
+        }
+
+        if (pinCache[val]) {
+            applyPinResult(pinCache[val], val);
+            return;
+        }
+
+        badge.innerHTML = '<span style="color: var(--muted);"><span class="spinner-border spinner-border-sm" style="width: 10px; height: 10px; border-width: 1px;" role="status"></span> Looking up postal directory…</span>';
+
+        debounceTimer = setTimeout(() => {
+            fetch(`/api/postal/lookup/?pincode=${encodeURIComponent(val)}`)
+                .then(r => r.json())
+                .then(data => {
+                    pinCache[val] = data;
+                    applyPinResult(data, val);
+                })
+                .catch(() => {
+                    badge.innerHTML = '<span style="color: var(--warning, #eab308);">⚠ Postal service offline (enter City/State manually)</span>';
+                });
+        }, 350);
+    });
+
+    function applyPinResult(data, searchedPin) {
+        if (!data || !data.success) {
+            const err = (data && data.error) ? data.error : `PIN code ${searchedPin} not found in postal directory. Enter City/State manually.`;
+            badge.innerHTML = `<span style="color: var(--warning, #eab308);">⚠ ${err}</span>`;
+            if (localityRow) localityRow.style.display = 'none';
+            return;
+        }
+
+        if (data.city && (!cityInput.value || cityInput.dataset.autofilled === 'true' || cityInput.dataset.manuallyEdited !== 'true')) {
+            cityInput.value = data.city;
+            cityInput.dataset.autofilled = 'true';
+        }
+
+        if (data.state && (!stateInput.value || stateInput.dataset.autofilled === 'true' || stateInput.dataset.manuallyEdited !== 'true')) {
+            stateInput.value = data.state;
+            stateInput.dataset.autofilled = 'true';
+        }
+
+        const sourceLabel = data.source === 'FALLBACK' ? ' (Offline Cache)' : '';
+        badge.innerHTML = `<span style="color: #34d399; font-weight: 600;">✓ Auto-filled: ${data.city || data.district}, ${data.state}${sourceLabel}</span>`;
+
+        if (data.localities && data.localities.length > 1 && localityRow && localitySelect) {
+            localitySelect.innerHTML = `<option value="">-- Select Locality (${data.localities.length} matched post offices) --</option>` +
+                data.localities.map(loc => `<option value="${loc}">${loc} (${data.district}, ${data.state})</option>`).join('');
+            localityRow.style.display = 'block';
+
+            localitySelect.onchange = function() {
+                const chosen = this.value;
+                if (!chosen) return;
+                cityInput.value = chosen;
+                cityInput.dataset.autofilled = 'true';
+                badge.innerHTML = `<span style="color: #34d399; font-weight: 600;">✓ Selected: ${chosen}, ${data.state}</span>`;
+            };
+        } else if (localityRow) {
+            localityRow.style.display = 'none';
+        }
+    }
+})();
+</script>
 {% endblock content %}

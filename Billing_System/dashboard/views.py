@@ -1,5 +1,7 @@
 from decimal import Decimal
+from datetime import timedelta, datetime, date
 from django.shortcuts import render, redirect, get_object_or_404
+from django.http import HttpResponseForbidden
 from django.db.models import F, Sum, Count, Q
 from django.utils import timezone
 from accounts.tenancy import company_required, role_required
@@ -22,7 +24,9 @@ def dashboard(request):
     Manager never sees salary/payroll amounts.
     """
     company = request.company
-    is_owner = request.user_role in ["Admin", "Owner"]
+    is_owner = bool(
+        company and hasattr(company, "owner_id") and company.owner_id == request.user.id
+    ) or (request.user.is_superuser and not hasattr(request.user, "user_registration"))
     today = timezone.now().date()
     current_year = today.year
     current_month = today.month
@@ -87,7 +91,7 @@ def dashboard(request):
     total_profit = total_revenue - cost_of_goods_sold
 
     # Recent sales ledger
-    recent_sales = completed_sales.select_related("customer", "cashier").order_by("-created_at")[:6]
+    recent_sales = completed_sales.select_related("customer", "cashier", "invoice").prefetch_related("payments").order_by("-created_at")[:6]
 
     # ── TEAM BAR METRICS ───────────────────────────────────────────────
     team_qs = user_registration.objects.filter(company=company)
@@ -127,6 +131,51 @@ def dashboard(request):
             "pending": pending_payroll,
         }
 
+    # ── TELEGRAM COMPACT OVERVIEW SUMMARY (OWNER ONLY) ───────────────
+    telegram_summary = None
+    if is_owner:
+        from dashboard.models import TelegramOwnerLink, MerchantTelegramBot
+        from dashboard.telegram_service import is_bot_token_configured
+
+        merchant_bot = MerchantTelegramBot.objects.filter(company=company).first()
+        if merchant_bot and merchant_bot.encrypted_token:
+            is_connected = merchant_bot.status == "CONNECTED"
+            bot_name = merchant_bot.bot_first_name or (f"@{merchant_bot.bot_username}" if merchant_bot.bot_username else "Custom Store Bot")
+            telegram_summary = {
+                "is_connected": is_connected,
+                "status_text": "Connected" if is_connected else (
+                    "Pending Verification" if merchant_bot.status == "PENDING_VERIFICATION" else (
+                        "Invalid Token" if merchant_bot.status == "INVALID_TOKEN" else "Disconnected"
+                    )
+                ),
+                "bot_name": bot_name,
+                "bot_username": merchant_bot.bot_username or "",
+            }
+        else:
+            bot_configured = is_bot_token_configured()
+            link = TelegramOwnerLink.objects.filter(company=company, is_verified=True).first()
+            if link:
+                telegram_summary = {
+                    "is_connected": True,
+                    "status_text": "Connected",
+                    "bot_name": "Brisksmith_bot",
+                    "bot_username": "Brisksmith_bot",
+                }
+            elif bot_configured:
+                telegram_summary = {
+                    "is_connected": False,
+                    "status_text": "Disconnected",
+                    "bot_name": "Brisksmith_bot",
+                    "bot_username": "Brisksmith_bot",
+                }
+            else:
+                telegram_summary = {
+                    "is_connected": False,
+                    "status_text": "Not Configured",
+                    "bot_name": "Not Configured",
+                    "bot_username": "",
+                }
+
     context = {
         "company": company,
         "user_role": request.user_role,
@@ -155,6 +204,8 @@ def dashboard(request):
         "inactive_team_count": inactive_team_count,
         # Payroll Metrics (Owner only)
         "payroll_data": payroll_data,
+        # Telegram Overview Summary (Owner only)
+        "telegram_summary": telegram_summary,
         # AI Business Intelligence
         "ai_sales_insights": generate_sales_insights(company),
         "ai_inventory_intelligence": generate_inventory_intelligence(company),
@@ -194,7 +245,7 @@ def cashier_dashboard(request):
     today_cashier_sales = cashier_sales.filter(created_at__date=today)
     today_count = today_cashier_sales.count()
     today_total = today_cashier_sales.aggregate(total=Sum("grand_total"))["total"] or Decimal("0.00")
-    recent_cashier_bills = today_cashier_sales.select_related("customer").order_by("-created_at")[:5]
+    recent_cashier_bills = today_cashier_sales.select_related("customer", "invoice").prefetch_related("payments").order_by("-created_at")[:5]
 
     return render(
         request,
@@ -223,8 +274,11 @@ def settings_general(request):
 
     saved_msg = None
     if request.method == "POST":
-        week_start = request.POST.get("week_start", "sunday").lower()
+        week_start = request.POST.get("week_start", "sunday").strip().lower()
+        if week_start not in ["sunday", "monday"]:
+            week_start = "sunday"
         request.session["pos_week_start"] = week_start
+        request.session.modified = True
         saved_msg = "Preferences updated successfully."
 
     current_week_start = request.session.get("pos_week_start", "sunday")
@@ -415,14 +469,21 @@ def settings_scanner(request):
 
 
 @company_required
-@role_required(["Admin", "Owner"])
 def settings_telegram(request):
     """
     Settings -> Telegram Owner Reporting.
-    Strictly OWNER / ADMIN ONLY.
+    Strictly OWNER ONLY.
     Allows generating one-time pairing codes, viewing paired status,
     testing bot commands, and reviewing the offline outbound queue.
     """
+    company = request.company
+    is_owner = bool(
+        company and hasattr(company, "owner_id") and company.owner_id == request.user.id
+    ) or (request.user.is_superuser and not hasattr(request.user, "user_registration"))
+
+    if not is_owner:
+        return HttpResponseForbidden("Access Denied: Only the store Owner can access Telegram Bot settings.")
+
     from .models import TelegramOwnerLink, TelegramOutboundMessage
     from .telegram_service import (
         generate_pairing_code,
@@ -433,9 +494,6 @@ def settings_telegram(request):
         is_bot_token_configured
     )
     from .sync_service import SyncService
-
-    company = request.company
-    is_owner = True
     msg = None
     test_result = None
 
@@ -468,6 +526,71 @@ def settings_telegram(request):
         elif action == "trigger_sync":
             sync_res = SyncService.run_sync(company)
             msg = f"Cloud Sync Completed. Synced {sync_res['synced']} items. Pending: {sync_res['pending']}."
+        elif action == "configure_merchant_bot":
+            import secrets
+            import urllib.request
+            import ssl
+            import json
+            from .models import MerchantTelegramBot
+            from .multi_bot_registry import get_supervised_bot_registry
+            raw_token = request.POST.get("bot_token", "").strip()
+            if not raw_token:
+                test_result = "⚠️ Bot token cannot be empty."
+            else:
+                try:
+                    ssl_ctx = ssl.create_default_context()
+                    req = urllib.request.Request(
+                        f"https://api.telegram.org/bot{raw_token}/getMe",
+                        headers={"User-Agent": "BriskRetail/1.0"}
+                    )
+                    with urllib.request.urlopen(req, timeout=6, context=ssl_ctx) as resp:
+                        resp_data = json.loads(resp.read().decode("utf-8"))
+                    if resp_data.get("ok"):
+                        b_info = resp_data.get("result", {})
+                        b_obj, _ = MerchantTelegramBot.objects.get_or_create(company=company, defaults={"owner": request.user})
+                        b_obj.owner = request.user
+                        b_obj.set_and_encrypt_token(raw_token)
+                        b_obj.bot_id = str(b_info.get("id", ""))
+                        b_obj.bot_username = b_info.get("username", "")
+                        b_obj.bot_first_name = b_info.get("first_name", "")
+                        b_obj.status = "PENDING_VERIFICATION"
+                        b_obj.verification_challenge = secrets.token_hex(4).upper()
+                        b_obj.verification_expires_at = timezone.now() + timedelta(minutes=15)
+                        b_obj.verified_chat_id = ""
+                        b_obj.is_active = True
+                        b_obj.last_error = ""
+                        b_obj.save()
+                        get_supervised_bot_registry().register_and_start(b_obj)
+                        msg = f"Bot token verified for @{b_obj.bot_username}! Open the bot on Telegram and press Start to link your store."
+                    else:
+                        test_result = "⚠️ Telegram rejected token. Verify with @BotFather."
+                except urllib.error.HTTPError as http_err:
+                    if http_err.code in (401, 404):
+                        test_result = "⚠️ Telegram rejected token (HTTP 401: Unauthorized). Please check the token provided by @BotFather."
+                    else:
+                        test_result = f"⚠️ Telegram API returned HTTP {http_err.code}. Please try again later."
+                except urllib.error.URLError:
+                    test_result = "⚠️ Could not connect to Telegram API. Please check your internet connection."
+                except Exception as ex:
+                    test_result = f"⚠️ Could not validate token with Telegram API: {str(ex)}"
+        elif action == "disconnect_merchant_bot":
+            from .models import MerchantTelegramBot
+            from .multi_bot_registry import get_supervised_bot_registry
+            b_obj = MerchantTelegramBot.objects.filter(company=company).first()
+            if b_obj:
+                b_obj.status = "DISCONNECTED"
+                b_obj.is_active = False
+                b_obj.verified_chat_id = ""
+                b_obj.verification_challenge = ""
+                b_obj.save()
+                get_supervised_bot_registry().stop_bot(b_obj.pk)
+                msg = "Custom Telegram bot disconnected successfully."
+
+    from .models import MerchantTelegramBot
+    from .token_encryption import mask_token_for_display
+    merchant_bot = MerchantTelegramBot.objects.filter(company=company).first()
+    decrypted_token = merchant_bot.get_decrypted_token() if merchant_bot else ""
+    masked_token = mask_token_for_display(decrypted_token) if decrypted_token else ""
 
     link = TelegramOwnerLink.objects.filter(company=company, owner=request.user).first()
     outbound_messages = TelegramOutboundMessage.objects.filter(company=company).order_by("-created_at")[:10]
@@ -482,12 +605,14 @@ def settings_telegram(request):
             "user_role": request.user_role,
             "is_owner": is_owner,
             "link": link,
+            "merchant_bot": merchant_bot,
+            "masked_token": masked_token,
             "msg": msg,
             "test_result": test_result,
             "outbound_messages": outbound_messages,
             "sync_info": sync_info,
             "tg_gateway": tg_gateway,
-            "is_bot_configured": is_bot_token_configured(),
+            "is_bot_configured": is_bot_token_configured() or (merchant_bot and merchant_bot.status == "CONNECTED"),
         }
     )
 

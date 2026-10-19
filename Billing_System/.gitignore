@@ -26,3 +26,10 @@ qa_evidence_v3/
 # Logs & temp files
 *.log
 scratch/
+.bot_heartbeat.json
+.auto_sync.lock
+.telegram_last_update.json
+android_scanner/app/build/
+android_scanner/.gradle/
+*.apk
+

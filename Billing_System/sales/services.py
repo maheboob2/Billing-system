@@ -321,7 +321,13 @@ class SalesService:
                 )
 
             # 8. Record Payments
-            payment_methods_used = []
+            method_labels = {
+                "CASH": "Cash",
+                "UPI": "UPI",
+                "CARD": "Card",
+                "CREDIT": "Store Credit",
+            }
+            payment_parts = []
             for p in parsed_payments:
                 Payment.objects.create(
                     company=company,
@@ -332,17 +338,22 @@ class SalesService:
                     received_by=cashier,
                     notes=p["notes"],
                 )
-                payment_methods_used.append(f"{p['payment_method']} (₹{p['amount']})")
+                lbl = method_labels.get(p["payment_method"].upper(), p["payment_method"])
+                amt = p["amount"]
+                amt_str = f"₹{amt:,.0f}" if amt == amt.to_integral() else f"₹{amt:,.2f}"
+                payment_parts.append(f"{lbl} {amt_str}" if len(parsed_payments) > 1 else lbl)
 
                 # If customer paid via Store Credit, adjust customer's credit balance
                 if p["payment_method"] == "CREDIT" and customer_obj:
                     customer_obj.credit_balance += p["amount"]
                     customer_obj.save(update_fields=["credit_balance"])
 
+            payment_summary_text = " + ".join(payment_parts) if len(payment_parts) > 1 else (payment_parts[0] if payment_parts else "Not recorded")
+
             # 9. Create Invoice
             invoice_number = cls.generate_invoice_number(company)
             cashier_name = cashier.get_full_name() or cashier.username
-            cust_name = customer_obj.name if customer_obj else "Walk-in Customer"
+            cust_name = customer_obj.name if customer_obj else "Counter Sale"
             cust_phone = customer_obj.phone if customer_obj else ""
             cust_address = customer_obj.address if customer_obj else ""
 
@@ -369,7 +380,7 @@ class SalesService:
                 paid_amount=total_paid,
                 balance_due=balance_due,
                 cashier_name=cashier_name,
-                payment_summary=", ".join(payment_methods_used),
+                payment_summary=payment_summary_text,
             )
 
             # Enqueue for remote sync (operates safely offline and online)

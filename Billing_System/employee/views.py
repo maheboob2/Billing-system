@@ -1,3 +1,4 @@
+import re
 from decimal import Decimal
 from django.shortcuts import render, redirect, get_object_or_404
 from django.contrib import messages
@@ -7,6 +8,52 @@ from django.db.models import Q
 from django.utils import timezone
 from accounts.tenancy import company_required, role_required
 from .models import user_registration, SalaryPayment
+
+
+def validate_and_normalize_phone(phone_str, field_name="Phone Number", required=True):
+    """
+    Validates and normalizes Indian mobile phone numbers.
+    Accepts 10 digits starting with 6-9, optionally prefixed by '+91', '91', or '0',
+    and allows spaces and hyphens.
+    Returns normalized 10-digit phone string.
+    Raises ValueError with a user-friendly message if invalid.
+    """
+    if not phone_str or not str(phone_str).strip():
+        if required:
+            raise ValueError(f"{field_name} is required.")
+        return ""
+
+    raw = str(phone_str).strip()
+
+    # Reject if contains letters or invalid symbols
+    if not re.match(r"^\+?[\d\s\-]+$", raw):
+        raise ValueError(
+            f"Invalid {field_name}. Please enter a valid 10-digit mobile number containing digits only."
+        )
+
+    # Strip all non-digit characters
+    digits = re.sub(r"\D", "", raw)
+
+    # Handle standard country code +91 or 91
+    if len(digits) == 12 and digits.startswith("91"):
+        digits = digits[2:]
+    # Handle leading zero trunk prefix
+    elif len(digits) == 11 and digits.startswith("0"):
+        digits = digits[1:]
+
+    # Enforce standard 10-digit Indian mobile number length
+    if len(digits) != 10:
+        raise ValueError(
+            f"Invalid {field_name}. Must be a valid 10-digit mobile number (received {len(digits)} digits)."
+        )
+
+    # Enforce starting digit 6, 7, 8, or 9
+    if digits[0] not in "6789":
+        raise ValueError(
+            f"Invalid {field_name}. Indian mobile numbers must begin with 6, 7, 8, or 9."
+        )
+
+    return digits
 
 
 @company_required
@@ -34,12 +81,68 @@ def employee(request):
         # Employee details
         profile_pic = request.FILES.get("profile_pic")
         gender = request.POST.get("Gender", "Male")
-        phone = request.POST.get("Phone", "").strip()
-        alternate_phone = request.POST.get("Alternate_phone", "").strip()
-        address = request.POST.get("address", "").strip()
-        employee_id = request.POST.get("employee_id", "").strip()
+        raw_phone = request.POST.get("Phone", "").strip()
+        raw_alternate_phone = request.POST.get("Alternate_phone", "").strip()
+        raw_emp_id = request.POST.get("employee_id", "").strip()
         raw_role = request.POST.get("Role", "Worker").strip()
-        
+
+        # Structured Address fields with backward compatibility
+        pincode = request.POST.get("pincode", "").strip()
+        city = request.POST.get("city", "").strip()
+        state = request.POST.get("state", "").strip()
+        address_line = request.POST.get("address_line", "").strip()
+
+        if address_line or city or state or pincode:
+            parts = [p for p in [address_line, city, state] if p]
+            address = ", ".join(parts)
+            if pincode:
+                address = f"{address} - {pincode}" if address else pincode
+        else:
+            address = request.POST.get("address", "").strip()
+
+        from .services import generate_next_employee_id
+
+        # Helper for returning form with error & preserved inputs
+        def render_error(msg):
+            suggested_id = ""
+            try:
+                suggested_id = generate_next_employee_id(company)
+            except Exception:
+                pass
+            return render(request, "employee/employee.html", {
+                "error": msg,
+                "form_data": request.POST,
+                "suggested_employee_id": suggested_id,
+                "company": company,
+                "is_owner": is_owner,
+                "user_role": request.user_role,
+            })
+
+        address = address or ""
+
+        # Validate Indian PIN code if provided
+        if pincode:
+            clean_pin = re.sub(r"\s+", "", pincode)
+            if not re.match(r"^[1-9]\d{5}$", clean_pin):
+                return render_error(f"Invalid PIN code '{pincode}'. Indian postal PIN codes must be exactly 6 digits beginning with 1–9.")
+
+        # Authoritative Employee ID Generation or Custom Validation
+        try:
+            employee_id = generate_next_employee_id(company, role=raw_role, requested_id=raw_emp_id)
+        except ValueError as ve:
+            return render_error(str(ve))
+
+        # Validate Phone Numbers
+        try:
+            phone = validate_and_normalize_phone(raw_phone, field_name="Phone Number", required=True)
+        except ValueError as ve:
+            return render_error(str(ve))
+
+        try:
+            alternate_phone = validate_and_normalize_phone(raw_alternate_phone, field_name="Alternate Phone", required=False)
+        except ValueError as ve:
+            return render_error(str(ve))
+
         # Normalize role
         if raw_role.lower() in ["stock manager", "stock", "inventory staff"]:
             role = "Stock Manager"
@@ -55,14 +158,8 @@ def employee(request):
             from datetime import datetime
             try:
                 parsed_join = datetime.strptime(str(joining_date), "%Y-%m-%d").date()
-                from django.utils import timezone
                 if parsed_join > timezone.now().date():
-                    return render(request, "employee/employee.html", {
-                        "error": "Joining date cannot be in the future.",
-                        "company": company,
-                        "is_owner": is_owner,
-                        "user_role": request.user_role,
-                    })
+                    return render_error("Joining date cannot be in the future.")
             except ValueError:
                 pass
 
@@ -79,70 +176,95 @@ def employee(request):
             monthaly_salary = Decimal("0.00")
             payment = "Unpaid"
 
+        if not password or len(password) < 4:
+            return render_error("Password must be at least 4 characters.")
+
         if password != confirm_pass:
-            return render(request, "employee/employee.html", {
-                "error": "Passwords do not match.",
-                "company": company,
-                "is_owner": is_owner,
-                "user_role": request.user_role,
-            })
+            return render_error("Passwords do not match.")
 
         if User.objects.filter(username=username).exists():
-            return render(request, "employee/employee.html", {
-                "error": f"Username '{username}' is already taken.",
-                "company": company,
-                "is_owner": is_owner,
-                "user_role": request.user_role,
-            })
+            return render_error(f"Username '{username}' is already taken.")
 
-        if user_registration.objects.filter(employee_id=employee_id).exists():
-            return render(request, "employee/employee.html", {
-                "error": f"Employee ID '{employee_id}' is already registered.",
-                "company": company,
-                "is_owner": is_owner,
-                "user_role": request.user_role,
-            })
+        # Concurrency-safe creation loop with automatic sequence increment on race condition
+        max_attempts = 4
+        created = False
+        last_err = None
+        for attempt in range(max_attempts):
+            try:
+                with transaction.atomic():
+                    user = User.objects.create_user(
+                        username=username,
+                        first_name=first_name,
+                        last_name=last_name,
+                        email=email,
+                        password=password,
+                    )
 
-        try:
-            with transaction.atomic():
-                user = User.objects.create_user(
-                    username=username,
-                    first_name=first_name,
-                    last_name=last_name,
-                    email=email,
-                    password=password,
-                )
+                    user_registration.objects.create(
+                        user=user,
+                        company=company,
+                        profile_pic=profile_pic,
+                        Gender=gender,
+                        Phone=phone,
+                        Alternate_phone=alternate_phone,
+                        address=address,
+                        employee_id=employee_id,
+                        Role=role,
+                        joining_date=joining_date,
+                        monthaly_salary=monthaly_salary,
+                        payment=payment,
+                        status=status,
+                    )
+                    created = True
+                    break
+            except IntegrityError as e:
+                last_err = e
+                # If race condition occurred on auto-generated employee_id, advance to next ID
+                if "employee_id" in str(e).lower() and not raw_emp_id and attempt < max_attempts - 1:
+                    employee_id = generate_next_employee_id(company, role=raw_role)
+                    continue
+                return render_error(f"Registration failed: {str(e)}")
 
-                user_registration.objects.create(
-                    user=user,
-                    company=company,
-                    profile_pic=profile_pic,
-                    Gender=gender,
-                    Phone=phone,
-                    Alternate_phone=alternate_phone,
-                    address=address,
-                    employee_id=employee_id,
-                    Role=role,
-                    joining_date=joining_date,
-                    monthaly_salary=monthaly_salary,
-                    payment=payment,
-                    status=status,
-                )
+        if not created and last_err:
+            return render_error(f"Registration failed: {str(last_err)}")
 
-            return redirect("view_employee")
-        except IntegrityError as e:
-            return render(request, "employee/employee.html", {
-                "error": f"Registration failed: {str(e)}",
-                "company": company,
-                "is_owner": is_owner,
-                "user_role": request.user_role,
-            })
+        return redirect("view_employee")
+
+    from .services import generate_next_employee_id
+    suggested_id = ""
+    try:
+        suggested_id = generate_next_employee_id(company)
+    except Exception:
+        pass
+
+    default_form_data = {
+        "first_name": "",
+        "last_name": "",
+        "username": "",
+        "email": "",
+        "employee_id": "",
+        "Role": "Cashier",
+        "joining_date": timezone.now().strftime("%Y-%m-%d"),
+        "status": "active",
+        "Gender": "Male",
+        "Phone": "",
+        "Alternate_phone": "",
+        "pincode": "",
+        "city": "",
+        "state": "",
+        "address_line": "",
+        "address": "",
+        "monthaly_salary": "0.00",
+        "payment": "Paid",
+    }
 
     return render(request, "employee/employee.html", {
         "company": company,
         "is_owner": is_owner,
         "user_role": request.user_role,
         "error": error,
+        "suggested_employee_id": suggested_id,
+        "form_data": default_form_data,
     })
 
 
@@ -268,9 +390,59 @@ def edit_employee(request, employee_id):
                 })
             employee_obj.employee_id = new_emp_id
 
-        employee_obj.Phone = request.POST.get("Phone", "").strip()
-        employee_obj.Alternate_phone = request.POST.get("Alternate_phone", "").strip()
-        employee_obj.address = request.POST.get("address", "").strip()
+        new_phone_raw = request.POST.get("Phone", "").strip()
+        new_alt_phone_raw = request.POST.get("Alternate_phone", "").strip()
+
+        try:
+            employee_obj.Phone = validate_and_normalize_phone(new_phone_raw, field_name="Phone Number", required=True)
+        except ValueError as ve:
+            return render(request, "employee/edit_employee.html", {
+                "employee": employee_obj,
+                "company": company,
+                "is_owner": is_owner,
+                "user_role": request.user_role,
+                "error": str(ve)
+            })
+
+        try:
+            employee_obj.Alternate_phone = validate_and_normalize_phone(new_alt_phone_raw, field_name="Alternate Phone", required=False)
+        except ValueError as ve:
+            return render(request, "employee/edit_employee.html", {
+                "employee": employee_obj,
+                "company": company,
+                "is_owner": is_owner,
+                "user_role": request.user_role,
+                "error": str(ve)
+            })
+
+        new_pincode = request.POST.get("pincode", "").strip()
+        if new_pincode:
+            clean_pin = re.sub(r"\s+", "", new_pincode)
+            if not re.match(r"^[1-9]\d{5}$", clean_pin):
+                return render(request, "employee/edit_employee.html", {
+                    "employee": employee_obj,
+                    "company": company,
+                    "is_owner": is_owner,
+                    "user_role": request.user_role,
+                    "error": f"Invalid PIN code '{new_pincode}'. Indian postal PIN codes must be exactly 6 digits beginning with 1–9."
+                })
+
+        new_city = request.POST.get("city", "").strip()
+        new_state = request.POST.get("state", "").strip()
+        new_addr_line = request.POST.get("address_line", "").strip()
+        new_addr_raw = request.POST.get("address", "").strip()
+
+        if new_pincode or new_city or new_state:
+            base = new_addr_line or new_addr_raw
+            parts = [p for p in [base, new_city, new_state] if p]
+            employee_obj.address = ", ".join(parts)
+            if new_pincode:
+                employee_obj.address = f"{employee_obj.address} - {new_pincode}" if employee_obj.address else new_pincode
+        else:
+            chosen_addr = new_addr_line or new_addr_raw
+            if chosen_addr:
+                employee_obj.address = chosen_addr
+
         employee_obj.Gender = request.POST.get("Gender", "Male")
         
         raw_role = request.POST.get("Role", employee_obj.Role).strip()
@@ -862,4 +1034,20 @@ def employee_payslip(request, employee_id):
     }
 
     return render(request, "employee/payslip.html", context)
+
+
+def postal_pincode_lookup(request):
+    """
+    Endpoint for validating Indian 6-digit PIN codes and retrieving City/District and State.
+    Privacy: Accepts ONLY the PIN code string. Never employee personal details.
+    """
+    from django.http import JsonResponse
+    from .services import lookup_postal_pincode
+
+    pincode = request.GET.get("pincode", "").strip()
+    result = lookup_postal_pincode(pincode)
+    status_code = 200
+    if not result.get("success") and "Invalid" in (result.get("error") or ""):
+        status_code = 400
+    return JsonResponse(result, status=status_code)
 

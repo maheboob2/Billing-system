@@ -440,3 +440,274 @@ class PayrollHistoryAndPayslipTests(TestCase):
         res = self.client.get(reverse("employee_payslip", kwargs={"employee_id": "OTH-001"}))
         self.assertEqual(res.status_code, 404)
 
+
+class EmployeePhoneValidationAndLoginTests(TestCase):
+    def setUp(self):
+        self.client = Client()
+
+        # Company and Owner
+        self.owner_user = User.objects.create_user(
+            username="owner_alpha",
+            password="password123",
+            first_name="Alpha",
+            last_name="Owner"
+        )
+        self.company = companyRegistration.objects.create(
+            owner=self.owner_user,
+            company_name="Alpha Retail Store",
+            address_line="100 Commercial Blvd",
+            city="Bengaluru",
+            state="Karnataka",
+            pincode="560001",
+            phone="9876543210",
+            company_email="owner@alphastore.com",
+            gst_number="29ABCDE1234F1Z5"
+        )
+
+    def test_phone_validation_rejects_alphabetic(self):
+        """Employee registration rejects alphabetic phone numbers and creates no User."""
+        self.client.force_login(self.owner_user)
+        post_data = {
+            "first_name": "John",
+            "last_name": "Doe",
+            "username": "johndoe_alpha",
+            "email": "john@alpha.com",
+            "password": "pass123456",
+            "confirm_pass": "pass123456",
+            "employee_id": "EMP-ALP-01",
+            "Role": "Cashier",
+            "joining_date": "2025-01-01",
+            "status": "active",
+            "Phone": "abcdefghij",
+            "Alternate_phone": "",
+            "address": "123 Main Street",
+            "monthaly_salary": "25000.00",
+            "payment": "Paid",
+        }
+        res = self.client.post(reverse("employee"), post_data)
+        self.assertEqual(res.status_code, 200)
+        self.assertContains(res, "Invalid Phone Number")
+        self.assertFalse(User.objects.filter(username="johndoe_alpha").exists())
+        self.assertFalse(user_registration.objects.filter(employee_id="EMP-ALP-01").exists())
+
+    def test_phone_validation_rejects_short_number(self):
+        """Employee registration rejects short phone numbers like 678889."""
+        self.client.force_login(self.owner_user)
+        post_data = {
+            "first_name": "John",
+            "last_name": "Doe",
+            "username": "johndoe_short",
+            "email": "john_short@alpha.com",
+            "password": "pass123456",
+            "confirm_pass": "pass123456",
+            "employee_id": "EMP-ALP-02",
+            "Role": "Cashier",
+            "joining_date": "2025-01-01",
+            "status": "active",
+            "Phone": "678889",
+            "Alternate_phone": "",
+            "address": "123 Main Street",
+            "monthaly_salary": "25000.00",
+            "payment": "Paid",
+        }
+        res = self.client.post(reverse("employee"), post_data)
+        self.assertEqual(res.status_code, 200)
+        self.assertContains(res, "Must be a valid 10-digit mobile number")
+        self.assertFalse(User.objects.filter(username="johndoe_short").exists())
+
+    def test_phone_validation_accepts_valid_10_digit_and_plus91(self):
+        """Employee registration accepts +91 formatted numbers and normalizes them."""
+        self.client.force_login(self.owner_user)
+        post_data = {
+            "first_name": "Ravi",
+            "last_name": "Kumar",
+            "username": "ravikumar_pos",
+            "email": "ravi@alpha.com",
+            "password": "pass123456",
+            "confirm_pass": "pass123456",
+            "employee_id": "EMP-ALP-03",
+            "Role": "Cashier",
+            "joining_date": "2025-01-01",
+            "status": "active",
+            "Phone": "+91 98765 43210",
+            "Alternate_phone": "09876543211",
+            "address": "789 Park Lane",
+            "monthaly_salary": "25000.00",
+            "payment": "Paid",
+        }
+        res = self.client.post(reverse("employee"), post_data)
+        self.assertEqual(res.status_code, 302)
+
+        emp = user_registration.objects.get(employee_id="EMP-ALP-03")
+        self.assertEqual(emp.Phone, "9876543210")
+        self.assertEqual(emp.Alternate_phone, "9876543211")
+
+    def test_employee_can_login_with_employee_id_and_username(self):
+        """New employee can log in using their employee_id or username and lands on role dashboard."""
+        # Create an active cashier
+        cashier_user = User.objects.create_user(
+            username="cashier_login_test",
+            password="mypassword123",
+            first_name="Sam",
+            last_name="Cash"
+        )
+        user_registration.objects.create(
+            user=cashier_user,
+            company=self.company,
+            Phone="9876543299",
+            employee_id="EMP-CSH-99",
+            Role="Cashier",
+            joining_date="2025-01-01",
+            status="active"
+        )
+
+        # 1. Login with employee_id
+        res_emp_id = self.client.post(reverse("accounts"), {
+            "username": "EMP-CSH-99",
+            "password": "mypassword123"
+        })
+        self.assertEqual(res_emp_id.status_code, 302)
+        self.assertIn("cashier", res_emp_id.url)
+
+        # Logout
+        self.client.logout()
+
+        # 2. Login with username
+        res_user = self.client.post(reverse("accounts"), {
+            "username": "cashier_login_test",
+            "password": "mypassword123"
+        })
+        self.assertEqual(res_user.status_code, 302)
+        self.assertIn("cashier", res_user.url)
+
+    def test_inactive_employee_cannot_login(self):
+        """Inactive employee is blocked from logging in."""
+        inactive_user = User.objects.create_user(
+            username="inactive_cashier",
+            password="mypassword123"
+        )
+        user_registration.objects.create(
+            user=inactive_user,
+            company=self.company,
+            Phone="9876543288",
+            employee_id="EMP-INACT-01",
+            Role="Cashier",
+            joining_date="2025-01-01",
+            status="inactive"
+        )
+
+        res = self.client.post(reverse("accounts"), {
+            "username": "EMP-INACT-01",
+            "password": "mypassword123"
+        })
+        self.assertEqual(res.status_code, 200)
+        self.assertContains(res, "Invalid")
+
+
+class EmployeeTemplateAndEmptyContextRegressionTests(TestCase):
+    """
+    Regression tests verifying that employee templates render safely
+    with empty context, empty form_data, zero employees, and optional addresses.
+    """
+    def setUp(self):
+        self.client = Client()
+        self.owner_user = User.objects.create_user(
+            username="owner_regress",
+            password="password123",
+            first_name="Owner",
+            last_name="Test"
+        )
+        self.company = companyRegistration.objects.create(
+            owner=self.owner_user,
+            company_name="Regress Corp",
+            address_line="100 Market St",
+            city="Pune",
+            state="Maharashtra",
+            pincode="411001",
+            phone="9876543200",
+            company_email="owner@regress.com",
+            gst_number="27ABCDE1234F1Z5"
+        )
+
+    def test_employee_get_page_renders_successfully(self):
+        """GET /employee/ renders 200 without VariableDoesNotExist or template lookup errors."""
+        self.client.force_login(self.owner_user)
+        response = self.client.get(reverse("employee"))
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "Add Team Member")
+        self.assertContains(response, 'id="emp_address_line"')
+
+    def test_employee_template_renders_with_empty_form_data(self):
+        """Direct template rendering with empty form_data dict does not raise VariableDoesNotExist."""
+        from django.template.loader import render_to_string
+        html = render_to_string("employee/employee.html", {
+            "form_data": {},
+            "company": self.company,
+            "is_owner": True,
+            "user_role": "Admin",
+        })
+        self.assertIn("Add Team Member", html)
+
+    def test_employee_template_renders_without_form_data_key(self):
+        """Direct template rendering without form_data in context does not crash."""
+        from django.template.loader import render_to_string
+        html = render_to_string("employee/employee.html", {
+            "company": self.company,
+            "is_owner": True,
+            "user_role": "Admin",
+        })
+        self.assertIn("Add Team Member", html)
+
+    def test_view_employee_renders_with_zero_employees(self):
+        """Employee list page /view_employee/ loads cleanly when zero employees exist."""
+        self.client.force_login(self.owner_user)
+        response = self.client.get(reverse("view_employee"))
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "Team")
+        self.assertEqual(response.context["Total_Employees"], 0)
+
+    def test_employee_registration_and_edit_without_address(self):
+        """Creating and editing employee without address succeeds without error."""
+        self.client.force_login(self.owner_user)
+        post_data = {
+            "first_name": "NoAddr",
+            "last_name": "Worker",
+            "username": "noaddr_worker",
+            "email": "worker@regress.com",
+            "password": "pass123456",
+            "confirm_pass": "pass123456",
+            "employee_id": "EMP-NOADDR",
+            "Role": "Cashier",
+            "joining_date": "2025-01-01",
+            "status": "active",
+            "Phone": "9876543290",
+            "monthaly_salary": "15000.00",
+            "payment": "Paid",
+            # Address intentionally omitted
+        }
+        res = self.client.post(reverse("employee"), post_data)
+        self.assertEqual(res.status_code, 302)
+        emp = user_registration.objects.filter(employee_id="EMP-NOADDR").first()
+        self.assertIsNotNone(emp)
+        self.assertEqual(emp.address, "")
+
+        # Verify editing this employee
+        edit_data = {
+            "first_name": "NoAddr",
+            "last_name": "Worker",
+            "email": "worker@regress.com",
+            "employee_id": "EMP-NOADDR",
+            "Phone": "9876543290",
+            "Role": "Cashier",
+            "status": "active",
+            "joining_date": "2025-01-01",
+            "monthaly_salary": "16000.00",
+            "payment": "Paid",
+            "address": "",
+        }
+        res_edit = self.client.post(reverse("edit_employee", kwargs={"employee_id": "EMP-NOADDR"}), edit_data)
+        self.assertEqual(res_edit.status_code, 302)
+        emp.refresh_from_db()
+        self.assertEqual(emp.address, "")
+
+

@@ -21,10 +21,12 @@
         <a href="{% url 'settings_scanner' %}" class="settings-tab">
             <i class="bi bi-upc-scan"></i> Scanner & POS Devices
         </a>
-        {% if is_owner %}
+        {% if is_owner or user_role == "Admin" %}
         <a href="{% url 'settings_company' %}" class="settings-tab">
             <i class="bi bi-building"></i> Company Profile
         </a>
+        {% endif %}
+        {% if is_owner %}
         <a href="{% url 'settings_telegram' %}" class="settings-tab">
             <i class="bi bi-telegram"></i> Telegram Bot & Sync
         </a>

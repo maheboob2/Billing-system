@@ -86,7 +86,7 @@
             gap: 8px;
             font-weight: 700;
             font-size: 14px;
-            color: #fff;
+            color: var(--text-main);
             letter-spacing: -0.2px;
         }
 
@@ -192,13 +192,13 @@
         }
 
         .role-badge.cashier {
-            color: #6ee7b7;
+            color: var(--success);
             background: var(--success-light);
             border: 1px solid rgba(16, 185, 129, 0.3);
         }
 
         .role-badge.manager {
-            color: #93c5fd;
+            color: var(--primary);
             background: var(--primary-light);
             border: 1px solid rgba(59, 130, 246, 0.3);
         }
@@ -256,7 +256,7 @@
             gap: 8px;
             font-size: 12px;
             font-weight: 700;
-            color: #fff;
+            color: var(--text-main);
             letter-spacing: 0.6px;
             text-transform: uppercase;
         }
@@ -354,7 +354,7 @@
             background: transparent;
             border: none;
             outline: none;
-            color: #fff;
+            color: var(--text-main);
             font-size: 14px;
             font-weight: 600;
             font-family: var(--font-mono);
@@ -518,7 +518,7 @@
         .preview-title {
             font-size: 14px;
             font-weight: 700;
-            color: #fff;
+            color: var(--text-main);
             line-height: 1.3;
             white-space: nowrap;
             overflow: hidden;
@@ -617,7 +617,7 @@
 
         .preview-qty-stepper button:hover:not(:disabled) {
             background: var(--surface-card);
-            color: #fff;
+            color: var(--text-main);
         }
 
         .preview-qty-stepper button:disabled {
@@ -628,15 +628,25 @@
         }
 
         .preview-qty-stepper input {
-            width: 38px;
+            width: 44px;
+            min-width: 44px;
             background: transparent;
             border: none;
             outline: none;
-            color: #fff;
+            color: var(--text-main);
             font-family: var(--font-mono);
-            font-size: 13px;
+            font-size: 14px;
             font-weight: 700;
             text-align: center;
+            padding: 0 4px;
+            -moz-appearance: textfield;
+            appearance: textfield;
+        }
+
+        .preview-qty-stepper input::-webkit-outer-spin-button,
+        .preview-qty-stepper input::-webkit-inner-spin-button {
+            -webkit-appearance: none;
+            margin: 0;
         }
 
         .btn-add-preview {
@@ -845,14 +855,14 @@
         }
 
         .cat-chip:hover {
-            color: #fff;
-            border-color: var(--text-dim);
+            color: var(--text-main);
+            border-color: var(--primary);
         }
 
         .cat-chip.active {
-            background: var(--primary-light);
-            border-color: rgba(59, 130, 246, 0.5);
-            color: #93c5fd;
+            background: var(--primary);
+            border-color: var(--primary);
+            color: #ffffff;
             font-weight: 600;
         }
 
@@ -885,7 +895,7 @@
         .catalog-card-info .name {
             font-size: 12px;
             font-weight: 600;
-            color: #fff;
+            color: var(--text-main);
             margin-bottom: 2px;
         }
 
@@ -987,7 +997,7 @@
         .cart-title {
             font-size: 14px;
             font-weight: 700;
-            color: #fff;
+            color: var(--text-main);
             display: flex;
             align-items: center;
             gap: 8px;
@@ -1079,7 +1089,7 @@
 
         .pname {
             font-weight: 600;
-            color: #fff;
+            color: var(--text-main);
             margin-bottom: 2px;
         }
 
@@ -1112,12 +1122,12 @@
         .qty-ctrl button {
             background: transparent;
             border: none;
-            color: var(--text-muted);
+            color: var(--text-main);
             width: 26px;
             height: 26px;
             cursor: pointer;
             font-size: 14px;
-            font-weight: 600;
+            font-weight: 700;
             display: flex;
             align-items: center;
             justify-content: center;
@@ -1151,13 +1161,13 @@
 
         .qty-ctrl input {
             width: 44px;
-            background: transparent;
+            background: var(--surface-card);
             border: none;
             outline: none;
-            color: #fff;
+            color: var(--text-main);
             font-family: var(--font-mono);
-            font-size: 12px;
-            font-weight: 600;
+            font-size: 13px;
+            font-weight: 700;
             text-align: center;
             padding: 2px 0;
             -moz-appearance: textfield;
@@ -1179,7 +1189,7 @@
         .col-total {
             font-family: var(--font-mono);
             font-weight: 700;
-            color: #fff;
+            color: var(--text-main);
             white-space: nowrap;
             text-align: right;
         }
@@ -1340,7 +1350,7 @@
         .customer-item .cname {
             font-size: 12px;
             font-weight: 600;
-            color: #fff;
+            color: var(--text-main);
         }
 
         .customer-item .cphone {
@@ -1362,7 +1372,7 @@
         .sc-info-block .name {
             font-size: 12px;
             font-weight: 600;
-            color: #fff;
+            color: var(--text-main);
         }
 
         .sc-info-block .credit {
@@ -1502,12 +1512,13 @@
         }
 
         .pay-tab.active {
-            background: var(--primary-light);
+            background: var(--primary);
             border-color: var(--primary);
+            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
         }
 
         .pay-tab.active i, .pay-tab.active span {
-            color: #fff;
+            color: #ffffff !important;
         }
 
         .tender-row {
@@ -1531,7 +1542,7 @@
             border: 1px solid var(--border);
             border-radius: var(--radius-sm);
             padding: 6px 10px;
-            color: #fff;
+            color: var(--text-main);
             font-family: var(--font-mono);
             font-size: 13px;
             font-weight: 600;
@@ -1558,9 +1569,9 @@
         }
 
         .btn-qc:hover {
-            background: var(--surface-card);
-            color: #fff;
-            border-color: var(--border-focus);
+            background: var(--primary);
+            color: #ffffff;
+            border-color: var(--primary);
         }
 
         .credit-alert-box {
@@ -1727,14 +1738,19 @@
              ══════════════════════════════════════════════════════════════ -->
         <section class="cashier-zone" id="pos-scan-catalog-zone" aria-label="POS Scanner Terminal">
             <!-- Terminal Header -->
-            <div class="cashier-scan-header">
+            <div class="cashier-scan-header" style="display: flex; justify-content: space-between; align-items: center;">
                 <div class="cashier-scan-title">
                     <i class="bi bi-upc-scan"></i>
                     <span>BARCODE SCANNER TERMINAL</span>
                 </div>
-                <span class="scan-status-badge">
-                    <span class="pulse-dot"></span> READY
-                </span>
+                <div style="display: flex; align-items: center; gap: 8px;">
+                    <button type="button" id="btn-pair-phone-scanner" onclick="if(window.Cart&&Cart.openScannerStatusModal){Cart.openScannerStatusModal();}else{window.open('{% url 'settings_scanner' %}','_blank');}" title="Pair Android Phone Barcode Scanner" style="background: rgba(56, 189, 248, 0.15); color: #38bdf8; border: 1px solid rgba(56, 189, 248, 0.35); border-radius: 20px; padding: 4px 10px; font-size: 11px; font-weight: 700; cursor: pointer; display: inline-flex; align-items: center; gap: 5px; transition: all 0.15s ease;">
+                        <i class="bi bi-phone"></i> <span>Pair Phone Scanner</span>
+                    </button>
+                    <span class="scan-status-badge">
+                        <span class="pulse-dot"></span> READY
+                    </span>
+                </div>
             </div>
 
             <!-- Collapsed Barcode Input Toggle & Elements (Preserves Barcode compatibility without cluttering layout) -->
@@ -1989,7 +2005,7 @@
                     </div>
 
                     <div class="ref-input" id="ref-input-wrap" style="display:none;margin-top:6px;">
-                        <input type="text" id="pay-ref" placeholder="Transaction ref / Auth code" style="width:100%;background:var(--surface-card);border:1px solid var(--border);border-radius:var(--radius-sm);padding:6px 10px;color:#fff;font-size:12px;outline:none;">
+                        <input type="text" id="pay-ref" placeholder="Transaction ref / Auth code" style="width:100%;background:var(--surface-card);border:1px solid var(--border);border-radius:var(--radius-sm);padding:6px 10px;color:var(--text-main);font-size:12px;outline:none;">
                     </div>
 
                     <!-- Dedicated UPI Payment Intent Panel -->
@@ -2009,13 +2025,13 @@
                             </div>
                             <div style="flex: 1; font-size: 11px;">
                                 <div style="color: var(--muted); margin-bottom: 2px;">Payable Amount:</div>
-                                <div id="upi-amount-display" style="font-size: 16px; font-weight: 800; color: #fff; margin-bottom: 4px;">₹0.00</div>
+                                <div id="upi-amount-display" style="font-size: 16px; font-weight: 800; color: var(--text-main); margin-bottom: 4px;">₹0.00</div>
                                 <div style="color: var(--muted); font-size: 10px;">Scan with GPay, PhonePe, Paytm, BHIM.</div>
                             </div>
                         </div>
 
                         <div style="margin-bottom: 8px;">
-                            <input type="text" id="upi-ref-input" placeholder="Enter UTR / UPI Ref (Optional for Demo)" style="width: 100%; padding: 6px 10px; background: var(--surface-2); border: 1px solid var(--border); border-radius: 4px; color: #fff; font-size: 11px; outline: none;">
+                            <input type="text" id="upi-ref-input" placeholder="Enter UTR / UPI Ref (Optional for Demo)" style="width: 100%; padding: 6px 10px; background: var(--surface-2); border: 1px solid var(--border); border-radius: 4px; color: var(--text-main); font-size: 11px; outline: none;">
                         </div>
 
                         <button type="button" id="btn-upi-mark-received" onclick="Cart.markUpiReceived()" style="width: 100%; padding: 7px 10px; background: rgba(16, 185, 129, 0.2); border: 1px solid rgba(16, 185, 129, 0.4); color: #34d399; border-radius: 6px; font-size: 11px; font-weight: 600; cursor: pointer; display: flex; align-items: center; justify-content: center; gap: 6px;">
@@ -2060,7 +2076,7 @@
             <!-- Primary Scanner Status Card -->
             <div style="background: var(--surface-2); border: 1px solid var(--border); border-radius: 8px; padding: 14px; margin-bottom: 14px;">
                 <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
-                    <span style="font-size: 13px; font-weight: 700; color: #ffffff;">Primary Hardware Scanner</span>
+                    <span style="font-size: 13px; font-weight: 700; color: var(--text);">Primary Hardware Scanner</span>
                     <span class="badge" style="background: rgba(16, 185, 129, 0.15); color: #34d399; border: 1px solid rgba(16, 185, 129, 0.3); font-size: 11px; padding: 3px 8px; border-radius: 12px; display: inline-flex; align-items: center; gap: 5px;">
                         <span style="width: 6px; height: 6px; border-radius: 50%; background: #10b981;"></span> Ready / Listening
                     </span>
@@ -2198,7 +2214,7 @@
         <div style="background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius-md); width: 100%; max-width: 480px; padding: 22px; text-align: center; box-shadow: 0 16px 40px rgba(0,0,0,0.6);">
             <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px;">
                 <div style="text-align: left;">
-                    <h3 style="font-size: 15px; font-weight: 700; color: #ffffff; margin: 0; display: flex; align-items: center; gap: 8px;">
+                    <h3 style="font-size: 15px; font-weight: 700; color: var(--text); margin: 0; display: flex; align-items: center; gap: 8px;">
                         <i class="bi bi-phone" style="color: #38bdf8;"></i> Phone Camera Scanner <span style="font-size: 10px; background: rgba(245, 158, 11, 0.15); color: #fbbf24; border: 1px solid rgba(245, 158, 11, 0.3); padding: 1px 6px; border-radius: 4px;">BACKUP</span>
                     </h3>
                     <p style="font-size: 11px; color: var(--muted); margin: 2px 0 0 0;">Scan QR on mobile or open the LAN URL below.</p>
@@ -2209,6 +2225,19 @@
             <!-- QR Code Box -->
             <div style="background: #ffffff; padding: 10px; border-radius: 12px; display: inline-block; margin: 6px auto 12px;">
                 <img id="scanner-qr-img" src="" alt="Pairing QR" style="width: 160px; height: 160px; display: block; border-radius: 4px;">
+            </div>
+
+            <!-- Insecure Context Warning (shown by JS when served over plain HTTP on non-localhost) -->
+            <div id="scanner-insecure-warning" style="display: none; background: rgba(239,68,68,0.10); border: 1px solid rgba(239,68,68,0.40); border-radius: 8px; padding: 10px 14px; margin-bottom: 12px; text-align: left; align-items: flex-start; gap: 10px;">
+                <i class="bi bi-exclamation-triangle-fill" style="color: #f87171; font-size: 16px; flex-shrink: 0; margin-top: 1px;"></i>
+                <div style="flex: 1;">
+                    <div style="font-size: 12px; font-weight: 700; color: #f87171; margin-bottom: 3px;">Camera Not Available (Insecure Context)</div>
+                    <div style="font-size: 11px; color: var(--muted); line-height: 1.5; margin-bottom: 8px;">
+                        Your browser requires <strong>HTTPS</strong> to access the camera on this page.
+                        You can still scan barcodes by typing them manually below, or open the QR link on your phone.
+                    </div>
+                    <input type="text" id="manual-barcode-input" placeholder="Type barcode and press Enter..." style="width: 100%; padding: 6px 10px; font-size: 12px; font-family: var(--font-mono); background: var(--surface-card); border: 1px solid var(--border); border-radius: 4px; color: var(--text-main);" onkeydown="if(event.key==='Enter'&&this.value){Cart.handleBarcodeScan(this.value.trim());this.value='';}">
+                </div>
             </div>
 
             <!-- Debuggable Phone Scanner URL Panel -->
@@ -2248,10 +2277,10 @@
                 <div id="scanner-device-info-bar" style="font-size: 11px; color: var(--muted); margin-top: 4px; display: none;"></div>
             </div>
 
-            <div style="background: rgba(59, 130, 246, 0.06); border: 1px solid rgba(59, 130, 246, 0.2); border-radius: 6px; padding: 8px 10px; font-size: 11px; color: #93c5fd; margin-bottom: 14px; text-align: left; display: flex; align-items: flex-start; gap: 8px;">
-                <i class="bi bi-info-circle-fill" style="margin-top: 1px;"></i>
+            <div style="background: rgba(59, 130, 246, 0.1); border: 1px solid rgba(59, 130, 246, 0.3); border-radius: 6px; padding: 8px 10px; font-size: 11px; color: var(--text-main); margin-bottom: 14px; text-align: left; display: flex; align-items: flex-start; gap: 8px;">
+                <i class="bi bi-info-circle-fill" style="color: var(--primary); margin-top: 1px;"></i>
                 <div>
-                    <strong>Wi-Fi Network Check:</strong> Phone and PC must be connected to the same Wi-Fi router. If phone shows <em>"This site can't be reached"</em>, ensure server was started with <code style="color:#fff;">0.0.0.0:8000</code> and Windows Firewall allows port 8000.
+                    <strong>Wi-Fi Network Check:</strong> Phone and PC must be connected to the same Wi-Fi router. If phone shows <em>"This site can't be reached"</em>, ensure server was started with <code style="color: var(--text-main); font-weight: 700; background: var(--surface-2); padding: 1px 4px; border-radius: 3px;">0.0.0.0:8000</code> and Windows Firewall allows port 8000.
                 </div>
             </div>
 
@@ -2272,8 +2301,9 @@
             customersUrl: '/api/customers/',
             csrfToken: document.getElementById('csrf-token').value,
             userRole: '{{ user_role|escapejs }}',
+            activeScannerSession: '{{ active_session_token|default:""|escapejs }}',
         };
     </script>
-    <script src="{% static 'sales/js/cart.js' %}?v=2.1"></script>
+    <script src="{% static 'sales/js/cart.js' %}?v=2.4"></script>
 </body>
 </html>

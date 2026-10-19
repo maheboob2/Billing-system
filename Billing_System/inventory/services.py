@@ -68,6 +68,13 @@ class StockService:
                 reason=reason,
             )
 
+            # Transactionally enqueue stock movement for offline/cloud sync
+            try:
+                from dashboard.sync_service import SyncService
+                SyncService.queue_stock_movement(movement)
+            except Exception:
+                pass
+
         return locked_product, movement
 
 
@@ -98,3 +105,50 @@ def generate_internal_barcode(company):
         candidate = f"{prefix}{seq:06d}"
 
     return candidate
+
+
+def generate_unique_sku(company, name="", barcode="", category=None):
+    """
+    Generates an authoritative, valid, unique SKU for a product within a company.
+    Format: SKU-{PREFIX}-{SEQ:04d} or derived from clean initials and sequential number.
+    Ensures length <= 50, uniqueness within company, and robust collision avoidance.
+    """
+    import re
+    import uuid
+
+    clean_name = re.sub(r"[^A-Za-z0-9\s]", "", str(name or "")).strip().upper()
+    words = [w for w in clean_name.split() if w]
+
+    prefix = ""
+    if words:
+        if len(words) == 1:
+            prefix = words[0][:4]
+        else:
+            prefix = "".join(w[:2] for w in words[:3])[:6]
+    elif category and hasattr(category, "name"):
+        cat_clean = re.sub(r"[^A-Za-z0-9]", "", str(category.name)).upper()
+        prefix = cat_clean[:4]
+
+    if not prefix or len(prefix) < 2:
+        prefix = "PRD"
+
+    base_count = Product.objects.filter(company=company).count() + 1
+
+    clean_barcode = re.sub(r"[^A-Za-z0-9]", "", str(barcode or ""))
+    candidates = []
+    if len(clean_barcode) >= 4:
+        candidates.append(f"SKU-{prefix}-{clean_barcode[-4:]}")
+
+    candidates.append(f"SKU-{prefix}-{base_count:04d}")
+
+    for candidate in candidates:
+        if not Product.objects.filter(company=company, product_code=candidate).exists():
+            return candidate[:50]
+
+    for seq in range(base_count + 1, base_count + 5000):
+        candidate = f"SKU-{prefix}-{seq:04d}"
+        if not Product.objects.filter(company=company, product_code=candidate).exists():
+            return candidate[:50]
+
+    return f"SKU-{prefix}-{uuid.uuid4().hex[:6].upper()}"[:50]
+

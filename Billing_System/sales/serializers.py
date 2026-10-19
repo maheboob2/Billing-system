@@ -110,9 +110,12 @@ class InvoiceSerializer(serializers.ModelSerializer):
 class SaleSerializer(serializers.ModelSerializer):
     items = SaleItemSerializer(many=True, read_only=True)
     payments = PaymentSerializer(many=True, read_only=True)
-    customer_name = serializers.CharField(source="customer.name", read_only=True, default="Walk-in Customer")
+    customer_name = serializers.CharField(source="customer_display_name", read_only=True, default="Counter Sale")
+    customer_display_name = serializers.CharField(read_only=True)
     cashier_name = serializers.CharField(source="cashier.username", read_only=True)
     invoice_number = serializers.CharField(source="invoice.invoice_number", read_only=True, default=None)
+    payment_mode_display = serializers.CharField(read_only=True)
+    payment_method = serializers.CharField(read_only=True)
 
     class Meta:
         model = Sale
@@ -122,6 +125,7 @@ class SaleSerializer(serializers.ModelSerializer):
             "invoice_number",
             "customer",
             "customer_name",
+            "customer_display_name",
             "cashier",
             "cashier_name",
             "subtotal",
@@ -140,6 +144,8 @@ class SaleSerializer(serializers.ModelSerializer):
             "notes",
             "items",
             "payments",
+            "payment_mode_display",
+            "payment_method",
             "created_at",
         ]
         read_only_fields = fields
@@ -156,6 +162,14 @@ class CheckoutPaymentSerializer(serializers.Serializer):
     transaction_reference = serializers.CharField(required=False, allow_blank=True, default="")
     notes = serializers.CharField(required=False, allow_blank=True, default="")
 
+    def to_internal_value(self, data):
+        if isinstance(data, dict):
+            # Normalize reference_number to transaction_reference
+            if "reference_number" in data and "transaction_reference" not in data:
+                data = dict(data)
+                data["transaction_reference"] = data.get("reference_number", "")
+        return super().to_internal_value(data)
+
 
 class CheckoutRequestSerializer(serializers.Serializer):
     customer_id = serializers.IntegerField(required=False, allow_null=True, default=None)
@@ -167,6 +181,16 @@ class CheckoutRequestSerializer(serializers.Serializer):
     payments = CheckoutPaymentSerializer(many=True, required=False, default=[])
     is_interstate = serializers.BooleanField(default=False)
     notes = serializers.CharField(required=False, allow_blank=True, default="")
+
+    def to_internal_value(self, data):
+        if isinstance(data, dict):
+            data = dict(data)
+            # If client passed single 'payment' object, normalize into 'payments' array
+            if "payment" in data and ("payments" not in data or not data["payments"]):
+                pay_obj = data["payment"]
+                if isinstance(pay_obj, dict):
+                    data["payments"] = [pay_obj]
+        return super().to_internal_value(data)
 
     def validate_items(self, value):
         if not value:
@@ -210,10 +234,12 @@ class ReturnItemSerializer(serializers.ModelSerializer):
 
 class ReturnRequestSerializer(serializers.ModelSerializer):
     items = ReturnItemSerializer(many=True, read_only=True)
-    created_by_name = serializers.CharField(source="created_by.username", read_only=True)
-    approved_by_name = serializers.CharField(source="approved_by.username", read_only=True)
+    created_by_name = serializers.CharField(source="created_by.username", read_only=True, default=None, allow_null=True)
+    approved_by_name = serializers.CharField(source="approved_by.username", read_only=True, default=None, allow_null=True)
+    created_by_label = serializers.CharField(read_only=True)
+    approved_by_label = serializers.CharField(read_only=True)
     sale_number = serializers.CharField(source="sale.sale_number", read_only=True)
-    customer_name = serializers.CharField(source="customer.name", read_only=True)
+    customer_name = serializers.CharField(source="customer.name", read_only=True, default="Counter Sale", allow_null=True)
 
     class Meta:
         model = ReturnRequest
@@ -232,6 +258,8 @@ class ReturnRequestSerializer(serializers.ModelSerializer):
             "notes",
             "created_by_name",
             "approved_by_name",
+            "created_by_label",
+            "approved_by_label",
             "approved_at",
             "rejection_reason",
             "items",

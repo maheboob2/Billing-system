@@ -82,4 +82,10 @@ class ReceivePurchaseAPIView(APIView):
             purchase.status = "RECEIVED"
             purchase.save(update_fields=["status"])
 
+            try:
+                from dashboard.sync_service import SyncService
+                SyncService.queue_purchase(purchase)
+            except Exception:
+                pass
+
         return Response(PurchaseSerializer(purchase).data, status=status.HTTP_200_OK)

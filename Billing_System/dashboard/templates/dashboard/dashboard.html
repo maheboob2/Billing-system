@@ -30,6 +30,35 @@
         </div>
     </div>
 
+    {% if is_owner and telegram_summary %}
+    <!-- ── COMPACT TELEGRAM STATUS SUMMARY (OWNER ONLY) ──────────────── -->
+    <div class="card" style="margin-bottom: 20px; padding: 12px 18px; border-radius: 10px; background: var(--surface); border: 1px solid var(--border); display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 12px;">
+        <div style="display: flex; align-items: center; gap: 12px;">
+            <div style="width: 36px; height: 36px; border-radius: 8px; background: {% if telegram_summary.is_connected %}rgba(16, 185, 129, 0.15){% else %}rgba(148, 163, 184, 0.15){% endif %}; display: flex; align-items: center; justify-content: center; font-size: 18px; color: {% if telegram_summary.is_connected %}#10b981{% else %}#94a3b8{% endif %};">
+                <i class="bi bi-telegram"></i>
+            </div>
+            <div>
+                <div style="display: flex; align-items: center; gap: 8px;">
+                    <span style="font-size: 13px; font-weight: 700; color: var(--text);">Telegram Reports</span>
+                    {% if telegram_summary.is_connected %}
+                        <span class="badge badge-success" style="font-size: 10px; padding: 2px 7px;"><i class="bi bi-check-circle-fill"></i> Connected</span>
+                    {% else %}
+                        <span class="badge badge-secondary" style="font-size: 10px; padding: 2px 7px;"><i class="bi bi-x-circle"></i> {{ telegram_summary.status_text }}</span>
+                    {% endif %}
+                </div>
+                <div style="font-size: 12px; color: var(--muted); margin-top: 1px;">
+                    Bot: <strong style="color: var(--text);">{{ telegram_summary.bot_name }}</strong>
+                </div>
+            </div>
+        </div>
+        <div>
+            <a href="{% url 'settings_telegram' %}" class="btn btn-secondary" style="font-size: 12px; padding: 6px 12px; text-decoration: none; display: inline-flex; align-items: center; gap: 5px;">
+                <i class="bi bi-gear"></i> Manage in Settings
+            </a>
+        </div>
+    </div>
+    {% endif %}
+
     <!-- ── KPI METRICS CARDS ─────────────────────────────────────────── -->
     <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 14px; margin-bottom: 22px;">
         <div class="stat-card" style="padding: 16px; border-left: 4px solid var(--primary);">
@@ -222,53 +251,195 @@
             </div>
         </div>
 
-        <!-- Natural Language Assistant Query Box -->
-        <div style="background: var(--surface-2); border: 1px solid var(--border); border-radius: var(--radius-sm); padding: 14px;">
-            <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 10px; flex-wrap: wrap; gap: 8px;">
-                <span style="font-size: 12px; font-weight: 700; color: var(--text);">
-                    <i class="bi bi-chat-left-dots-fill" style="color: #a855f7;"></i> Ask Business Assistant:
-                </span>
-                <div style="display: flex; gap: 6px; flex-wrap: wrap;">
-                    <button type="button" onclick="setAiQuery('How much did we sell today?')" style="background: var(--surface); border: 1px solid var(--border); font-size: 11px; padding: 3px 8px; border-radius: 12px; color: var(--muted); cursor: pointer;">
-                        Today's sales
-                    </button>
-                    <button type="button" onclick="setAiQuery('What are our top products?')" style="background: var(--surface); border: 1px solid var(--border); font-size: 11px; padding: 3px 8px; border-radius: 12px; color: var(--muted); cursor: pointer;">
-                        Top products
-                    </button>
-                    <button type="button" onclick="setAiQuery('Which products are low on stock?')" style="background: var(--surface); border: 1px solid var(--border); font-size: 11px; padding: 3px 8px; border-radius: 12px; color: var(--muted); cursor: pointer;">
-                        Low stock
-                    </button>
-                    <button type="button" onclick="setAiQuery('Compare this week with last week.')" style="background: var(--surface); border: 1px solid var(--border); font-size: 11px; padding: 3px 8px; border-radius: 12px; color: var(--muted); cursor: pointer;">
-                        Week comparison
+        <!-- Natural Language Assistant Conversational Chat Box -->
+        <div style="background: var(--surface-2); border: 1px solid var(--border); border-radius: var(--radius-sm); padding: 16px;">
+            <!-- Chat Header -->
+            <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 12px; flex-wrap: wrap; gap: 8px;">
+                <div style="display: flex; align-items: center; gap: 8px;">
+                    <div style="width: 28px; height: 28px; border-radius: 50%; background: rgba(168, 85, 247, 0.15); color: #a855f7; display: flex; align-items: center; justify-content: center; font-size: 15px;">
+                        <i class="bi bi-robot"></i>
+                    </div>
+                    <div>
+                        <span style="font-size: 13px; font-weight: 700; color: var(--text);">Retail Business Assistant</span>
+                        <span style="font-size: 10px; color: var(--success); font-weight: 600; margin-left: 6px;">● Online</span>
+                    </div>
+                </div>
+
+                <div style="display: flex; align-items: center; gap: 6px;">
+                    <button type="button" onclick="clearAiChat()" style="background: transparent; border: 1px solid var(--border); font-size: 11px; padding: 4px 9px; border-radius: 6px; color: var(--muted); cursor: pointer; transition: all 0.15s ease;" title="Clear conversation history">
+                        <i class="bi bi-trash3"></i> Clear Chat
                     </button>
                 </div>
             </div>
-
-            <div style="display: flex; gap: 8px;">
-                <input type="text" id="ai-query-input" placeholder="e.g. How much did we sell today? Or Compare this week with last week." style="flex: 1; font-size: 13px; padding: 8px 12px; background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius-sm); color: var(--text);" onkeydown="if(event.key==='Enter') submitAiQuery();">
-                <button type="button" class="btn btn-primary" onclick="submitAiQuery()" style="padding: 8px 16px; font-size: 12px; white-space: nowrap;">
-                    <i class="bi bi-send-fill"></i> Ask
+            <!-- Quick Suggestions Row -->
+            <div style="display: flex; gap: 6px; flex-wrap: wrap; margin-bottom: 12px;">
+                <button type="button" onclick="setAiQuery('How much did we sell today?')" style="background: var(--surface); border: 1px solid var(--border); font-size: 11px; padding: 4px 10px; border-radius: 12px; color: var(--muted); cursor: pointer; transition: all 0.15s ease;">
+                    Today's sales
+                </button>
+                <button type="button" onclick="setAiQuery('Show UPI collections')" style="background: var(--surface); border: 1px solid var(--border); font-size: 11px; padding: 4px 10px; border-radius: 12px; color: var(--muted); cursor: pointer; transition: all 0.15s ease;">
+                    UPI collections
+                </button>
+                <button type="button" onclick="setAiQuery('Who is our best-selling product?')" style="background: var(--surface); border: 1px solid var(--border); font-size: 11px; padding: 4px 10px; border-radius: 12px; color: var(--muted); cursor: pointer; transition: all 0.15s ease;">
+                    Best-selling product
+                </button>
+                <button type="button" onclick="setAiQuery('Tell me today\'s returns')" style="background: var(--surface); border: 1px solid var(--border); font-size: 11px; padding: 4px 10px; border-radius: 12px; color: var(--muted); cursor: pointer; transition: all 0.15s ease;">
+                    Today's returns
+                </button>
+                <button type="button" onclick="setAiQuery('Low stock')" style="background: var(--surface); border: 1px solid var(--border); font-size: 11px; padding: 4px 10px; border-radius: 12px; color: var(--muted); cursor: pointer; transition: all 0.15s ease;">
+                    Low stock
+                </button>
+                <button type="button" onclick="setAiQuery('Tell cashier to speak to me in the office.')" style="background: var(--surface); border: 1px solid var(--border); font-size: 11px; padding: 4px 10px; border-radius: 12px; color: var(--primary); font-weight: 600; cursor: pointer; transition: all 0.15s ease;">
+                    <i class="bi bi-chat-dots"></i> Message cashier
                 </button>
             </div>
 
-            <div id="ai-response-box" style="display: none; margin-top: 12px; padding: 12px; background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius-sm); font-size: 12px; line-height: 1.5; color: var(--text); white-space: pre-wrap;"></div>
+            <!-- Chat Messages Log Container -->
+            <div id="ai-chat-thread" style="max-height: 360px; min-height: 180px; overflow-y: auto; background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius-sm); padding: 14px; margin-bottom: 12px; display: flex; flex-direction: column; gap: 12px;">
+                <!-- Initial Assistant Message Bubble -->
+                <div class="ai-msg-assistant" style="display: flex; gap: 10px; align-items: flex-start;">
+                    <div style="width: 28px; height: 28px; border-radius: 50%; background: rgba(168, 85, 247, 0.15); color: #a855f7; display: flex; align-items: center; justify-content: center; font-size: 14px; flex-shrink: 0; margin-top: 2px;">
+                        <i class="bi bi-robot"></i>
+                    </div>
+                    <div style="max-width: 82%;">
+                        <div style="background: var(--surface-2); border: 1px solid var(--border); border-radius: 12px 12px 12px 2px; padding: 10px 14px; font-size: 12.5px; line-height: 1.55; color: var(--text);">
+                            👋 Hello! I am your store's <strong>Retail Business Assistant</strong>. You can ask me about sales figures, UPI/cash collections, best-selling products, today's returns, or ask me to message store employees.
+                        </div>
+                        <span style="font-size: 10px; color: var(--muted); margin-top: 3px; display: block; padding-left: 2px;">Just now</span>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Input & Send Controls -->
+            <div style="display: flex; gap: 8px; align-items: flex-end;">
+                <textarea id="ai-query-input" rows="1" placeholder="Ask a business question or send staff message (e.g. 'Tell cashier to speak to me in the office'). Enter to send..." style="flex: 1; font-size: 13px; padding: 10px 14px; background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius-sm); color: var(--text); resize: none; min-height: 40px; max-height: 90px; line-height: 1.4; font-family: inherit;"></textarea>
+                <button type="button" class="btn btn-primary" id="btn-ask-ai" onclick="submitAiQuery()" style="padding: 10px 18px; font-size: 12.5px; white-space: nowrap; display: inline-flex; align-items: center; gap: 6px; height: 40px;">
+                    <i class="bi bi-send-fill" id="ai-btn-icon"></i> <span id="ai-btn-text">Send</span>
+                </button>
+            </div>
         </div>
     </div>
 
     <script>
+    (function() {
+        const input = document.getElementById('ai-query-input');
+        if (input) {
+            input.addEventListener('keydown', function(e) {
+                if (e.key === 'Enter' && !e.shiftKey) {
+                    e.preventDefault();
+                    submitAiQuery();
+                }
+            });
+            // Auto resize height
+            input.addEventListener('input', function() {
+                this.style.height = 'auto';
+                this.style.height = Math.min(this.scrollHeight, 90) + 'px';
+            });
+        }
+    })();
+
+    function escapeHtml(str) {
+        if (!str) return '';
+        return String(str).replace(/[&<>"']/g, function(m) {
+            return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#039;' }[m];
+        });
+    }
+
+    function formatAiMarkdown(text) {
+        if (!text) return '';
+        // Escape first for XSS prevention
+        let safe = escapeHtml(text);
+        // Safe Markdown subset formatting
+        safe = safe.replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>');
+        safe = safe.replace(/\*(.*?)\*/g, '<em>$1</em>');
+        safe = safe.replace(/`([^`]+)`/g, '<code style="background: var(--surface-2); padding: 1px 5px; border-radius: 4px; font-family: var(--font-mono); font-size: 11.5px;">$1</code>');
+        safe = safe.replace(/\n/g, '<br>');
+        return safe;
+    }
+
+    function getCurrentTimeDisplay() {
+        const now = new Date();
+        return now.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+    }
+
     function setAiQuery(text) {
-        document.getElementById('ai-query-input').value = text;
-        submitAiQuery();
+        const input = document.getElementById('ai-query-input');
+        if (input) {
+            input.value = text;
+            input.focus();
+            submitAiQuery();
+        }
+    }
+
+    function clearAiChat() {
+        const thread = document.getElementById('ai-chat-thread');
+        if (!thread) return;
+        thread.innerHTML = `
+            <div class="ai-msg-assistant" style="display: flex; gap: 10px; align-items: flex-start;">
+                <div style="width: 28px; height: 28px; border-radius: 50%; background: rgba(168, 85, 247, 0.15); color: #a855f7; display: flex; align-items: center; justify-content: center; font-size: 14px; flex-shrink: 0; margin-top: 2px;">
+                    <i class="bi bi-robot"></i>
+                </div>
+                <div style="max-width: 82%;">
+                    <div style="background: var(--surface-2); border: 1px solid var(--border); border-radius: 12px 12px 12px 2px; padding: 10px 14px; font-size: 12.5px; line-height: 1.55; color: var(--text);">
+                        Chat history cleared. How can I assist you today?
+                    </div>
+                    <span style="font-size: 10px; color: var(--muted); margin-top: 3px; display: block; padding-left: 2px;">Just now</span>
+                </div>
+            </div>
+        `;
     }
 
     async function submitAiQuery() {
         const input = document.getElementById('ai-query-input');
-        const box = document.getElementById('ai-response-box');
-        const query = input.value.trim();
+        const thread = document.getElementById('ai-chat-thread');
+        const btn = document.getElementById('btn-ask-ai');
+        const btnIcon = document.getElementById('ai-btn-icon');
+        const btnText = document.getElementById('ai-btn-text');
+
+        const query = (input.value || '').trim();
         if (!query) return;
 
-        box.style.display = 'block';
-        box.innerHTML = '<span style="color: var(--muted);"><i class="bi bi-hourglass-split"></i> Querying business engine...</span>';
+        // Append User Message Bubble (Right aligned, escaped content)
+        const userTime = getCurrentTimeDisplay();
+        const userBubble = document.createElement('div');
+        userBubble.className = 'ai-msg-user';
+        userBubble.style.cssText = 'display: flex; justify-content: flex-end; gap: 8px; align-items: flex-start;';
+        userBubble.innerHTML = `
+            <div style="max-width: 80%; text-align: right;">
+                <div style="background: var(--primary); color: #ffffff; border-radius: 12px 12px 2px 12px; padding: 10px 14px; font-size: 12.5px; line-height: 1.5; text-align: left; display: inline-block; word-break: break-word;">
+                    ${escapeHtml(query)}
+                </div>
+                <span style="font-size: 10px; color: var(--muted); margin-top: 3px; display: block; padding-right: 2px;">${userTime}</span>
+            </div>
+            <div style="width: 28px; height: 28px; border-radius: 50%; background: var(--surface-2); border: 1px solid var(--border); color: var(--text); display: flex; align-items: center; justify-content: center; font-size: 13px; flex-shrink: 0; margin-top: 2px;">
+                <i class="bi bi-person-fill"></i>
+            </div>
+        `;
+        thread.appendChild(userBubble);
+        input.value = '';
+        input.style.height = 'auto';
+
+        // Append Typing Indicator Bubble
+        const typingId = 'typing-' + Date.now();
+        const typingBubble = document.createElement('div');
+        typingBubble.id = typingId;
+        typingBubble.className = 'ai-msg-assistant';
+        typingBubble.style.cssText = 'display: flex; gap: 10px; align-items: flex-start;';
+        typingBubble.innerHTML = `
+            <div style="width: 28px; height: 28px; border-radius: 50%; background: rgba(168, 85, 247, 0.15); color: #a855f7; display: flex; align-items: center; justify-content: center; font-size: 14px; flex-shrink: 0; margin-top: 2px;">
+                <i class="bi bi-robot"></i>
+            </div>
+            <div style="background: var(--surface-2); border: 1px solid var(--border); border-radius: 12px 12px 12px 2px; padding: 10px 14px; font-size: 12px; color: var(--muted); display: inline-flex; align-items: center; gap: 8px;">
+                <i class="bi bi-hourglass-split spin-icon"></i> Assistant is analyzing store data...
+            </div>
+        `;
+        thread.appendChild(typingBubble);
+        thread.scrollTop = thread.scrollHeight;
+
+        // Disable input during request
+        input.disabled = true;
+        btn.disabled = true;
+        if (btnIcon) btnIcon.className = 'bi bi-arrow-repeat spin-icon';
+        if (btnText) btnText.textContent = 'Thinking…';
 
         try {
             const resp = await fetch('/api/ai/ask/', {
@@ -280,16 +451,75 @@
                 body: JSON.stringify({ question: query })
             });
             const data = await resp.json();
+
+            // Remove typing bubble
+            const typingElem = document.getElementById(typingId);
+            if (typingElem) typingElem.remove();
+
+            const assistantTime = getCurrentTimeDisplay();
+            const replyBubble = document.createElement('div');
+            replyBubble.className = 'ai-msg-assistant';
+            replyBubble.style.cssText = 'display: flex; gap: 10px; align-items: flex-start;';
+
             if (resp.ok && data.status === 'success') {
-                box.innerHTML = data.answer.replace(/\\*\\*(.*?)\\*\\*/g, '<strong>$1</strong>').replace(/\\*(.*?)\\*/g, '<em>$1</em>').replace(/\\n/g, '<br>');
+                const formattedHtml = formatAiMarkdown(data.answer);
+                replyBubble.innerHTML = `
+                    <div style="width: 28px; height: 28px; border-radius: 50%; background: rgba(168, 85, 247, 0.15); color: #a855f7; display: flex; align-items: center; justify-content: center; font-size: 14px; flex-shrink: 0; margin-top: 2px;">
+                        <i class="bi bi-robot"></i>
+                    </div>
+                    <div style="max-width: 84%;">
+                        <div style="background: var(--surface-2); border: 1px solid var(--border); border-radius: 12px 12px 12px 2px; padding: 10px 14px; font-size: 12.5px; line-height: 1.55; color: var(--text); word-break: break-word;">
+                            ${formattedHtml}
+                        </div>
+                        <span style="font-size: 10px; color: var(--muted); margin-top: 3px; display: block; padding-left: 2px;">${assistantTime}</span>
+                    </div>
+                `;
             } else {
-                box.innerHTML = '<span style="color: var(--danger);">' + (data.error || 'Unable to process query.') + '</span>';
+                const errMsg = escapeHtml(data.answer || data.error || "I couldn't process that request. Please try again.");
+                replyBubble.innerHTML = `
+                    <div style="width: 28px; height: 28px; border-radius: 50%; background: rgba(239, 68, 68, 0.15); color: #ef4444; display: flex; align-items: center; justify-content: center; font-size: 14px; flex-shrink: 0; margin-top: 2px;">
+                        <i class="bi bi-exclamation-triangle"></i>
+                    </div>
+                    <div style="max-width: 84%;">
+                        <div style="background: rgba(239, 68, 68, 0.08); border: 1px solid rgba(239, 68, 68, 0.2); border-radius: 12px 12px 12px 2px; padding: 10px 14px; font-size: 12.5px; line-height: 1.55; color: var(--danger);">
+                            ${errMsg}
+                        </div>
+                        <span style="font-size: 10px; color: var(--muted); margin-top: 3px; display: block; padding-left: 2px;">${assistantTime}</span>
+                    </div>
+                `;
             }
-        } catch (err) {
-            box.innerHTML = '<span style="color: var(--danger);">Network error communicating with AI assistant API.</span>';
+            thread.appendChild(replyBubble);
+            thread.scrollTop = thread.scrollHeight;
+        } catch(err) {
+            const typingElem = document.getElementById(typingId);
+            if (typingElem) typingElem.remove();
+
+            const errBubble = document.createElement('div');
+            errBubble.className = 'ai-msg-assistant';
+            errBubble.style.cssText = 'display: flex; gap: 10px; align-items: flex-start;';
+            errBubble.innerHTML = `
+                <div style="width: 28px; height: 28px; border-radius: 50%; background: rgba(239, 68, 68, 0.15); color: #ef4444; display: flex; align-items: center; justify-content: center; font-size: 14px; flex-shrink: 0; margin-top: 2px;">
+                    <i class="bi bi-wifi-off"></i>
+                </div>
+                <div style="max-width: 84%;">
+                    <div style="background: rgba(239, 68, 68, 0.08); border: 1px solid rgba(239, 68, 68, 0.2); border-radius: 12px 12px 12px 2px; padding: 10px 14px; font-size: 12.5px; line-height: 1.55; color: var(--danger);">
+                        I couldn't reach the server right now. Please check your network connection and try again.
+                    </div>
+                    <span style="font-size: 10px; color: var(--muted); margin-top: 3px; display: block; padding-left: 2px;">${getCurrentTimeDisplay()}</span>
+                </div>
+            `;
+            thread.appendChild(errBubble);
+            thread.scrollTop = thread.scrollHeight;
+        } finally {
+            input.disabled = false;
+            btn.disabled = false;
+            if (btnIcon) btnIcon.className = 'bi bi-send-fill';
+            if (btnText) btnText.textContent = 'Send';
+            input.focus();
         }
     }
     </script>
+
 
     <!-- ── RECENT SALES LEDGER ──────────────────────────────────────── -->
     <div style="background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius-md); padding: 18px 20px;">
@@ -334,18 +564,18 @@
                             {{ s.created_at|date:"M d, Y H:i" }}
                         </td>
                         <td>
-                            {% if s.customer %}
-                                <strong>{{ s.customer.name }}</strong>
+                            {% if s.customer and s.customer.name %}
+                                <strong style="color: var(--text);">{{ s.customer.name }}</strong>
                             {% else %}
-                                <span style="color: var(--muted);">Walk-in Customer</span>
+                                <span style="color: var(--muted);">Counter Sale</span>
                             {% endif %}
                         </td>
                         <td style="font-size: 12px; color: var(--muted);">
                             {{ s.cashier.username|default:"System" }}
                         </td>
                         <td>
-                            <span class="badge badge-primary" style="font-size: 11px;">
-                                {{ s.payment_method }}
+                            <span class="badge badge-primary" style="font-size: 11px; font-family: var(--font-mono); font-weight: 600;">
+                                {{ s.payment_mode_display }}
                             </span>
                         </td>
                         <td style="text-align: right; font-family: var(--font-mono); font-weight: 700; color: var(--text);">

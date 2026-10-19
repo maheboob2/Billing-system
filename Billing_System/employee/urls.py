@@ -11,4 +11,5 @@ urlpatterns = [
     path("payslip/<str:employee_id>/", views.employee_payslip, name="employee_payslip"),
     path("delete_employee/<str:employee_id>/", views.delete_employee, name="delete_employee"),
     path("delete_employee/<str:employee_id>", views.delete_employee),
+    path("api/postal/lookup/", views.postal_pincode_lookup, name="postal_pincode_lookup"),
 ]

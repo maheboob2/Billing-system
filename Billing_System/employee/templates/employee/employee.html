@@ -37,29 +37,29 @@
                 <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 14px; margin-bottom: 12px;">
                     <div>
                         <label style="display: block; font-size: 12px; font-weight: 600; color: var(--text); margin-bottom: 6px;">First Name *</label>
-                        <input type="text" name="first_name" required placeholder="e.g. John" style="width: 100%;">
+                        <input type="text" name="first_name" value="{{ form_data.first_name|default:'' }}" required placeholder="e.g. John" style="width: 100%;">
                     </div>
                     <div>
                         <label style="display: block; font-size: 12px; font-weight: 600; color: var(--text); margin-bottom: 6px;">Last Name *</label>
-                        <input type="text" name="last_name" required placeholder="e.g. Doe" style="width: 100%;">
+                        <input type="text" name="last_name" value="{{ form_data.last_name|default:'' }}" required placeholder="e.g. Doe" style="width: 100%;">
                     </div>
                 </div>
 
                 <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 14px; margin-bottom: 12px;">
                     <div>
                         <label style="display: block; font-size: 12px; font-weight: 600; color: var(--text); margin-bottom: 6px;">Username *</label>
-                        <input type="text" name="username" required placeholder="e.g. jdoe_pos" style="width: 100%;">
+                        <input type="text" name="username" value="{{ form_data.username|default:'' }}" required placeholder="e.g. jdoe_pos" style="width: 100%;">
                     </div>
                     <div>
                         <label style="display: block; font-size: 12px; font-weight: 600; color: var(--text); margin-bottom: 6px;">Email</label>
-                        <input type="email" name="email" placeholder="e.g. staff@retailstore.com" style="width: 100%;">
+                        <input type="email" name="email" value="{{ form_data.email|default:'' }}" placeholder="e.g. staff@retailstore.com" style="width: 100%;">
                     </div>
                 </div>
 
                 <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 14px;">
                     <div>
                         <label style="display: block; font-size: 12px; font-weight: 600; color: var(--text); margin-bottom: 6px;">Password *</label>
-                        <input type="password" name="password" required placeholder="Min. 6 characters" style="width: 100%;">
+                        <input type="password" name="password" required placeholder="Min. 4 characters" style="width: 100%;">
                     </div>
                     <div>
                         <label style="display: block; font-size: 12px; font-weight: 600; color: var(--text); margin-bottom: 6px;">Confirm Password *</label>
@@ -76,16 +76,19 @@
 
                 <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 14px; margin-bottom: 12px;">
                     <div>
-                        <label style="display: block; font-size: 12px; font-weight: 600; color: var(--text); margin-bottom: 6px;">Employee ID *</label>
-                        <input type="text" name="employee_id" required placeholder="e.g. EMP-101" style="width: 100%;">
+                        <div style="display: flex; justify-content: space-between; align-items: baseline; margin-bottom: 6px;">
+                            <label style="font-size: 12px; font-weight: 600; color: var(--text);">Employee ID</label>
+                            <span style="font-size: 11px; color: var(--primary); font-weight: 600;">(Auto-generated if empty)</span>
+                        </div>
+                        <input type="text" name="employee_id" id="employee_id" value="{{ form_data.employee_id|default:'' }}" placeholder="e.g. {{ suggested_employee_id|default:'EMP-001' }} (Leave blank for auto)" maxlength="10" style="width: 100%;">
                     </div>
                     <div>
                         <label style="display: block; font-size: 12px; font-weight: 600; color: var(--text); margin-bottom: 6px;">Role *</label>
                         <select name="Role" required style="width: 100%;">
-                            <option value="Cashier">Cashier (Front Billing & Barcode Terminal)</option>
-                            <option value="Stock Manager">Stock Manager (Inventory & Purchases)</option>
-                            <option value="Manager">Manager (Operational Management)</option>
-                            <option value="Worker">Worker (General Floor)</option>
+                            <option value="Cashier" {% if form_data.Role == 'Cashier' %}selected{% endif %}>Cashier (Front Billing & Barcode Terminal)</option>
+                            <option value="Stock Manager" {% if form_data.Role == 'Stock Manager' %}selected{% endif %}>Stock Manager (Inventory & Purchases)</option>
+                            <option value="Manager" {% if form_data.Role == 'Manager' %}selected{% endif %}>Manager (Operational Management)</option>
+                            <option value="Worker" {% if form_data.Role == 'Worker' %}selected{% endif %}>Worker (General Floor)</option>
                         </select>
                     </div>
                 </div>
@@ -93,21 +96,21 @@
                 <div style="display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 14px; margin-bottom: 12px;">
                     <div>
                         <label style="display: block; font-size: 12px; font-weight: 600; color: var(--text); margin-bottom: 6px;">Joining Date *</label>
-                        <input type="date" name="joining_date" required style="width: 100%;">
+                        <input type="date" name="joining_date" value="{{ form_data.joining_date|default:'' }}" required style="width: 100%;">
                     </div>
                     <div>
                         <label style="display: block; font-size: 12px; font-weight: 600; color: var(--text); margin-bottom: 6px;">Status</label>
                         <select name="status" style="width: 100%;">
-                            <option value="active">Active</option>
-                            <option value="inactive">Inactive</option>
+                            <option value="active" {% if form_data.status == 'active' or not form_data.status %}selected{% endif %}>Active</option>
+                            <option value="inactive" {% if form_data.status == 'inactive' %}selected{% endif %}>Inactive</option>
                         </select>
                     </div>
                     <div>
                         <label style="display: block; font-size: 12px; font-weight: 600; color: var(--text); margin-bottom: 6px;">Gender</label>
                         <select name="Gender" style="width: 100%;">
-                            <option value="Male">Male</option>
-                            <option value="Female">Female</option>
-                            <option value="Other">Other</option>
+                            <option value="Male" {% if form_data.Gender == 'Male' or not form_data.Gender %}selected{% endif %}>Male</option>
+                            <option value="Female" {% if form_data.Gender == 'Female' %}selected{% endif %}>Female</option>
+                            <option value="Other" {% if form_data.Gender == 'Other' %}selected{% endif %}>Other</option>
                         </select>
                     </div>
                 </div>
@@ -115,17 +118,51 @@
                 <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 14px; margin-bottom: 12px;">
                     <div>
                         <label style="display: block; font-size: 12px; font-weight: 600; color: var(--text); margin-bottom: 6px;">Phone Number *</label>
-                        <input type="text" name="Phone" required placeholder="e.g. +91 98765 43210" style="width: 100%;">
+                        <input type="text" name="Phone" value="{{ form_data.Phone|default:'' }}" required placeholder="e.g. +91 98765 43210" style="width: 100%;">
                     </div>
                     <div>
                         <label style="display: block; font-size: 12px; font-weight: 600; color: var(--text); margin-bottom: 6px;">Alternate Phone</label>
-                        <input type="text" name="Alternate_phone" placeholder="Emergency contact" style="width: 100%;">
+                        <input type="text" name="Alternate_phone" value="{{ form_data.Alternate_phone|default:'' }}" placeholder="Emergency contact (Optional)" style="width: 100%;">
                     </div>
                 </div>
 
-                <div style="margin-bottom: 12px;">
-                    <label style="display: block; font-size: 12px; font-weight: 600; color: var(--text); margin-bottom: 6px;">Address *</label>
-                    <textarea name="address" required rows="2" placeholder="Full residential address..." style="width: 100%;"></textarea>
+                <!-- Structured Address with Indian PIN Code Auto-Fill -->
+                <div style="background: var(--surface-2); border: 1px solid var(--border); border-radius: var(--radius-sm); padding: 14px; margin-bottom: 12px;">
+                    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px;">
+                        <label style="font-size: 12px; font-weight: 700; color: var(--text); text-transform: uppercase; letter-spacing: 0.5px;">
+                            <i class="bi bi-geo-alt-fill" style="color: var(--primary);"></i> Residential Address *
+                        </label>
+                        <span id="pin-status-badge" style="font-size: 11px; color: var(--muted); font-weight: 600; display: inline-flex; align-items: center; gap: 4px;"></span>
+                    </div>
+
+                    <div style="display: grid; grid-template-columns: 140px 1fr 1fr; gap: 10px; margin-bottom: 10px;">
+                        <div>
+                            <label style="display: block; font-size: 11px; font-weight: 600; color: var(--muted); margin-bottom: 4px;">PIN Code</label>
+                            <input type="text" name="pincode" id="emp_pincode" value="{{ form_data.pincode|default:'' }}" placeholder="6-digit PIN" maxlength="10" style="width: 100%; font-family: var(--font-mono); font-size: 13px;">
+                        </div>
+                        <div>
+                            <label style="display: block; font-size: 11px; font-weight: 600; color: var(--muted); margin-bottom: 4px;">City / District *</label>
+                            <input type="text" name="city" id="emp_city" value="{{ form_data.city|default:'' }}" placeholder="Auto-filled or type..." style="width: 100%; font-size: 13px;">
+                        </div>
+                        <div>
+                            <label style="display: block; font-size: 11px; font-weight: 600; color: var(--muted); margin-bottom: 4px;">State *</label>
+                            <input type="text" name="state" id="emp_state" value="{{ form_data.state|default:'' }}" placeholder="Auto-filled or type..." style="width: 100%; font-size: 13px;">
+                        </div>
+                    </div>
+
+                    <!-- Multi-Locality Match Selector (shown if multiple post offices match) -->
+                    <div id="locality-selector-row" style="display: none; margin-bottom: 10px; background: rgba(59, 130, 246, 0.08); border: 1px solid rgba(59, 130, 246, 0.25); border-radius: var(--radius-sm); padding: 8px 12px;">
+                        <label style="display: block; font-size: 11px; font-weight: 600; color: var(--primary, #3b82f6); margin-bottom: 4px;">
+                            <i class="bi bi-geo-alt-fill"></i> Multiple localities match this PIN — choose your post office / locality:
+                        </label>
+                        <select id="emp_locality_select" style="width: 100%; font-size: 13px; padding: 6px 10px; background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius-sm); color: var(--text);">
+                        </select>
+                    </div>
+
+                    <div>
+                        <label style="display: block; font-size: 11px; font-weight: 600; color: var(--muted); margin-bottom: 4px;">Flat / Street / Landmark / Area *</label>
+                        <textarea name="address_line" id="emp_address_line" rows="2" placeholder="e.g. Flat 402, Green Meadows, MG Road..." required style="width: 100%; font-size: 13px;">{% if form_data.address_line %}{{ form_data.address_line }}{% elif form_data.address %}{{ form_data.address }}{% endif %}</textarea>
+                    </div>
                 </div>
 
                 <div>
@@ -144,14 +181,14 @@
                 <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 14px;">
                     <div>
                         <label style="display: block; font-size: 12px; font-weight: 600; color: var(--text); margin-bottom: 6px;">Monthly Salary (₹) *</label>
-                        <input type="number" step="0.01" name="monthaly_salary" value="0.00" placeholder="0.00" style="width: 100%;">
+                        <input type="number" step="0.01" name="monthaly_salary" value="{{ form_data.monthaly_salary|default:'0.00' }}" placeholder="0.00" style="width: 100%;">
                     </div>
                     <div>
                         <label style="display: block; font-size: 12px; font-weight: 600; color: var(--text); margin-bottom: 6px;">Payroll Status</label>
                         <select name="payment" style="width: 100%;">
-                            <option value="Paid">Paid</option>
-                            <option value="Unpaid" selected>Unpaid</option>
-                            <option value="Due">Due</option>
+                            <option value="Paid" {% if form_data.payment == 'Paid' %}selected{% endif %}>Paid</option>
+                            <option value="Unpaid" {% if form_data.payment == 'Unpaid' or not form_data.payment %}selected{% endif %}>Unpaid</option>
+                            <option value="Due" {% if form_data.payment == 'Due' %}selected{% endif %}>Due</option>
                         </select>
                     </div>
                 </div>
@@ -168,4 +205,129 @@
         </form>
     </div>
 </div>
+
+<!-- Debounced Indian Postal PIN Code Auto-Fill Client Script -->
+<script>
+(function() {
+    const pinInput = document.getElementById('emp_pincode');
+    const cityInput = document.getElementById('emp_city');
+    const stateInput = document.getElementById('emp_state');
+    const addressLineInput = document.getElementById('emp_address_line');
+    const badge = document.getElementById('pin-status-badge');
+    const localityRow = document.getElementById('locality-selector-row');
+    const localitySelect = document.getElementById('emp_locality_select');
+
+    if (!pinInput || !cityInput || !stateInput || !badge) return;
+
+    const pinCache = {};
+    let debounceTimer = null;
+
+    // Preserve manual edits
+    cityInput.addEventListener('input', function() {
+        this.dataset.manuallyEdited = 'true';
+        this.dataset.autofilled = 'false';
+    });
+    stateInput.addEventListener('input', function() {
+        this.dataset.manuallyEdited = 'true';
+        this.dataset.autofilled = 'false';
+    });
+
+    pinInput.addEventListener('input', function() {
+        const raw = this.value.trim();
+        // Allow digits only
+        const digits = raw.replace(/\D/g, '');
+        if (raw !== digits) {
+            this.value = digits;
+        }
+        const val = digits;
+
+        clearTimeout(debounceTimer);
+
+        if (localityRow) localityRow.style.display = 'none';
+
+        if (val.length === 0) {
+            badge.innerHTML = '';
+            return;
+        }
+
+        // Rejection for codes longer than 6 digits (e.g. 7 digits like 4132477)
+        if (val.length > 6) {
+            badge.innerHTML = `<span style="color: var(--danger, #ef4444); font-weight: 700;">⚠ Invalid PIN: Indian postal codes must be exactly 6 digits (got ${val.length} digits).</span>`;
+            return;
+        }
+
+        if (val.length < 6) {
+            badge.innerHTML = `<span style="color: var(--muted);">${6 - val.length} more digit(s) needed</span>`;
+            return;
+        }
+
+        // Must be exactly 6 digits starting with 1-9
+        if (!/^[1-9]\d{5}$/.test(val)) {
+            badge.innerHTML = '<span style="color: var(--danger, #ef4444); font-weight: 700;">⚠ Invalid Indian PIN (must start with digits 1–9)</span>';
+            return;
+        }
+
+        // Check local cache to avoid redundant API calls
+        if (pinCache[val]) {
+            applyPinResult(pinCache[val], val);
+            return;
+        }
+
+        badge.innerHTML = '<span style="color: var(--muted);"><span class="spinner-border spinner-border-sm" style="width: 10px; height: 10px; border-width: 1px;" role="status"></span> Looking up postal directory…</span>';
+
+        debounceTimer = setTimeout(() => {
+            fetch(`/api/postal/lookup/?pincode=${encodeURIComponent(val)}`)
+                .then(r => r.json())
+                .then(data => {
+                    pinCache[val] = data;
+                    applyPinResult(data, val);
+                })
+                .catch(() => {
+                    badge.innerHTML = '<span style="color: var(--warning, #eab308);">⚠ Postal service offline (enter City/State manually)</span>';
+                });
+        }, 350);
+    });
+
+    function applyPinResult(data, searchedPin) {
+        if (!data || !data.success) {
+            const err = (data && data.error) ? data.error : `PIN code ${searchedPin} not found in postal directory. Enter City/State manually.`;
+            badge.innerHTML = `<span style="color: var(--warning, #eab308);">⚠ ${err}</span>`;
+            if (localityRow) localityRow.style.display = 'none';
+            return;
+        }
+
+        // Auto-fill City if not manually customized
+        if (data.city && (!cityInput.value || cityInput.dataset.autofilled === 'true' || cityInput.dataset.manuallyEdited !== 'true')) {
+            cityInput.value = data.city;
+            cityInput.dataset.autofilled = 'true';
+        }
+
+        // Auto-fill State if not manually customized
+        if (data.state && (!stateInput.value || stateInput.dataset.autofilled === 'true' || stateInput.dataset.manuallyEdited !== 'true')) {
+            stateInput.value = data.state;
+            stateInput.dataset.autofilled = 'true';
+        }
+
+        const sourceLabel = data.source === 'FALLBACK' ? ' (Offline Cache)' : '';
+        badge.innerHTML = `<span style="color: #34d399; font-weight: 600;">✓ Auto-filled: ${data.city || data.district}, ${data.state}${sourceLabel}</span>`;
+
+        // Handle multiple localities / post offices
+        if (data.localities && data.localities.length > 1 && localityRow && localitySelect) {
+            localitySelect.innerHTML = `<option value="">-- Select Locality (${data.localities.length} matched post offices) --</option>` +
+                data.localities.map(loc => `<option value="${loc}">${loc} (${data.district}, ${data.state})</option>`).join('');
+            localityRow.style.display = 'block';
+
+            localitySelect.onchange = function() {
+                const chosen = this.value;
+                if (!chosen) return;
+                cityInput.value = chosen;
+                cityInput.dataset.autofilled = 'true';
+                badge.innerHTML = `<span style="color: #34d399; font-weight: 600;">✓ Selected: ${chosen}, ${data.state}</span>`;
+            };
+        } else if (localityRow) {
+            localityRow.style.display = 'none';
+        }
+    }
+})();
+</script>
 {% endblock content %}

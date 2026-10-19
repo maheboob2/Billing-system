@@ -20,9 +20,11 @@ from sales.api_views import (
     SalesQuoteAPIView,
     ReturnRequestViewSet,
     POSScannerSessionCreateAPIView,
+    POSScannerSessionActiveAPIView,
     POSScannerSessionPollAPIView,
     POSScannerSessionScanAPIView,
     POSScannerSessionDisconnectAPIView,
+    POSScannerSessionRevokeAPIView,
     POSScannerNetworkDiagnosticsAPIView,
 )
 from reports.urls import report_api_urlpatterns
@@ -32,8 +34,17 @@ from dashboard.api_views import (
     TelegramWebhookAPIView,
     SyncStatusAPIView,
     SyncTriggerAPIView,
+    NotificationListCreateAPIView,
+    NotificationMarkReadAPIView,
+    NotificationMarkAllReadAPIView,
+    MerchantBotConfigureAPIView,
+    MerchantBotStatusAPIView,
+    MerchantBotDisconnectAPIView,
+    CloudSyncPushAPIView,
+    CloudSyncStatusAPIView,
 )
 from config.api_docs import openapi_schema_view, swagger_docs_view
+from employee.views import postal_pincode_lookup
 
 router = DefaultRouter()
 router.register(r"products", ProductViewSet, basename="api-products")
@@ -69,9 +80,12 @@ urlpatterns = [
     # POS Phone Scanner APIs
     path("pos/scanner-session/", POSScannerSessionCreateAPIView.as_view()),
     path("pos/scanner-session/create/", POSScannerSessionCreateAPIView.as_view(), name="api-scanner-session-create"),
+    path("pos/scanner-session/active/", POSScannerSessionActiveAPIView.as_view(), name="api-scanner-session-active"),
     path("pos/scanner-session/<str:token>/poll/", POSScannerSessionPollAPIView.as_view(), name="api-scanner-session-poll"),
     path("pos/scanner-session/<str:token>/scan/", POSScannerSessionScanAPIView.as_view(), name="api-scanner-session-scan"),
+    path("pos/scanner-session/<str:token>/heartbeat/", POSScannerSessionScanAPIView.as_view(), name="api-scanner-session-heartbeat"),
     path("pos/scanner-session/<str:token>/disconnect/", POSScannerSessionDisconnectAPIView.as_view(), name="api-scanner-session-disconnect"),
+    path("pos/scanner-session/<str:token>/revoke/", POSScannerSessionRevokeAPIView.as_view(), name="api-scanner-session-revoke"),
     path("pos/scanner-session/network-diagnostics/", POSScannerNetworkDiagnosticsAPIView.as_view(), name="api-scanner-network-diagnostics"),
 
     # Report APIs
@@ -83,10 +97,23 @@ urlpatterns = [
 
     # Telegram Webhook / Gateway API
     path("telegram/webhook/", TelegramWebhookAPIView.as_view(), name="api-telegram-webhook"),
+    path("telegram/merchant-bot/configure/", MerchantBotConfigureAPIView.as_view(), name="api-merchant-bot-configure"),
+    path("telegram/merchant-bot/status/", MerchantBotStatusAPIView.as_view(), name="api-merchant-bot-status"),
+    path("telegram/merchant-bot/disconnect/", MerchantBotDisconnectAPIView.as_view(), name="api-merchant-bot-disconnect"),
 
     # Cloud Sync Status & Trigger APIs
     path("sync/status/", SyncStatusAPIView.as_view(), name="api-sync-status"),
     path("sync/trigger/", SyncTriggerAPIView.as_view(), name="api-sync-trigger"),
+    path("cloud-sync/push/", CloudSyncPushAPIView.as_view(), name="api-cloud-sync-push"),
+    path("cloud-sync/status/", CloudSyncStatusAPIView.as_view(), name="api-cloud-sync-status"),
+
+    # Internal Staff Notification & Messaging APIs
+    path("notifications/", NotificationListCreateAPIView.as_view(), name="api-notifications"),
+    path("notifications/<int:pk>/read/", NotificationMarkReadAPIView.as_view(), name="api-notification-read"),
+    path("notifications/mark-all-read/", NotificationMarkAllReadAPIView.as_view(), name="api-notifications-mark-all-read"),
+
+    # Postal PIN code lookup API
+    path("postal/lookup/", postal_pincode_lookup, name="api-postal-lookup"),
 
     # OpenAPI Schema & Swagger Documentation
     path("schema/", openapi_schema_view, name="api-schema"),

@@ -1,0 +1,55 @@
+databases:
+  - name: billing-cloud-db
+    databaseName: pos_cloud_db
+    user: pos_admin
+    plan: free
+
+services:
+  # 1. 24/7 Cloud Sync Web API & Ingestion Gateway
+  - type: web
+    name: billing-cloud-api
+    runtime: python
+    plan: free
+    buildCommand: pip install -r requirements.txt && python manage.py migrate --noinput && python manage.py collectstatic --noinput
+    startCommand: gunicorn config.wsgi:application --bind 0.0.0.0:$PORT
+    envVars:
+      - key: DEBUG
+        value: "False"
+      - key: SECRET_KEY
+        generateValue: true
+      - key: ALLOWED_HOSTS
+        value: ".onrender.com,localhost"
+      - key: DATABASE_URL
+        fromDatabase:
+          name: billing-cloud-db
+          property: connectionString
+      - key: CLOUD_SYNC_ROLE
+        value: "CLOUD_WORKER"
+      - key: CLOUD_SYNC_API_KEY
+        generateValue: true
+      - key: TELEGRAM_BOT_TOKEN
+        sync: false
+
+  # 2. 24/7 Always-On Telegram Bot Daemon (Runs independently even when shop PC is closed)
+  - type: worker
+    name: billing-telegram-worker
+    runtime: python
+    plan: free
+    buildCommand: pip install -r requirements.txt
+    startCommand: python manage.py run_telegram_bot
+    envVars:
+      - key: DEBUG
+        value: "False"
+      - key: SECRET_KEY
+        fromService:
+          type: web
+          name: billing-cloud-api
+          envVarKey: SECRET_KEY
+      - key: DATABASE_URL
+        fromDatabase:
+          name: billing-cloud-db
+          property: connectionString
+      - key: CLOUD_SYNC_ROLE
+        value: "CLOUD_WORKER"
+      - key: TELEGRAM_BOT_TOKEN
+        sync: false

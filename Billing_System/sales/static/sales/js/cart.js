@@ -56,6 +56,7 @@
             this.render();
             this.refreshQuote();
             this.initSyncPoll();
+            this.initActiveScannerSession();
         },
 
         initSyncPoll() {
@@ -227,6 +228,12 @@
                 if (input) {
                     input.focus();
                     input.select();
+                    setTimeout(() => {
+                        try {
+                            input.focus();
+                            input.select();
+                        } catch (_) {}
+                    }, 40);
                 }
                 this.loadOverlayProducts(input ? input.value.trim() : '');
             }
@@ -242,8 +249,34 @@
         },
 
         initProductSearchOverlay() {
+            const overlay = document.getElementById('pos-search-overlay');
             const input = document.getElementById('pos-search-overlay-input');
             const submitBtn = document.getElementById('btn-pos-search-submit');
+            const triggerBtn = document.getElementById('btn-open-f2-search');
+            const topbarTrigger = document.getElementById('pos-topbar-f2-btn');
+
+            if (overlay) {
+                overlay.addEventListener('click', (e) => {
+                    if (e.target === overlay) {
+                        this.closeProductSearchOverlay();
+                    }
+                });
+            }
+
+            if (triggerBtn) {
+                triggerBtn.addEventListener('click', (e) => {
+                    e.preventDefault();
+                    this.openProductSearchOverlay();
+                });
+            }
+
+            if (topbarTrigger) {
+                topbarTrigger.addEventListener('click', (e) => {
+                    e.preventDefault();
+                    this.openProductSearchOverlay();
+                });
+            }
+
             if (input) {
                 let debounceTimer = null;
                 input.addEventListener('input', () => {
@@ -259,6 +292,7 @@
                         this.submitOverlaySearch();
                     } else if (e.key === 'Escape') {
                         e.preventDefault();
+                        e.stopPropagation();
                         this.closeProductSearchOverlay();
                     }
                 });
@@ -1350,6 +1384,30 @@
             if (!modal) return;
             modal.style.display = 'flex';
 
+            // ── Phase C: Insecure Context Detection ─────────────────────────
+            // Modern browsers require HTTPS (or localhost) for camera APIs.
+            // On an insecure LAN connection, suppress the scanner reticle and
+            // shift focus to the manual barcode input field instead.
+            const isLocal = ['localhost', '127.0.0.1', '::1'].includes(window.location.hostname);
+            const isSecure = window.isSecureContext || isLocal;
+            const scannerReticle = document.getElementById('scanner-reticle-box') || document.getElementById('phone-scanner-reticle');
+            const manualBarcodeInput = document.getElementById('manual-barcode-input') || document.getElementById('scanner-manual-input');
+
+            if (!isSecure) {
+                if (scannerReticle) scannerReticle.style.display = 'none';
+                const insecureWarning = document.getElementById('scanner-insecure-warning');
+                if (insecureWarning) insecureWarning.style.display = 'flex';
+                if (manualBarcodeInput) {
+                    setTimeout(() => manualBarcodeInput.focus(), 150);
+                }
+                // Continue loading the modal for QR/manual use — camera not available
+            } else {
+                if (scannerReticle) scannerReticle.style.display = '';
+                const insecureWarning = document.getElementById('scanner-insecure-warning');
+                if (insecureWarning) insecureWarning.style.display = 'none';
+            }
+            // ─────────────────────────────────────────────────────────────────
+
             const statusText = document.getElementById('scanner-status-text');
             const lifecycleBadge = document.getElementById('scanner-lifecycle-badge');
             const urlDisplay = document.getElementById('scanner-lan-url-display');
@@ -1360,20 +1418,15 @@
 
             this.updateScannerLifecycleState('WAITING_FOR_PHONE');
 
-            fetch('/api/pos/scanner-session/create/', {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                    'X-CSRFToken': POS_CONFIG.csrfToken
-                }
-            })
+            // Reuse active terminal session if available
+            fetch('/api/pos/scanner-session/active/?destination=POS')
             .then(r => r.json())
             .then(data => {
                 if (data.session_token) {
                     this.currentScannerSession = data.session_token;
                     const fullUrl = data.lan_connect_url || (window.location.origin + data.connect_url);
                     this.currentScannerUrl = fullUrl;
-                    this.phoneConnected = false;
+                    this.phoneConnected = Boolean(data.connected);
 
                     const qrImg = document.getElementById('scanner-qr-img');
                     if (qrImg) {
@@ -1394,14 +1447,58 @@
                         openLocalBtn.href = fullUrl;
                     }
 
-                    if (this.scannerPollTimer) clearInterval(this.scannerPollTimer);
-                    this.scannerPollTimer = setInterval(() => this.pollPhoneScanner(), 900);
+                    if (this.phoneConnected) {
+                        const dev = data.device_info ? data.device_info.slice(0, 45) : 'Mobile Device';
+                        this.updateScannerLifecycleState('PHONE_CONNECTED', `Connected: ${dev}`);
+                        if (devInfoBar) {
+                            devInfoBar.textContent = `Paired Device: ${dev}`;
+                            devInfoBar.style.display = 'block';
+                        }
+                    }
+
+                    if (!this.scannerPollTimer) {
+                        this.scannerPollTimer = setInterval(() => this.pollPhoneScanner(), 800);
+                    }
                 }
             })
             .catch(err => {
-                console.error('Error creating scanner session:', err);
+                console.error('Error getting active scanner session:', err);
                 this.updateScannerLifecycleState('ERROR', 'Could not initialize session. Check server connectivity.');
             });
+        },
+
+        initActiveScannerSession() {
+            if (POS_CONFIG.activeScannerSession) {
+                this.currentScannerSession = POS_CONFIG.activeScannerSession;
+                if (!this.scannerPollTimer) {
+                    this.scannerPollTimer = setInterval(() => this.pollPhoneScanner(), 800);
+                }
+            }
+
+            fetch('/api/pos/scanner-session/active/?destination=POS')
+                .then(r => r.json())
+                .then(data => {
+                    if (data && data.session_token) {
+                        this.currentScannerSession = data.session_token;
+                        this.currentScannerUrl = data.lan_connect_url || (window.location.origin + data.connect_url);
+                        this.phoneConnected = Boolean(data.connected);
+
+                        if (this.phoneConnected) {
+                            const dev = data.device_info ? data.device_info.slice(0, 45) : 'Mobile Device';
+                            this.updateScannerLifecycleState('PHONE_CONNECTED', `Connected: ${dev}`);
+                            const devInfoBar = document.getElementById('scanner-device-info-bar');
+                            if (devInfoBar) {
+                                devInfoBar.textContent = `Paired Device: ${dev}`;
+                                devInfoBar.style.display = 'block';
+                            }
+                        }
+
+                        if (!this.scannerPollTimer) {
+                            this.scannerPollTimer = setInterval(() => this.pollPhoneScanner(), 800);
+                        }
+                    }
+                })
+                .catch(e => console.warn('Active scanner session sync error:', e));
         },
 
         updateScannerLifecycleState(state, customMessage = null) {
@@ -1466,7 +1563,7 @@
 
         pollPhoneScanner() {
             if (!this.currentScannerSession) return;
-            fetch(`/api/pos/scanner-session/${encodeURIComponent(this.currentScannerSession)}/poll/`)
+            fetch(`/api/pos/scanner-session/${encodeURIComponent(this.currentScannerSession)}/poll/?destination=POS`)
                 .then(r => r.json())
                 .then(data => {
                     const devInfoBar = document.getElementById('scanner-device-info-bar');
@@ -1564,6 +1661,10 @@
             this.openPhoneScannerModal();
         },
 
+        openScannerStatusModal() {
+            this.openPhoneScannerModal();
+        },
+
         closePhoneScannerModal() {
             const modal = document.getElementById('phone-scanner-modal');
             if (modal) modal.style.display = 'none';
@@ -1642,9 +1743,16 @@
                 })),
                 discount_type: discType,
                 discount_value: discVal,
+                payments: [{
+                    payment_method: this.paymentMethod,
+                    amount: tenderAmount > 0 ? tenderAmount : this.lastGrandTotal,
+                    transaction_reference: payRef,
+                    reference_number: payRef
+                }],
                 payment: {
                     payment_method: this.paymentMethod,
                     amount: tenderAmount > 0 ? tenderAmount : this.lastGrandTotal,
+                    transaction_reference: payRef,
                     reference_number: payRef
                 }
             };
@@ -1902,19 +2010,18 @@
 
                 // F2: Dedicated POS Product & Barcode Search Overlay (POS ONLY)
                 if (e.key === 'F2') {
-                    if (!isTyping || isOverlayInput) {
-                        e.preventDefault();
-                        e.stopPropagation();
-                        this.openProductSearchOverlay();
-                        return;
-                    }
+                    e.preventDefault();
+                    e.stopPropagation();
+                    this.openProductSearchOverlay();
+                    return;
                 }
 
                 // Esc: Clear overlay or modals (STRICTLY PRESERVES CART ITEMS)
                 if (e.key === 'Escape') {
                     const overlay = document.getElementById('pos-search-overlay');
-                    if (overlay && overlay.style.display !== 'none') {
+                    if (overlay && (overlay.style.display === 'flex' || (window.getComputedStyle && window.getComputedStyle(overlay).display !== 'none'))) {
                         e.preventDefault();
+                        e.stopPropagation();
                         this.closeProductSearchOverlay();
                         return;
                     }
@@ -1948,5 +2055,9 @@
     };
 
     window.Cart = Cart;
-    document.addEventListener('DOMContentLoaded', () => Cart.init());
+    if (document.readyState === 'loading') {
+        document.addEventListener('DOMContentLoaded', () => Cart.init());
+    } else {
+        Cart.init();
+    }
 })();

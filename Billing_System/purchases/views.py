@@ -1,3 +1,4 @@
+from decimal import Decimal
 from django.shortcuts import render, redirect, get_object_or_404
 from django.db import transaction
 from django.db.models import Count, Q, Sum, F, DecimalField, ExpressionWrapper
@@ -187,6 +188,7 @@ def receive_purchase(request, purchase_id):
 @role_required(["Admin", "Manager"])
 def purchase_detail(request, purchase_id):
     company = request.company
+    from inventory.models import StockMovement
 
     purchase = get_object_or_404(
         Purchase.objects
@@ -196,12 +198,27 @@ def purchase_detail(request, purchase_id):
         id=purchase_id
     )
 
+    stock_movements = StockMovement.objects.filter(
+        company=company,
+        reference=f"PO #{purchase.invoice_number}"
+    ).select_related("product", "user").order_by("-id")
+
+    items = list(purchase.items.all())
+    subtotal = sum((item.subtotal for item in items), Decimal("0.00"))
+    tax_total = sum((item.gst_amount for item in items), Decimal("0.00"))
+    grand_total = sum((item.total_amount for item in items), Decimal("0.00"))
+
     return render(
         request,
         "purchases/purchase_detail.html",
         {
             "purchase": purchase,
             "company": company,
+            "stock_movements": stock_movements,
+            "items": items,
+            "subtotal": subtotal,
+            "tax_total": tax_total,
+            "grand_total": grand_total,
         }
     )
 

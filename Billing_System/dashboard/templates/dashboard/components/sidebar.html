@@ -132,12 +132,12 @@
                     <span class="sidebar-link-text">Payroll & Payslips</span>
                 </a>
                 {% endif %}
-                <a href="{% url 'settings_appearance' %}"
-                   class="sidebar-link {% if '/settings' in request.path and '/scanner' not in request.path and '/telegram' not in request.path and '/company' not in request.path and '/general' not in request.path %}active{% endif %}"
+                <a href="{% url 'settings_general' %}"
+                   class="sidebar-link {% if '/settings' in request.path and '/settings/scanner' not in request.path and '/settings/telegram' not in request.path %}active{% endif %}"
                    data-nav-match="/settings"
-                   {% if '/settings' in request.path and '/scanner' not in request.path and '/telegram' not in request.path and '/company' not in request.path and '/general' not in request.path %}aria-current="page"{% endif %}
-                   title="System Settings & Appearance">
-                    <i class="bi bi-palette sidebar-link-icon"></i>
+                   {% if '/settings' in request.path and '/settings/scanner' not in request.path and '/settings/telegram' not in request.path %}aria-current="page"{% endif %}
+                   title="System Settings, Store Details & Appearance">
+                    <i class="bi bi-gear sidebar-link-icon"></i>
                     <span class="sidebar-link-text">Settings</span>
                 </a>
                 <a href="{% url 'settings_scanner' %}"
@@ -148,6 +148,16 @@
                     <i class="bi bi-upc-scan sidebar-link-icon"></i>
                     <span class="sidebar-link-text">Scanner & Devices</span>
                 </a>
+                {% if is_owner %}
+                <a href="{% url 'settings_telegram' %}"
+                   class="sidebar-link {% if '/settings/telegram' in request.path %}active{% endif %}"
+                   data-nav-match="/settings/telegram"
+                   {% if '/settings/telegram' in request.path %}aria-current="page"{% endif %}
+                   title="Telegram Bot Integration & Cloud Sync">
+                    <i class="bi bi-telegram sidebar-link-icon"></i>
+                    <span class="sidebar-link-text">Telegram Bot</span>
+                </a>
+                {% endif %}
             </div>
         </div>
         {% endif %}

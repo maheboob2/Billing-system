@@ -26,7 +26,7 @@ BASE_DIR = Path(__file__).resolve().parent.parent
 load_dotenv(BASE_DIR / ".env", override=True)
 
 # DEBUG defaults to False unless explicitly configured in environment
-DEBUG = os.getenv("DEBUG", "True").lower() in ("true", "1", "yes")
+DEBUG = os.getenv("DEBUG", "False").lower() in ("true", "1", "yes")
 
 # SECRET_KEY must come from environment.
 # In development (DEBUG=True), generate an ephemeral key if missing from .env
@@ -40,10 +40,38 @@ if not SECRET_KEY:
         from django.core.exceptions import ImproperlyConfigured
         raise ImproperlyConfigured("The SECRET_KEY environment variable must be set when DEBUG is False.")
 
+# College Demo Session Isolation Mode
+# When True, enables multi-origin loopback host isolation (localhost, 127.0.0.1, 127.0.0.2)
+# and demo hub features. Disabled by default in production.
+COLLEGE_DEMO_MODE = os.getenv("COLLEGE_DEMO_MODE", "False").lower() in ("true", "1", "yes")
+
 # ALLOWED_HOSTS must not default to '*'
 raw_allowed_hosts = os.getenv("ALLOWED_HOSTS", "localhost,127.0.0.1,testserver")
 ALLOWED_HOSTS = [h.strip() for h in raw_allowed_hosts.split(",") if h.strip()]
 
+# Multi-origin loopback hosts for independent demo sessions
+DEMO_LOOPBACK_HOSTS = ["localhost", "127.0.0.1", "127.0.0.2", "127.0.0.3", "testserver"]
+if COLLEGE_DEMO_MODE or DEBUG:
+    for loopback_host in DEMO_LOOPBACK_HOSTS:
+        if loopback_host not in ALLOWED_HOSTS:
+            ALLOWED_HOSTS.append(loopback_host)
+
+# Automatically include local LAN interface IPs for mobile phone scanner companions
+try:
+    from sales.network_utils import get_all_lan_ips
+    for lan_ip in get_all_lan_ips():
+        if lan_ip not in ALLOWED_HOSTS:
+            ALLOWED_HOSTS.append(lan_ip)
+except Exception:
+    pass
+
+# CSRF Trusted Origins for multi-origin loopback demo and local development
+CSRF_TRUSTED_ORIGINS = [
+    "http://localhost:8000",
+    "http://127.0.0.1:8000",
+    "http://127.0.0.2:8000",
+    "http://127.0.0.3:8000",
+]
 # POS Scanner Base URL (e.g. http://192.168.1.10:8000 or https://pos.store.local)
 # If blank, LAN IPv4 address is dynamically discovered for the phone QR code
 POS_SCANNER_BASE_URL = os.getenv("POS_SCANNER_BASE_URL", "").strip()
@@ -126,9 +154,25 @@ MIDDLEWARE = [
     'django.middleware.common.CommonMiddleware',
     'django.middleware.csrf.CsrfViewMiddleware',
     'django.contrib.auth.middleware.AuthenticationMiddleware',
+    'accounts.middleware.DemoSessionIsolationMiddleware',
     'django.contrib.messages.middleware.MessageMiddleware',
     'django.middleware.clickjacking.XFrameOptionsMiddleware',
 ]
+
+# Dynamically enable WhiteNoise static asset serving if installed
+try:
+    import whitenoise  # noqa: F401
+    if 'whitenoise.middleware.WhiteNoiseMiddleware' not in MIDDLEWARE:
+        MIDDLEWARE.insert(1, 'whitenoise.middleware.WhiteNoiseMiddleware')
+except ImportError:
+    pass
+
+# Production HTTPS and reverse-proxy header settings (e.g., Render, Nginx)
+if not DEBUG:
+    SECURE_PROXY_SSL_HEADER = ('HTTP_X_FORWARDED_PROTO', 'https')
+    SESSION_COOKIE_SECURE = os.getenv("SESSION_COOKIE_SECURE", "True").lower() in ("true", "1", "yes")
+    CSRF_COOKIE_SECURE = os.getenv("CSRF_COOKIE_SECURE", "True").lower() in ("true", "1", "yes")
+
 
 ROOT_URLCONF = 'config.urls'
 
@@ -218,13 +262,19 @@ AUTH_PASSWORD_VALIDATORS = [
     },
 ]
 
+AUTHENTICATION_BACKENDS = [
+    'accounts.backends.UsernameOrEmployeeIdOrEmailBackend',
+    'django.contrib.auth.backends.ModelBackend',
+]
+
 
 # Internationalization
 # https://docs.djangoproject.com/en/6.0/topics/i18n/
 
 LANGUAGE_CODE = 'en-us'
 
-TIME_ZONE = 'UTC'
+TIME_ZONE = os.getenv('TIME_ZONE', 'Asia/Kolkata')
+STORE_TIMEZONE = TIME_ZONE
 
 USE_I18N = True
 
@@ -268,4 +318,12 @@ REST_FRAMEWORK = {
         'payment': '30/minute',
     },
 }
+
+# ─────────────────────────────────────────────────────────────
+# OFFLINE-FIRST CLOUD SYNC CONFIGURATION
+# ─────────────────────────────────────────────────────────────
+CLOUD_SYNC_REMOTE_URL = os.environ.get("CLOUD_SYNC_REMOTE_URL", "").strip()
+CLOUD_SYNC_API_KEY = os.environ.get("CLOUD_SYNC_API_KEY", "pos-cloud-sync-secret-dev-key").strip()
+CLOUD_SYNC_ROLE = os.environ.get("CLOUD_SYNC_ROLE", "LOCAL_EDGE").strip()  # LOCAL_EDGE or CLOUD_WORKER
+
 

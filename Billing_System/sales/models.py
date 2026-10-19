@@ -171,6 +171,70 @@ class Sale(models.Model):
     def __str__(self):
         return f"{self.sale_number} - ₹{self.grand_total}"
 
+    @property
+    def customer_display_name(self):
+        """
+        Returns the registered customer's name, or 'Counter Sale' if no customer is attached.
+        Never fabricates a customer name.
+        """
+        if self.customer and self.customer.name:
+            return self.customer.name
+        return "Counter Sale"
+
+    @property
+    def payment_mode_display(self):
+        """
+        Derives the human-readable payment method or split tender breakdown
+        directly from persisted Payment records for this exact sale.
+        Examples:
+          - Cash -> 'Cash'
+          - UPI -> 'UPI'
+          - Card -> 'Card'
+          - Store credit -> 'Store Credit'
+          - Split tender -> 'Cash ₹200 + UPI ₹100'
+          - No records -> 'Not recorded'
+        """
+        method_labels = {
+            "CASH": "Cash",
+            "UPI": "UPI",
+            "CARD": "Card",
+            "CREDIT": "Store Credit",
+        }
+
+        # Check pre-fetched or existing Payment records in chronological order
+        payments = list(self.payments.all().order_by("id"))
+        if payments:
+            if len(payments) == 1:
+                p = payments[0]
+                return method_labels.get(p.payment_method.upper(), p.payment_method)
+            else:
+                parts = []
+                for p in payments:
+                    label = method_labels.get(p.payment_method.upper(), p.payment_method)
+                    amt = p.amount
+                    amt_str = f"₹{amt:,.0f}" if amt == amt.to_integral() else f"₹{amt:,.2f}"
+                    parts.append(f"{label} {amt_str}")
+                return " + ".join(parts)
+
+        # Fallback to Invoice payment_summary if payments table record is missing
+        try:
+            if hasattr(self, "invoice") and self.invoice and self.invoice.payment_summary:
+                summary = self.invoice.payment_summary.strip()
+                if summary:
+                    if summary.upper() in method_labels:
+                        return method_labels[summary.upper()]
+                    return summary
+        except Exception:
+            pass
+
+        import logging
+        logging.getLogger(__name__).warning(f"Sale #{self.sale_number} has no recorded payment details in database.")
+        return "Not recorded"
+
+    @property
+    def payment_method(self):
+        """Alias for payment_mode_display for template and serializer compatibility."""
+        return self.payment_mode_display
 
 class SaleItem(models.Model):
     sale = models.ForeignKey(
@@ -307,7 +371,7 @@ class Invoice(models.Model):
     )
     invoice_date = models.DateTimeField(auto_now_add=True)
 
-    customer_name = models.CharField(max_length=150, blank=True, default="Walk-in Customer")
+    customer_name = models.CharField(max_length=150, blank=True, default="Counter Sale")
     customer_phone = models.CharField(max_length=20, blank=True, default="")
     customer_address = models.TextField(blank=True, default="")
 
@@ -327,7 +391,7 @@ class Invoice(models.Model):
     balance_due = models.DecimalField(max_digits=12, decimal_places=2)
 
     cashier_name = models.CharField(max_length=150)
-    payment_summary = models.CharField(max_length=100, default="CASH")
+    payment_summary = models.CharField(max_length=100, default="Cash")
 
     class Meta:
         ordering = ["-invoice_date"]
@@ -339,6 +403,13 @@ class Invoice(models.Model):
     def __str__(self):
         return f"Invoice {self.invoice_number} (₹{self.grand_total})"
 
+    @property
+    def customer_display_name(self):
+        if self.customer_name and self.customer_name.strip() and self.customer_name.strip() not in ["Walk-in Customer", "Walk-in"]:
+            return self.customer_name.strip()
+        if hasattr(self, "sale") and self.sale and self.sale.customer and self.sale.customer.name:
+            return self.sale.customer.name
+        return "Counter Sale"
 
 class CheckoutIdempotency(models.Model):
     STATUS_CHOICES = [
@@ -397,6 +468,11 @@ class POSScannerSession(models.Model):
         ("ACTIVE", "Active"),
         ("DISCONNECTED", "Disconnected"),
         ("EXPIRED", "Expired"),
+("REVOKED", "Revoked"),
+    ]
+    DESTINATION_CHOICES = [
+        ("POS", "POS Cart"),
+        ("PRODUCT_FORM", "Product Form"),
     ]
     company = models.ForeignKey(
         companyRegistration,
@@ -411,6 +487,7 @@ class POSScannerSession(models.Model):
     session_token = models.CharField(max_length=64, unique=True, db_index=True)
     pairing_code = models.CharField(max_length=10, db_index=True)
     status = models.CharField(max_length=20, choices=STATUS_CHOICES, default="ACTIVE")
+    destination = models.CharField(max_length=30, choices=DESTINATION_CHOICES, default="POS")
     device_info = models.CharField(max_length=255, blank=True, default="")
     created_at = models.DateTimeField(auto_now_add=True)
     expires_at = models.DateTimeField()
@@ -420,8 +497,14 @@ class POSScannerSession(models.Model):
         from django.utils import timezone
         return self.status == "ACTIVE" and self.expires_at > timezone.now()
 
+    def revoke(self):
+        """Immediately revokes pairing credentials and terminates active connection."""
+        self.status = "REVOKED"
+        self.device_info = ""
+        self.save(update_fields=["status", "device_info"])
+
     def __str__(self):
-        return f"ScannerSession {self.pairing_code} ({self.status}) - {self.company.company_name}"
+        return f"ScannerSession {self.pairing_code} ({self.status}) [{self.destination}] - {self.company.company_name}"
 
 
 class POSScannerScan(models.Model):
@@ -431,6 +514,8 @@ class POSScannerScan(models.Model):
         related_name="scans"
     )
     barcode = models.CharField(max_length=100)
+    destination = models.CharField(max_length=30, choices=POSScannerSession.DESTINATION_CHOICES, default="POS")
+    idempotency_key = models.CharField(max_length=64, blank=True, default="")
     consumed = models.BooleanField(default=False)
     created_at = models.DateTimeField(auto_now_add=True)
 
@@ -438,7 +523,7 @@ class POSScannerScan(models.Model):
         ordering = ["created_at"]
 
     def __str__(self):
-        return f"Scan: {self.barcode} (consumed={self.consumed})"
+        return f"Scan: {self.barcode} [{self.destination}] (consumed={self.consumed})"
 
 
 class ReturnRequest(models.Model):
@@ -529,6 +614,27 @@ class ReturnRequest(models.Model):
             models.Index(fields=["company", "return_number"]),
         ]
 
+    @property
+    def created_by_label(self):
+        if not self.created_by:
+            return "Added by System"
+        from accounts.tenancy import get_user_role
+        role = get_user_role(self.created_by) or "Staff"
+        if role == "Admin":
+            role = "Owner"
+        return f"Added by {role} — {self.created_by.username}"
+
+    @property
+    def approved_by_label(self):
+        if not self.approved_by:
+            return None
+        from accounts.tenancy import get_user_role
+        role = get_user_role(self.approved_by) or "Staff"
+        if role == "Admin":
+            role = "Owner"
+        if self.status == "REJECTED":
+            return f"Rejected by {role} — {self.approved_by.username}"
+        return f"Approved by {role} — {self.approved_by.username}"
     def __str__(self):
         return f"{self.return_number} - {self.status} (₹{self.refund_amount})"
 

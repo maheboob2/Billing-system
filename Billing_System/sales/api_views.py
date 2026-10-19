@@ -66,7 +66,12 @@ class CustomerViewSet(viewsets.ModelViewSet):
         return ctx
 
     def perform_create(self, serializer):
-        serializer.save(company=self.request.company)
+        customer = serializer.save(company=self.request.company)
+        try:
+            from dashboard.sync_service import SyncService
+            SyncService.queue_customer(customer)
+        except Exception:
+            pass
 
 
 class SaleViewSet(viewsets.ReadOnlyModelViewSet):
@@ -97,6 +102,15 @@ class SaleViewSet(viewsets.ReadOnlyModelViewSet):
         end_date = self.request.query_params.get("end_date")
         if end_date:
             qs = qs.filter(created_at__date__lte=end_date)
+
+        search = self.request.query_params.get("search", "").strip()
+        if search:
+            qs = qs.filter(
+                Q(sale_number__icontains=search) |
+                Q(invoice__invoice_number__icontains=search) |
+                Q(customer__name__icontains=search) |
+                Q(customer__phone__icontains=search)
+            )
 
         return qs
 
@@ -395,6 +409,12 @@ class RecordPaymentAPIView(APIView):
             received_by=request.user,
             notes=notes,
         )
+
+        try:
+            from dashboard.sync_service import SyncService
+            SyncService.queue_payment(payment)
+        except Exception:
+            pass
 
         # If customer paid via Store Credit, adjust customer's credit balance
         if method == "CREDIT" and sale.customer:
@@ -705,6 +725,7 @@ class POSScannerSessionCreateAPIView(APIView):
     """
     Creates a temporary pairing session for phone camera scanner.
     Resolves LAN-accessible IP/URL with zero loopback exposure.
+    Supports explicit destination routing (POS cart vs PRODUCT_FORM).
     Access: Cashier and above.
     """
     permission_classes = [IsCashierOrAbove]
@@ -713,24 +734,44 @@ class POSScannerSessionCreateAPIView(APIView):
         company = request.company
         session_token = secrets.token_urlsafe(24)
         pairing_code = f"{random.randint(100, 999)}-{random.randint(100, 999)}"
-        expires_at = timezone.now() + timedelta(minutes=30)
+        expires_at = timezone.now() + timedelta(minutes=60)
+        destination = request.data.get("destination", "POS").strip().upper()
+        if destination not in ("POS", "PRODUCT_FORM"):
+            destination = "POS"
 
         session = POSScannerSession.objects.create(
             company=company,
             user=request.user,
             session_token=session_token,
             pairing_code=pairing_code,
+            destination=destination,
             expires_at=expires_at,
         )
 
         url_info = get_phone_scanner_full_url(session.session_token, request=request)
+        dest_param = f"&dest={session.destination}"
+        lan_url = f"{url_info['phone_url']}{dest_param}"
+        connect_url = f"/pos/scanner/?session={session.session_token}{dest_param}"
+
+        qr_payload = {
+            "v": 1,
+            "type": "BRISK_POS_SCANNER_PAIR",
+            "session_token": session.session_token,
+            "pairing_code": session.pairing_code,
+            "destination": session.destination,
+            "base_url": url_info["base_url"],
+            "company_name": company.company_name,
+            "terminal_id": "POS-001",
+            "expires_at": session.expires_at.isoformat(),
+        }
 
         return Response(
             {
                 "session_token": session.session_token,
                 "pairing_code": session.pairing_code,
-                "connect_url": f"/pos/scanner/?session={session.session_token}",
-                "lan_connect_url": url_info["phone_url"],
+                "destination": session.destination,
+                "connect_url": connect_url,
+                "lan_connect_url": lan_url,
                 "lan_ip": url_info["lan_ip"],
                 "base_url": url_info["base_url"],
                 "url_source": url_info["source"],
@@ -738,14 +779,116 @@ class POSScannerSessionCreateAPIView(APIView):
                 "is_https": url_info["is_https"],
                 "all_lan_ips": url_info["all_lan_ips"],
                 "expires_at": session.expires_at.isoformat(),
+                "qr_payload": qr_payload,
             },
             status=status.HTTP_201_CREATED,
         )
 
 
+class POSScannerSessionActiveAPIView(APIView):
+    """
+    Retrieves or establishes the active scanner session for the current terminal/user.
+    Allows seamlessly syncing paired companion devices between POS and Product Form without re-pairing.
+    Access: Cashier and above.
+    """
+    permission_classes = [IsCashierOrAbove]
+
+    def get_or_set_session(self, request):
+        company = request.company
+        now = timezone.now()
+
+        # Invalidate expired sessions
+        POSScannerSession.objects.filter(
+            company=company,
+            status="ACTIVE",
+            expires_at__lte=now
+        ).update(status="EXPIRED")
+
+        requested_dest = (
+            request.GET.get("destination") or
+            request.data.get("destination") or
+            "POS"
+        ).strip().upper()
+        if requested_dest not in ("POS", "PRODUCT_FORM"):
+            requested_dest = "POS"
+
+        active_session = POSScannerSession.objects.filter(
+            company=company,
+            user=request.user,
+            status="ACTIVE",
+            expires_at__gt=now
+        ).order_by("-created_at").first()
+
+        if active_session:
+            if requested_dest and active_session.destination != requested_dest:
+                active_session.destination = requested_dest
+                active_session.save(update_fields=["destination"])
+        else:
+            session_token = secrets.token_urlsafe(24)
+            pairing_code = f"{random.randint(100, 999)}-{random.randint(100, 999)}"
+            expires_at = now + timedelta(hours=2)
+            active_session = POSScannerSession.objects.create(
+                company=company,
+                user=request.user,
+                session_token=session_token,
+                pairing_code=pairing_code,
+                destination=requested_dest,
+                expires_at=expires_at,
+                status="ACTIVE",
+                device_info="",
+            )
+
+        url_info = get_phone_scanner_full_url(active_session.session_token, request=request)
+        dest_param = f"&dest={active_session.destination}"
+        lan_url = f"{url_info['phone_url']}{dest_param}"
+        connect_url = f"/pos/scanner/?session={active_session.session_token}{dest_param}"
+
+        time_since_ping = (now - active_session.last_ping).total_seconds()
+        is_connected = bool(
+            active_session.device_info and
+            not active_session.device_info.startswith("Terminal") and
+            time_since_ping <= 45
+        )
+
+        qr_payload = {
+            "v": 1,
+            "type": "BRISK_POS_SCANNER_PAIR",
+            "session_token": active_session.session_token,
+            "pairing_code": active_session.pairing_code,
+            "destination": active_session.destination,
+            "base_url": url_info["base_url"],
+            "company_name": company.company_name,
+            "terminal_id": "POS-001",
+            "expires_at": active_session.expires_at.isoformat(),
+        }
+
+        return Response({
+            "active": True,
+            "session_token": active_session.session_token,
+            "pairing_code": active_session.pairing_code,
+            "destination": active_session.destination,
+            "connected": is_connected,
+            "device_info": active_session.device_info if is_connected else "",
+            "connect_url": connect_url,
+            "lan_connect_url": lan_url,
+            "lan_ip": url_info["lan_ip"],
+            "base_url": url_info["base_url"],
+            "url_source": url_info["source"],
+            "expires_at": active_session.expires_at.isoformat(),
+            "qr_payload": qr_payload,
+        }, status=status.HTTP_200_OK)
+
+    def get(self, request):
+        return self.get_or_set_session(request)
+
+    def post(self, request):
+        return self.get_or_set_session(request)
+
+
 class POSScannerSessionPollAPIView(APIView):
     """
     Polls pending scans for an active POS scanner session.
+    Filters explicitly by destination (POS cart vs PRODUCT_FORM).
     Tracks explicit connection state (WAITING vs CONNECTED vs DISCONNECTED).
     Access: Cashier and above.
     """
@@ -764,27 +907,37 @@ class POSScannerSessionPollAPIView(APIView):
                     "active": False,
                     "status": session.status if session else "EXPIRED",
                     "connected": False,
+                    "destination": session.destination if session else "POS",
                     "device_info": "",
                     "scans": [],
                 },
                 status=status.HTTP_200_OK,
             )
 
-        # Phone is considered actively connected if it pinged within the last 40 seconds
+        destination_filter = request.GET.get("destination")
         time_since_ping = (timezone.now() - session.last_ping).total_seconds()
-        is_connected = bool(session.device_info and time_since_ping <= 40)
+        is_connected = bool(
+            session.device_info and
+            not session.device_info.startswith("Terminal") and
+            time_since_ping <= 45
+        )
 
-        unconsumed_scans = list(session.scans.filter(consumed=False).order_by("created_at"))
-        codes = [s.barcode for s in unconsumed_scans]
+        unconsumed_scans = session.scans.filter(consumed=False).order_by("created_at")
+        if destination_filter:
+            unconsumed_scans = unconsumed_scans.filter(destination=destination_filter)
 
-        if unconsumed_scans:
-            session.scans.filter(id__in=[s.id for s in unconsumed_scans]).update(consumed=True)
+        scans_list = list(unconsumed_scans)
+        codes = [s.barcode for s in scans_list]
+
+        if scans_list:
+            session.scans.filter(id__in=[s.id for s in scans_list]).update(consumed=True)
 
         return Response(
             {
                 "active": True,
                 "status": session.status,
                 "connected": is_connected,
+                "destination": session.destination,
                 "device_info": session.device_info if is_connected else "",
                 "last_ping_seconds_ago": int(time_since_ping),
                 "scans": codes,
@@ -797,12 +950,23 @@ class POSScannerSessionScanAPIView(APIView):
     """
     Endpoint called by phone camera client to submit a scanned barcode or ping heartbeat.
     Session-token authorized; safe for phone camera on local Wi-Fi.
+    Routes scan to the intended target destination (PRODUCT_FORM vs POS Cart).
     """
     permission_classes = [AllowAny]
 
     def post(self, request, token):
         session = POSScannerSession.objects.filter(session_token=token).first()
-        if not session or not session.is_valid():
+        if not session:
+            clean_code = token.replace("-", "").strip()
+            session = POSScannerSession.objects.filter(pairing_code__in=[token, clean_code]).first()
+
+        if not session:
+            return Response(
+                {"error": "Scanner pairing session not found."},
+                status=status.HTTP_404_NOT_FOUND,
+            )
+
+        if not session.is_valid():
             return Response(
                 {"error": "Scanner pairing session is invalid or expired."},
                 status=status.HTTP_400_BAD_REQUEST,
@@ -812,7 +976,7 @@ class POSScannerSessionScanAPIView(APIView):
         fields_to_update = ["last_ping"]
         session.last_ping = now
 
-        device_info = request.data.get("device_info", "")
+        device_info = request.data.get("device_info", "").strip()
         if device_info and device_info != session.device_info:
             session.device_info = device_info
             fields_to_update.append("device_info")
@@ -824,6 +988,7 @@ class POSScannerSessionScanAPIView(APIView):
         session.save(update_fields=fields_to_update)
 
         barcode = request.data.get("barcode", "").strip()
+        idempotency_key = request.data.get("idempotency_key", "").strip()
 
         # Allow handshake/heartbeat ping to establish device presence without creating dummy scan
         if request.data.get("heartbeat") or barcode in ("__PING__", "__HEARTBEAT__"):
@@ -831,6 +996,11 @@ class POSScannerSessionScanAPIView(APIView):
                 {
                     "success": True,
                     "connected": True,
+                    "session_token": session.session_token,
+                    "pairing_code": session.pairing_code,
+                    "destination": session.destination,
+                    "company_name": session.company.company_name,
+                    "terminal_id": "POS-001",
                     "device_info": session.device_info,
                 },
                 status=status.HTTP_200_OK,
@@ -842,12 +1012,138 @@ class POSScannerSessionScanAPIView(APIView):
                 status=status.HTTP_400_BAD_REQUEST,
             )
 
-        scan = POSScannerScan.objects.create(session=session, barcode=barcode)
+        # Idempotency check for network retries
+        if idempotency_key:
+            existing_scan = POSScannerScan.objects.filter(session=session, idempotency_key=idempotency_key).first()
+            if existing_scan:
+                return Response(
+                    {
+                        "success": True,
+                        "barcode": existing_scan.barcode,
+                        "destination": existing_scan.destination,
+                        "duplicate_suppressed": True,
+                        "idempotent_replay": True,
+                        "message": "Scan already processed.",
+                    },
+                    status=status.HTTP_200_OK,
+                )
+
+        # Camera frame burst suppression (within 1.0s on the exact same barcode)
+        recent_duplicate = POSScannerScan.objects.filter(
+            session=session,
+            barcode=barcode,
+            created_at__gte=now - timedelta(seconds=1)
+        ).first()
+        if recent_duplicate:
+            return Response(
+                {
+                    "success": True,
+                    "barcode": recent_duplicate.barcode,
+                    "destination": recent_duplicate.destination,
+                    "duplicate_suppressed": True,
+                    "message": "Duplicate camera frame suppressed.",
+                },
+                status=status.HTTP_200_OK,
+            )
+
+        target_dest = (request.data.get("destination") or session.destination or "POS").strip().upper()
+
+        # ── Destination 1: PRODUCT FORM ───────────────────────────────────────
+        if target_dest == "PRODUCT_FORM":
+            product = Product.objects.filter(company=session.company, barcode=barcode).first()
+            scan = POSScannerScan.objects.create(
+                session=session,
+                barcode=barcode,
+                destination="PRODUCT_FORM",
+                idempotency_key=idempotency_key
+            )
+            return Response(
+                {
+                    "success": True,
+                    "barcode": scan.barcode,
+                    "destination": "PRODUCT_FORM",
+                    "scanned_at": scan.created_at.isoformat(),
+                    "found": bool(product),
+                    "product_name": product.name if product else None,
+                    "company_name": session.company.company_name,
+                    "message": f"Barcode '{barcode}' sent to Product Form",
+                },
+                status=status.HTTP_201_CREATED,
+            )
+
+        # ── Destination 2: POS CART ───────────────────────────────────────────
+        product = Product.objects.filter(company=session.company, barcode=barcode, status=True).first()
+        if not product:
+            product = Product.objects.filter(company=session.company, product_code=barcode, status=True).first()
+
+        if not product:
+            # Check if inactive product exists
+            inactive_prod = Product.objects.filter(company=session.company, barcode=barcode, status=False).first()
+            if not inactive_prod:
+                inactive_prod = Product.objects.filter(company=session.company, product_code=barcode, status=False).first()
+
+            if inactive_prod:
+                return Response(
+                    {
+                        "success": False,
+                        "found": True,
+                        "inactive": True,
+                        "barcode": barcode,
+                        "destination": "POS",
+                        "product_name": inactive_prod.name,
+                        "error": f"Product '{inactive_prod.name}' is inactive and cannot be sold.",
+                    },
+                    status=status.HTTP_200_OK,
+                )
+
+            # Barcode not found in catalog
+            return Response(
+                {
+                    "success": False,
+                    "found": False,
+                    "barcode": barcode,
+                    "destination": "POS",
+                    "error": f"Barcode '{barcode}' not found in store catalog.",
+                },
+                status=status.HTTP_200_OK,
+            )
+
+        # Check stock limits
+        current_stock = float(product.current_stock or 0)
+        if current_stock <= 0:
+            return Response(
+                {
+                    "success": False,
+                    "found": True,
+                    "out_of_stock": True,
+                    "barcode": barcode,
+                    "destination": "POS",
+                    "product_name": product.name,
+                    "current_stock": 0,
+                    "error": f"Product '{product.name}' is out of stock (Available: 0).",
+                },
+                status=status.HTTP_200_OK,
+            )
+
+        # Product valid and ready for POS Cart
+        scan = POSScannerScan.objects.create(
+            session=session,
+            barcode=barcode,
+            destination="POS",
+            idempotency_key=idempotency_key
+        )
         return Response(
             {
                 "success": True,
+                "found": True,
                 "barcode": scan.barcode,
+                "destination": "POS",
                 "scanned_at": scan.created_at.isoformat(),
+                "product_name": product.name,
+                "selling_price": float(product.selling_price),
+                "current_stock": current_stock,
+                "company_name": session.company.company_name,
+                "message": f"Added '{product.name}' to POS register",
             },
             status=status.HTTP_201_CREATED,
         )
@@ -868,6 +1164,25 @@ class POSScannerSessionDisconnectAPIView(APIView):
             session.save(update_fields=["status", "device_info"])
 
         return Response({"success": True, "status": "DISCONNECTED"}, status=status.HTTP_200_OK)
+
+
+class POSScannerSessionRevokeAPIView(APIView):
+    """
+    Revokes an active pairing session immediately from the POS terminal.
+    Requires Cashier or above permissions.
+    """
+    permission_classes = [IsCashierOrAbove]
+
+    def post(self, request, token):
+        session = POSScannerSession.objects.filter(
+            session_token=token,
+            company=request.company
+        ).first()
+        if not session:
+            return Response({"error": "Session not found."}, status=status.HTTP_404_NOT_FOUND)
+
+        session.revoke()
+        return Response({"success": True, "status": "REVOKED"}, status=status.HTTP_200_OK)
 
 
 class POSScannerNetworkDiagnosticsAPIView(APIView):
@@ -933,110 +1248,117 @@ class ReturnRequestViewSet(viewsets.ModelViewSet):
     def create(self, request, *args, **kwargs):
         company = request.company
         sale_id = request.data.get("sale_id")
-        sale_number = request.data.get("sale_number", "").strip()
-        invoice_number = request.data.get("invoice_number", "").strip()
-
-        sale = None
-        if sale_id:
-            sale = Sale.objects.filter(company=company, id=sale_id).first()
-        elif sale_number:
-            sale = Sale.objects.filter(company=company, sale_number=sale_number).first()
-        elif invoice_number:
-            sale = Sale.objects.filter(
-                company=company
-            ).filter(
-                Q(invoice__invoice_number=invoice_number) | Q(sale_number=invoice_number)
-            ).first()
-
-        if not sale:
-            return Response(
-                {"error": "Original sale/invoice not found for this company."},
-                status=status.HTTP_404_NOT_FOUND,
-            )
-
-        items_data = request.data.get("items", [])
-        if not items_data:
-            return Response(
-                {"error": "At least one item must be selected for return."},
-                status=status.HTTP_400_BAD_REQUEST,
-            )
-
-        reason = request.data.get("reason", "CUSTOMER_CHANGED_MIND").upper()
-        if reason not in dict(ReturnRequest.REASON_CHOICES):
-            reason = "OTHER"
-
-        notes = request.data.get("notes", "").strip()
-        refund_method = request.data.get("refund_payment_method", "CASH").upper()
-        if refund_method not in dict(Payment.PAYMENT_METHODS):
-            refund_method = "CASH"
-
-        total_refund_amount = Decimal("0.00")
-        validated_items = []
-
-        for item_entry in items_data:
-            sale_item_id = item_entry.get("sale_item_id")
-            return_qty = Decimal(str(item_entry.get("quantity", "0")))
-            restock = bool(item_entry.get("restock", True))
-
-            if return_qty <= Decimal("0.00"):
-                continue
-
-            sale_item = SaleItem.objects.filter(sale=sale, id=sale_item_id).first()
-            if not sale_item:
-                return Response(
-                    {"error": f"Item {sale_item_id} does not belong to sale {sale.sale_number}."},
-                    status=status.HTTP_400_BAD_REQUEST,
-                )
-
-            # Check already returned quantity for this sale item
-            already_returned = ReturnItem.objects.filter(
-                sale_item=sale_item,
-                return_request__status__in=["PENDING", "APPROVED", "COMPLETED"]
-            ).aggregate(total=Sum("quantity"))["total"] or Decimal("0.00")
-
-            max_eligible_qty = sale_item.quantity - already_returned
-            if return_qty > max_eligible_qty:
-                return Response(
-                    {
-                        "error": f"Requested return quantity ({return_qty}) exceeds eligible remaining quantity ({max_eligible_qty}) for '{sale_item.product_name}'."
-                    },
-                    status=status.HTTP_400_BAD_REQUEST,
-                )
-
-            unit_refund = quantize_money(sale_item.total / sale_item.quantity)
-            line_refund = quantize_money(unit_refund * return_qty)
-            total_refund_amount += line_refund
-
-            validated_items.append({
-                "sale_item": sale_item,
-                "product": sale_item.product,
-                "quantity": return_qty,
-                "refund_unit_price": unit_refund,
-                "refund_total": line_refund,
-                "restock": restock,
-            })
-
-        if not validated_items:
-            return Response(
-                {"error": "No valid return quantities specified."},
-                status=status.HTTP_400_BAD_REQUEST,
-            )
-
-        return_number = f"RET-{company.id}-{int(time.time())}-{secrets.token_hex(4).upper()}"
+        sale_number = str(request.data.get("sale_number") or "").strip()
+        invoice_number = str(request.data.get("invoice_number") or "").strip()
 
         with transaction.atomic():
+            sale = None
+            if sale_id:
+                sale = Sale.objects.select_for_update().filter(company=company, id=sale_id).first()
+            elif sale_number:
+                sale = Sale.objects.select_for_update().filter(company=company, sale_number=sale_number).first()
+            elif invoice_number:
+                sale = Sale.objects.select_for_update().filter(
+                    company=company
+                ).filter(
+                    Q(invoice__invoice_number=invoice_number) | Q(sale_number=invoice_number)
+                ).first()
+
+            if not sale:
+                return Response(
+                    {"error": "Original sale/invoice not found for this company."},
+                    status=status.HTTP_404_NOT_FOUND,
+                )
+
+            items_data = request.data.get("items", [])
+            if not items_data:
+                return Response(
+                    {"error": "At least one item must be selected for return."},
+                    status=status.HTTP_400_BAD_REQUEST,
+                )
+
+            reason = request.data.get("reason", "CUSTOMER_CHANGED_MIND").upper()
+            if reason not in dict(ReturnRequest.REASON_CHOICES):
+                reason = "OTHER"
+
+            notes = request.data.get("notes", "").strip()
+            refund_method = request.data.get("refund_payment_method", "CASH").upper()
+            if refund_method not in dict(Payment.PAYMENT_METHODS):
+                refund_method = "CASH"
+
+            total_refund_amount = Decimal("0.00")
+            validated_items = []
+
+            for item_entry in items_data:
+                sale_item_id = item_entry.get("sale_item_id")
+                return_qty = Decimal(str(item_entry.get("quantity", "0")))
+                restock = bool(item_entry.get("restock", True))
+
+                if return_qty <= Decimal("0.00"):
+                    continue
+
+                sale_item = SaleItem.objects.select_for_update().filter(sale=sale, id=sale_item_id).first()
+                if not sale_item:
+                    return Response(
+                        {"error": f"Item {sale_item_id} does not belong to sale {sale.sale_number}."},
+                        status=status.HTTP_400_BAD_REQUEST,
+                    )
+
+                # Check already returned quantity for this sale item
+                already_returned = ReturnItem.objects.filter(
+                    sale_item=sale_item,
+                    return_request__status__in=["PENDING", "APPROVED", "COMPLETED"]
+                ).aggregate(total=Sum("quantity"))["total"] or Decimal("0.00")
+
+                max_eligible_qty = sale_item.quantity - already_returned
+                if return_qty > max_eligible_qty:
+                    return Response(
+                        {
+                            "error": f"Requested return quantity ({return_qty}) exceeds eligible remaining quantity ({max_eligible_qty}) for '{sale_item.product_name}'."
+                        },
+                        status=status.HTTP_400_BAD_REQUEST,
+                    )
+
+                unit_refund = quantize_money(sale_item.total / sale_item.quantity)
+                line_refund = quantize_money(unit_refund * return_qty)
+                total_refund_amount += line_refund
+
+                validated_items.append({
+                    "sale_item": sale_item,
+                    "product": sale_item.product,
+                    "quantity": return_qty,
+                    "refund_unit_price": unit_refund,
+                    "refund_total": line_refund,
+                    "restock": restock,
+                })
+
+            if not validated_items:
+                return Response(
+                    {"error": "No valid return quantities specified."},
+                    status=status.HTTP_400_BAD_REQUEST,
+                )
+
+            return_number = f"RET-{company.id}-{int(time.time())}-{secrets.token_hex(4).upper()}"
+
+            # Determine if direct approval applies (Owner or Manager creates the return)
+            is_direct_approval = request.user_role in ["Admin", "Manager"]
+            initial_status = "APPROVED" if is_direct_approval else "PENDING"
+            now = timezone.now()
+
             ret_req = ReturnRequest.objects.create(
                 company=company,
                 return_number=return_number,
                 sale=sale,
                 invoice=getattr(sale, "invoice", None),
                 customer=sale.customer,
-                status="PENDING",
+                status=initial_status,
                 reason=reason,
                 refund_amount=total_refund_amount,
                 refund_payment_method=refund_method,
                 notes=notes,
                 created_by=request.user,
+                approved_by=request.user if is_direct_approval else None,
+                approved_at=now if is_direct_approval else None,
             )
 
             for v in validated_items:
@@ -1048,6 +1370,42 @@ class ReturnRequestViewSet(viewsets.ModelViewSet):
                     refund_unit_price=v["refund_unit_price"],
                     refund_total=v["refund_total"],
                     restock=v["restock"],
+                )
+
+            # If created by Owner/Manager, execute inventory restock and refund immediately
+            if is_direct_approval:
+                for item in ret_req.items.select_related("product"):
+                    if item.restock:
+                        StockService.adjust_stock(
+                            company=company,
+                            product=item.product,
+                            movement_type="RETURN",
+                            quantity=item.quantity,
+                            user=request.user,
+                            reference=ret_req.return_number,
+                            reason=f"Customer Return: {ret_req.get_reason_display()}",
+                        )
+                    else:
+                        StockMovement.objects.create(
+                            company=company,
+                            product=item.product,
+                            movement_type="DAMAGE",
+                            quantity=-abs(item.quantity),
+                            previous_stock=item.product.current_stock,
+                            new_stock=item.product.current_stock,
+                            reference=ret_req.return_number,
+                            user=request.user,
+                            reason=f"Defective/Damaged Return (Quarantine - Not Sellable): {ret_req.get_reason_display()}",
+                        )
+
+                Payment.objects.create(
+                    company=company,
+                    sale=ret_req.sale,
+                    payment_method=ret_req.refund_payment_method,
+                    amount=-ret_req.refund_amount,
+                    transaction_reference=f"REFUND-{ret_req.return_number}",
+                    received_by=request.user,
+                    notes=f"Direct return refund for Return {ret_req.return_number} (by {request.user.username})",
                 )
 
         try:
@@ -1062,47 +1420,48 @@ class ReturnRequestViewSet(viewsets.ModelViewSet):
     @action(detail=True, methods=["post"], url_path="approve")
     def approve(self, request, pk=None):
         company = request.company
-        return_req = ReturnRequest.objects.filter(company=company, pk=pk).first()
-        if not return_req:
-            return Response({"error": "Return request not found."}, status=status.HTTP_404_NOT_FOUND)
-
-        if return_req.status != "PENDING":
-            return Response(
-                {"error": f"Cannot approve return in status '{return_req.status}'."},
-                status=status.HTTP_400_BAD_REQUEST,
-            )
-
-        # Manager Authorization Resolution:
-        approver = request.user
-        if request.user_role not in ["Admin", "Manager"]:
-            # CASE B: Cashier is logged in, Manager is physically present entering PIN/credentials
-            mgr_user_name = request.data.get("manager_username", "").strip()
-            mgr_pin = request.data.get("manager_pin", "").strip()
-            if not mgr_user_name or not mgr_pin:
-                return Response(
-                    {"error": "Manager approval required. Please provide manager credentials or approval PIN."},
-                    status=status.HTTP_403_FORBIDDEN
-                )
-
-            from django.contrib.auth import authenticate
-            authenticated_mgr = authenticate(username=mgr_user_name, password=mgr_pin)
-            if not authenticated_mgr:
-                return Response(
-                    {"error": "Invalid manager credentials or PIN."},
-                    status=status.HTTP_403_FORBIDDEN
-                )
-
-            from accounts.tenancy import get_user_role, get_user_company
-            mgr_comp = get_user_company(authenticated_mgr)
-            mgr_role = get_user_role(authenticated_mgr)
-            if mgr_comp != company or mgr_role not in ["Admin", "Manager"]:
-                return Response(
-                    {"error": "Provided credentials do not belong to an authorized Manager for this company."},
-                    status=status.HTTP_403_FORBIDDEN
-                )
-            approver = authenticated_mgr
 
         with transaction.atomic():
+            return_req = ReturnRequest.objects.select_for_update().filter(company=company, pk=pk).first()
+            if not return_req:
+                return Response({"error": "Return request not found."}, status=status.HTTP_404_NOT_FOUND)
+
+            if return_req.status != "PENDING":
+                return Response(
+                    {"error": f"Cannot approve return in status '{return_req.status}'."},
+                    status=status.HTTP_400_BAD_REQUEST,
+                )
+
+            # Manager Authorization Resolution:
+            approver = request.user
+            if request.user_role not in ["Admin", "Manager"]:
+                # Cashier is logged in -> verify on-site manager credentials
+                mgr_user_name = request.data.get("manager_username", "").strip()
+                mgr_pin = request.data.get("manager_pin", "").strip()
+                if not mgr_user_name or not mgr_pin:
+                    return Response(
+                        {"error": "Manager approval required. Please provide manager credentials or approval PIN."},
+                        status=status.HTTP_403_FORBIDDEN
+                    )
+
+                from django.contrib.auth import authenticate
+                authenticated_mgr = authenticate(request, username=mgr_user_name, password=mgr_pin)
+                if not authenticated_mgr:
+                    return Response(
+                        {"error": "Invalid manager credentials or PIN."},
+                        status=status.HTTP_403_FORBIDDEN
+                    )
+
+                from accounts.tenancy import get_user_role, get_user_company
+                mgr_comp = get_user_company(authenticated_mgr)
+                mgr_role = get_user_role(authenticated_mgr)
+                if mgr_comp != company or mgr_role not in ["Admin", "Manager"]:
+                    return Response(
+                        {"error": "Provided credentials do not belong to an authorized Manager for this company."},
+                        status=status.HTTP_403_FORBIDDEN
+                    )
+                approver = authenticated_mgr
+
             # 1. Restock items that are flagged for restock
             for item in return_req.items.select_related("product"):
                 if item.restock:
@@ -1116,8 +1475,6 @@ class ReturnRequestViewSet(viewsets.ModelViewSet):
                         reason=f"Customer Return: {return_req.get_reason_display()}",
                     )
                 else:
-                    # Item is DAMAGED / DEFECTIVE:
-                    # Must NOT be returned to sellable stock. Record quarantine audit trail.
                     StockMovement.objects.create(
                         company=company,
                         product=item.product,
@@ -1147,6 +1504,12 @@ class ReturnRequestViewSet(viewsets.ModelViewSet):
             return_req.approved_at = timezone.now()
             return_req.save()
 
+            try:
+                from dashboard.sync_service import SyncService
+                SyncService.queue_return(return_req)
+            except Exception:
+                pass
+
         serializer = ReturnRequestSerializer(return_req)
         return Response(
             {
@@ -1159,52 +1522,60 @@ class ReturnRequestViewSet(viewsets.ModelViewSet):
     @action(detail=True, methods=["post"], url_path="reject")
     def reject(self, request, pk=None):
         company = request.company
-        return_req = ReturnRequest.objects.filter(company=company, pk=pk).first()
-        if not return_req:
-            return Response({"error": "Return request not found."}, status=status.HTTP_404_NOT_FOUND)
 
-        if return_req.status != "PENDING":
-            return Response(
-                {"error": f"Cannot reject return in status '{return_req.status}'."},
-                status=status.HTTP_400_BAD_REQUEST,
-            )
+        with transaction.atomic():
+            return_req = ReturnRequest.objects.select_for_update().filter(company=company, pk=pk).first()
+            if not return_req:
+                return Response({"error": "Return request not found."}, status=status.HTTP_404_NOT_FOUND)
 
-        # Manager Authorization Resolution:
-        approver = request.user
-        if request.user_role not in ["Admin", "Manager"]:
-            mgr_user_name = request.data.get("manager_username", "").strip()
-            mgr_pin = request.data.get("manager_pin", "").strip()
-            if not mgr_user_name or not mgr_pin:
+            if return_req.status != "PENDING":
                 return Response(
-                    {"error": "Manager approval required. Please provide manager credentials or approval PIN."},
-                    status=status.HTTP_403_FORBIDDEN
+                    {"error": f"Cannot reject return in status '{return_req.status}'."},
+                    status=status.HTTP_400_BAD_REQUEST,
                 )
 
-            from django.contrib.auth import authenticate
-            authenticated_mgr = authenticate(username=mgr_user_name, password=mgr_pin)
-            if not authenticated_mgr:
-                return Response(
-                    {"error": "Invalid manager credentials or PIN."},
-                    status=status.HTTP_403_FORBIDDEN
-                )
+            # Manager Authorization Resolution:
+            approver = request.user
+            if request.user_role not in ["Admin", "Manager"]:
+                mgr_user_name = request.data.get("manager_username", "").strip()
+                mgr_pin = request.data.get("manager_pin", "").strip()
+                if not mgr_user_name or not mgr_pin:
+                    return Response(
+                        {"error": "Manager approval required. Please provide manager credentials or approval PIN."},
+                        status=status.HTTP_403_FORBIDDEN
+                    )
 
-            from accounts.tenancy import get_user_role, get_user_company
-            mgr_comp = get_user_company(authenticated_mgr)
-            mgr_role = get_user_role(authenticated_mgr)
-            if mgr_comp != company or mgr_role not in ["Admin", "Manager"]:
-                return Response(
-                    {"error": "Provided credentials do not belong to an authorized Manager for this company."},
-                    status=status.HTTP_403_FORBIDDEN
-                )
-            approver = authenticated_mgr
+                from django.contrib.auth import authenticate
+                authenticated_mgr = authenticate(request, username=mgr_user_name, password=mgr_pin)
+                if not authenticated_mgr:
+                    return Response(
+                        {"error": "Invalid manager credentials or PIN."},
+                        status=status.HTTP_403_FORBIDDEN
+                    )
 
-        rejection_reason = request.data.get("reason", "").strip() or "Rejected by manager."
+                from accounts.tenancy import get_user_role, get_user_company
+                mgr_comp = get_user_company(authenticated_mgr)
+                mgr_role = get_user_role(authenticated_mgr)
+                if mgr_comp != company or mgr_role not in ["Admin", "Manager"]:
+                    return Response(
+                        {"error": "Provided credentials do not belong to an authorized Manager for this company."},
+                        status=status.HTTP_403_FORBIDDEN
+                    )
+                approver = authenticated_mgr
 
-        return_req.status = "REJECTED"
-        return_req.rejection_reason = rejection_reason
-        return_req.approved_by = approver
-        return_req.approved_at = timezone.now()
-        return_req.save()
+            rejection_reason = request.data.get("reason", "").strip() or "Rejected by manager."
+
+            return_req.status = "REJECTED"
+            return_req.rejection_reason = rejection_reason
+            return_req.approved_by = approver
+            return_req.approved_at = timezone.now()
+            return_req.save()
+
+            try:
+                from dashboard.sync_service import SyncService
+                SyncService.queue_return(return_req)
+            except Exception:
+                pass
 
         serializer = ReturnRequestSerializer(return_req)
         return Response(

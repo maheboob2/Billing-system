@@ -302,9 +302,23 @@ const SidebarController = {
             });
         }
 
-        // Close mobile drawer on route click
+        // Close mobile drawer on route click & prevent redundant jump-to-top reloads on same page
         sidebar.querySelectorAll('.sidebar-link').forEach(link => {
-            link.addEventListener('click', () => {
+            link.addEventListener('click', (e) => {
+                const linkHref = link.getAttribute('href');
+                if (linkHref) {
+                    try {
+                        const targetUrl = new URL(linkHref, window.location.origin);
+                        if (targetUrl.pathname === window.location.pathname && targetUrl.search === window.location.search && !targetUrl.hash) {
+                            // Link points to current page view; prevent default jump-to-top reload
+                            e.preventDefault();
+                            if (window.innerWidth <= 900) {
+                                this.closeMobileDrawer();
+                            }
+                            return;
+                        }
+                    } catch(err) {}
+                }
                 if (window.innerWidth <= 900) {
                     this.closeMobileDrawer();
                 }
@@ -367,10 +381,58 @@ const SidebarController = {
         links.forEach(a => {
             const match = a.getAttribute('data-nav-match');
             if (match) {
-                if (match === '/dashboard' && (path === '/dashboard/' || path === '/')) {
+                if (match === '/dashboard' && (path === '/dashboard/' || path === '/' || path.startsWith('/manager_dashboard'))) {
                     a.classList.add('active');
                     a.setAttribute('aria-current', 'page');
                     matched = true;
+                } else if (match === '/settings') {
+                    // Match settings pages EXCEPT scanner which has its own link
+                    if (path.startsWith('/settings') && !path.startsWith('/settings/scanner') && !path.startsWith('/settings/telegram')) {
+                        a.classList.add('active');
+                        a.setAttribute('aria-current', 'page');
+                        matched = true;
+                    } else {
+                        a.classList.remove('active');
+                        a.removeAttribute('aria-current');
+                    }
+                } else if (match === '/settings/telegram') {
+                    if (path.startsWith('/settings/telegram')) {
+                        a.classList.add('active');
+                        a.setAttribute('aria-current', 'page');
+                        matched = true;
+                    } else {
+                        a.classList.remove('active');
+                        a.removeAttribute('aria-current');
+                    }
+                } else if (match === '/sales') {
+                    // Match sales & invoices EXCEPT returns which has dedicated management view
+                    if ((path.startsWith('/sales') || path.startsWith('/invoice')) && !path.startsWith('/sales/returns')) {
+                        a.classList.add('active');
+                        a.setAttribute('aria-current', 'page');
+                        matched = true;
+                    } else {
+                        a.classList.remove('active');
+                        a.removeAttribute('aria-current');
+                    }
+                } else if (match === '/returns') {
+                    // Match returns specifically
+                    if (path.startsWith('/sales/returns') || path.startsWith('/returns')) {
+                        a.classList.add('active');
+                        a.setAttribute('aria-current', 'page');
+                        matched = true;
+                    } else {
+                        a.classList.remove('active');
+                        a.removeAttribute('aria-current');
+                    }
+                } else if (match === '/cart') {
+                    if (path.startsWith('/cart') || path.startsWith('/pos')) {
+                        a.classList.add('active');
+                        a.setAttribute('aria-current', 'page');
+                        matched = true;
+                    } else {
+                        a.classList.remove('active');
+                        a.removeAttribute('aria-current');
+                    }
                 } else if (match !== '/dashboard' && path.startsWith(match)) {
                     a.classList.add('active');
                     a.setAttribute('aria-current', 'page');
@@ -550,6 +612,11 @@ document.addEventListener("keydown", (event) => {
 
     const isPOSRoute = window.location.pathname.startsWith('/cart') || 
                        Boolean(document.getElementById('pos-search-overlay') || document.getElementById('barcode-scanner-input') || document.getElementById('pos-terminal-container'));
+
+    if (isPOSRoute) {
+        // Strictly yield all shortcuts (F2, Esc, etc.) to the POS checkout terminal
+        return;
+    }
 
     // Escape closes search or mobile sidebar
     if (event.key === "Escape") {

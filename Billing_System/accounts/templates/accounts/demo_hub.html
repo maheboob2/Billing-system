@@ -1,0 +1,661 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>College Demo Hub — Multi-Role Session Isolation | Retail POS</title>
+    <meta name="description" content="Independent Owner, Manager, and Cashier multi-tab session demonstration hub with RFC 6265 origin isolation.">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@500;600;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css">
+    <style>
+        :root {
+            --bg-base: #090d16;
+            --bg-surface: #111827;
+            --bg-card: rgba(17, 24, 39, 0.85);
+            --border-subtle: rgba(255, 255, 255, 0.08);
+            --border-glow: rgba(59, 130, 246, 0.3);
+            --text-main: #f8fafc;
+            --text-muted: #94a3b8;
+            --accent-blue: #3b82f6;
+            --accent-indigo: #6366f1;
+            --accent-green: #22c55e;
+            --accent-amber: #f59e0b;
+            --accent-purple: #a855f7;
+            --mono-font: 'JetBrains Mono', monospace;
+        }
+
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+        }
+
+        body {
+            font-family: 'Inter', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+            background-color: var(--bg-base);
+            color: var(--text-main);
+            min-height: 100vh;
+            background-image: 
+                radial-gradient(at 15% 15%, rgba(59, 130, 246, 0.12) 0px, transparent 50%),
+                radial-gradient(at 85% 85%, rgba(168, 85, 247, 0.1) 0px, transparent 50%);
+            background-attachment: fixed;
+            line-height: 1.5;
+            padding: 2.5rem 1.5rem;
+        }
+
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+        }
+
+        /* Header */
+        .hub-header {
+            text-align: center;
+            margin-bottom: 2.5rem;
+        }
+
+        .hub-badge {
+            display: inline-flex;
+            align-items: center;
+            gap: 0.5rem;
+            padding: 0.35rem 1rem;
+            border-radius: 9999px;
+            background: rgba(34, 197, 94, 0.12);
+            border: 1px solid rgba(34, 197, 94, 0.3);
+            color: #4ade80;
+            font-size: 0.8rem;
+            font-weight: 700;
+            letter-spacing: 0.5px;
+            text-transform: uppercase;
+            margin-bottom: 1rem;
+        }
+
+        .pulse-dot {
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+            background-color: #22c55e;
+            box-shadow: 0 0 10px #22c55e;
+            animation: pulse 1.8s infinite ease-in-out;
+        }
+
+        @keyframes pulse {
+            0%, 100% { opacity: 1; transform: scale(1); }
+            50% { opacity: 0.4; transform: scale(0.85); }
+        }
+
+        .hub-title {
+            font-size: 2.35rem;
+            font-weight: 800;
+            letter-spacing: -0.03em;
+            background: linear-gradient(135deg, #ffffff 0%, #cbd5e1 100%);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            margin-bottom: 0.75rem;
+        }
+
+        .hub-subtitle {
+            color: var(--text-muted);
+            font-size: 1.05rem;
+            max-width: 760px;
+            margin: 0 auto;
+        }
+
+        /* Banner Card */
+        .info-card {
+            background: var(--bg-card);
+            border: 1px solid var(--border-subtle);
+            border-radius: 14px;
+            padding: 1.5rem;
+            margin-bottom: 2rem;
+            backdrop-filter: blur(12px);
+            display: flex;
+            gap: 1.5rem;
+            align-items: flex-start;
+        }
+
+        .info-icon {
+            font-size: 1.75rem;
+            color: var(--accent-blue);
+            padding: 0.75rem;
+            background: rgba(59, 130, 246, 0.1);
+            border-radius: 12px;
+            flex-shrink: 0;
+        }
+
+        .info-content h3 {
+            font-size: 1.15rem;
+            font-weight: 700;
+            margin-bottom: 0.35rem;
+            color: #ffffff;
+        }
+
+        .info-content p {
+            color: #cbd5e1;
+            font-size: 0.925rem;
+            line-height: 1.6;
+        }
+
+        .code-pill {
+            display: inline-block;
+            font-family: var(--mono-font);
+            background: rgba(0, 0, 0, 0.4);
+            padding: 0.15rem 0.5rem;
+            border-radius: 6px;
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            color: #93c5fd;
+            font-size: 0.85rem;
+        }
+
+        /* Role Cards Grid */
+        .roles-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(340px, 1fr));
+            gap: 1.5rem;
+            margin-bottom: 2.5rem;
+        }
+
+        .role-card {
+            background: var(--bg-card);
+            border: 1px solid var(--border-subtle);
+            border-radius: 16px;
+            padding: 1.75rem;
+            backdrop-filter: blur(12px);
+            display: flex;
+            flex-direction: column;
+            position: relative;
+            overflow: hidden;
+            transition: transform 0.2s ease, border-color 0.2s ease, box-shadow 0.2s ease;
+        }
+
+        .role-card:hover {
+            transform: translateY(-3px);
+            border-color: rgba(255, 255, 255, 0.2);
+            box-shadow: 0 12px 28px rgba(0, 0, 0, 0.35);
+        }
+
+        .role-card::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            height: 4px;
+        }
+
+        .role-card.owner::before { background: linear-gradient(90deg, #3b82f6, #6366f1); }
+        .role-card.manager::before { background: linear-gradient(90deg, #a855f7, #ec4899); }
+        .role-card.cashier::before { background: linear-gradient(90deg, #22c55e, #10b981); }
+
+        .role-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 1.25rem;
+        }
+
+        .role-icon-box {
+            width: 48px;
+            height: 48px;
+            border-radius: 12px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 1.5rem;
+        }
+
+        .owner .role-icon-box { background: rgba(59, 130, 246, 0.15); color: #60a5fa; }
+        .manager .role-icon-box { background: rgba(168, 85, 247, 0.15); color: #c084fc; }
+        .cashier .role-icon-box { background: rgba(34, 197, 94, 0.15); color: #4ade80; }
+
+        .origin-badge {
+            font-family: var(--mono-font);
+            font-size: 0.775rem;
+            padding: 0.25rem 0.65rem;
+            border-radius: 6px;
+            background: rgba(255, 255, 255, 0.06);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            color: #94a3b8;
+        }
+
+        .role-title {
+            font-size: 1.35rem;
+            font-weight: 700;
+            margin-bottom: 0.35rem;
+            color: #ffffff;
+        }
+
+        .role-desc {
+            color: var(--text-muted);
+            font-size: 0.885rem;
+            margin-bottom: 1.25rem;
+            min-height: 40px;
+        }
+
+        .feature-list {
+            list-style: none;
+            margin-bottom: 1.5rem;
+            flex-grow: 1;
+        }
+
+        .feature-item {
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+            font-size: 0.85rem;
+            color: #cbd5e1;
+            margin-bottom: 0.5rem;
+        }
+
+        .feature-item i {
+            color: #4ade80;
+            font-size: 0.9rem;
+        }
+
+        .origin-box {
+            background: rgba(0, 0, 0, 0.35);
+            border: 1px solid rgba(255, 255, 255, 0.08);
+            border-radius: 10px;
+            padding: 0.75rem 1rem;
+            margin-bottom: 1.25rem;
+        }
+
+        .origin-label {
+            font-size: 0.72rem;
+            text-transform: uppercase;
+            font-weight: 700;
+            letter-spacing: 0.5px;
+            color: #64748b;
+            margin-bottom: 0.25rem;
+        }
+
+        .origin-url {
+            font-family: var(--mono-font);
+            font-size: 0.875rem;
+            color: #f1f5f9;
+            word-break: break-all;
+        }
+
+        .btn-launch {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 0.5rem;
+            width: 100%;
+            padding: 0.85rem;
+            border-radius: 10px;
+            font-size: 0.925rem;
+            font-weight: 600;
+            text-decoration: none;
+            color: #ffffff;
+            transition: all 0.2s ease;
+            border: none;
+            cursor: pointer;
+        }
+
+        .owner .btn-launch { background: #2563eb; }
+        .owner .btn-launch:hover { background: #1d4ed8; }
+        .manager .btn-launch { background: #9333ea; }
+        .manager .btn-launch:hover { background: #7e22ce; }
+        .cashier .btn-launch { background: #16a34a; }
+        .cashier .btn-launch:hover { background: #15803d; }
+
+        /* Multi-Tab Action Hub */
+        .actions-panel {
+            background: var(--bg-card);
+            border: 1px solid var(--border-subtle);
+            border-radius: 16px;
+            padding: 1.75rem;
+            margin-bottom: 2rem;
+            display: flex;
+            flex-wrap: wrap;
+            align-items: center;
+            justify-content: space-between;
+            gap: 1.5rem;
+        }
+
+        .actions-info h4 {
+            font-size: 1.15rem;
+            font-weight: 700;
+            margin-bottom: 0.25rem;
+            color: #ffffff;
+        }
+
+        .actions-info p {
+            font-size: 0.875rem;
+            color: var(--text-muted);
+        }
+
+        .btn-launch-all {
+            background: linear-gradient(135deg, #3b82f6, #8b5cf6);
+            color: #ffffff;
+            padding: 0.85rem 1.75rem;
+            border-radius: 10px;
+            font-size: 0.95rem;
+            font-weight: 700;
+            border: none;
+            cursor: pointer;
+            display: inline-flex;
+            align-items: center;
+            gap: 0.6rem;
+            box-shadow: 0 4px 14px rgba(59, 130, 246, 0.4);
+            transition: transform 0.15s, box-shadow 0.15s;
+        }
+
+        .btn-launch-all:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 6px 20px rgba(59, 130, 246, 0.6);
+        }
+
+        /* Script Section */
+        .script-section {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 1.5rem;
+        }
+
+        @media (max-width: 900px) {
+            .script-section { grid-template-columns: 1fr; }
+        }
+
+        .panel-box {
+            background: var(--bg-card);
+            border: 1px solid var(--border-subtle);
+            border-radius: 14px;
+            padding: 1.5rem;
+        }
+
+        .panel-title {
+            font-size: 1.1rem;
+            font-weight: 700;
+            color: #ffffff;
+            margin-bottom: 1rem;
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+        }
+
+        .step-list {
+            list-style: none;
+            display: grid;
+            gap: 1rem;
+        }
+
+        .step-item {
+            display: flex;
+            gap: 0.85rem;
+            align-items: flex-start;
+        }
+
+        .step-num {
+            width: 24px;
+            height: 24px;
+            border-radius: 50%;
+            background: rgba(59, 130, 246, 0.2);
+            color: #60a5fa;
+            font-size: 0.8rem;
+            font-weight: 700;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            flex-shrink: 0;
+            margin-top: 2px;
+        }
+
+        .step-text {
+            font-size: 0.875rem;
+            color: #cbd5e1;
+            line-height: 1.45;
+        }
+
+        .terminal-block {
+            background: #000000;
+            border: 1px solid rgba(255, 255, 255, 0.12);
+            border-radius: 10px;
+            padding: 1rem;
+            font-family: var(--mono-font);
+            font-size: 0.825rem;
+            color: #a5f3fc;
+            margin-top: 0.75rem;
+            overflow-x: auto;
+        }
+
+        .terminal-comment {
+            color: #64748b;
+        }
+
+        .footer-note {
+            text-align: center;
+            margin-top: 3rem;
+            font-size: 0.825rem;
+            color: #64748b;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <!-- Header -->
+        <header class="hub-header">
+            <div class="hub-badge">
+                <span class="pulse-dot"></span>
+                {% if college_demo_mode %}College Demo Mode Active{% else %}College Demo Hub (Ready){% endif %}
+            </div>
+            <h1 class="hub-title">Independent Multi-Role Demonstration Portal</h1>
+            <p class="hub-subtitle">
+                Demonstrate concurrent <strong>Owner</strong>, <strong>Manager</strong>, and <strong>Cashier</strong> sessions 
+                in separate tabs within the exact same browser profile using RFC 6265 Host Isolation.
+            </p>
+        </header>
+
+        <!-- Technical Explanation Banner -->
+        <div class="info-card">
+            <div class="info-icon">
+                <i class="bi bi-shield-check"></i>
+            </div>
+            <div class="info-content">
+                <h3>RFC 6265 Origin Boundary & Architecture Note</h3>
+                <p>
+                    By standard web specifications (RFC 6265), browser cookies (<span class="code-pill">sessionid</span>) are origin-wide. 
+                    If two tabs use the exact same hostname, logging into Tab 2 overwrites Tab 1's session.
+                    <br><br>
+                    <strong>The College Demo Solution:</strong> 
+                    Windows natively routes all addresses in the <span class="code-pill">127.0.0.0/8</span> block (e.g. <span class="code-pill">127.0.0.1</span>, <span class="code-pill">127.0.0.2</span>) as well as <span class="code-pill">localhost</span>.
+                    Browsers enforce completely separate cookie jars for distinct hostnames. Running on <span class="code-pill">0.0.0.0:8000</span> enables 
+                    <strong>100% physically isolated cookie jars</strong> in the same Chrome profile without storing passwords in JavaScript, compromising tokens, or weakening CSRF protection.
+                </p>
+            </div>
+        </div>
+
+        <!-- Launch All Banner -->
+        <div class="actions-panel">
+            <div class="actions-info">
+                <h4>1-Click Multi-Tab Launcher</h4>
+                <p>Opens Owner, Manager, and Cashier tabs side-by-side in this browser window.</p>
+            </div>
+            <button class="btn-launch-all" id="btnLaunchAll" onclick="launchAllTabs()">
+                <i class="bi bi-window-stack"></i> Launch All 3 Role Tabs
+            </button>
+        </div>
+
+        <!-- 3 Role Portals -->
+        <div class="roles-grid">
+            <!-- Owner Card -->
+            <div class="role-card owner">
+                <div class="role-header">
+                    <div class="role-icon-box">
+                        <i class="bi bi-crown"></i>
+                    </div>
+                    <span class="origin-badge">Tab 1 Origin</span>
+                </div>
+                <h2 class="role-title">Business Owner</h2>
+                <p class="role-desc">Full business control, executive reporting, user administration, and system-wide configurations.</p>
+                
+                <div class="origin-box">
+                    <div class="origin-label">Dedicated Isolated Origin</div>
+                    <div class="origin-url">{{ owner_url }}</div>
+                </div>
+
+                <ul class="feature-list">
+                    <li class="feature-item"><i class="bi bi-check2-circle"></i> Executive Dashboard & Revenue Analytics</li>
+                    <li class="feature-item"><i class="bi bi-check2-circle"></i> Employee Onboarding & Roles</li>
+                    <li class="feature-item"><i class="bi bi-check2-circle"></i> Business Settings & Multi-Branch Tenancy</li>
+                    <li class="feature-item"><i class="bi bi-check2-circle"></i> Unrestricted Access to All Modules</li>
+                </ul>
+
+                <a href="{{ owner_url }}" target="_blank" rel="noopener noreferrer" class="btn-launch">
+                    <i class="bi bi-box-arrow-up-right"></i> Launch Owner Tab
+                </a>
+            </div>
+
+            <!-- Manager Card -->
+            <div class="role-card manager">
+                <div class="role-header">
+                    <div class="role-icon-box">
+                        <i class="bi bi-person-badge"></i>
+                    </div>
+                    <span class="origin-badge">Tab 2 Origin</span>
+                </div>
+                <h2 class="role-title">Store Manager</h2>
+                <p class="role-desc">Store operations supervision, stock levels, return approvals, and staff messaging.</p>
+
+                <div class="origin-box">
+                    <div class="origin-label">Dedicated Isolated Origin</div>
+                    <div class="origin-url">{{ manager_url }}</div>
+                </div>
+
+                <ul class="feature-list">
+                    <li class="feature-item"><i class="bi bi-check2-circle"></i> Manager Operations Dashboard</li>
+                    <li class="feature-item"><i class="bi bi-check2-circle"></i> Return Request Review & Authorization</li>
+                    <li class="feature-item"><i class="bi bi-check2-circle"></i> Inventory Replenishment & Purchases</li>
+                    <li class="feature-item"><i class="bi bi-check2-circle"></i> Direct Cashier Messaging</li>
+                </ul>
+
+                <a href="{{ manager_url }}" target="_blank" rel="noopener noreferrer" class="btn-launch">
+                    <i class="bi bi-box-arrow-up-right"></i> Launch Manager Tab
+                </a>
+            </div>
+
+            <!-- Cashier Card -->
+            <div class="role-card cashier">
+                <div class="role-header">
+                    <div class="role-icon-box">
+                        <i class="bi bi-receipt"></i>
+                    </div>
+                    <span class="origin-badge">Tab 3 Origin</span>
+                </div>
+                <h2 class="role-title">POS Cashier</h2>
+                <p class="role-desc">High-speed point-of-sale terminal, barcode companion scanning, cart checkout, and return filing.</p>
+
+                <div class="origin-box">
+                    <div class="origin-label">Dedicated Isolated Origin</div>
+                    <div class="origin-url">{{ cashier_url }}</div>
+                </div>
+
+                <ul class="feature-list">
+                    <li class="feature-item"><i class="bi bi-check2-circle"></i> Fast POS Touch Terminal & Barcode Entry</li>
+                    <li class="feature-item"><i class="bi bi-check2-circle"></i> Instant Thermal Print Receipts</li>
+                    <li class="feature-item"><i class="bi bi-check2-circle"></i> Submit Customer Return Requests</li>
+                    <li class="feature-item"><i class="bi bi-check2-circle"></i> Real-Time Notifications from Manager</li>
+                </ul>
+
+                <a href="{{ cashier_url }}" target="_blank" rel="noopener noreferrer" class="btn-launch">
+                    <i class="bi bi-box-arrow-up-right"></i> Launch Cashier Tab
+                </a>
+            </div>
+        </div>
+
+        <!-- Demonstration Walkthrough Panels -->
+        <div class="script-section">
+            <div class="panel-box">
+                <h3 class="panel-title"><i class="bi bi-play-circle-fill"></i> College Presentation Demonstration Protocol</h3>
+                <ol class="step-list">
+                    <li class="step-item">
+                        <div class="step-num">1</div>
+                        <div class="step-text">
+                            <strong>Launch Server on INADDR_ANY:</strong><br>
+                            Run the server bound to <span class="code-pill">0.0.0.0:8000</span> so all loopback IPs route seamlessly.
+                            <div class="terminal-block">
+                                <span class="terminal-comment"># Start server to listen on all loopback hostnames</span><br>
+                                python manage.py runserver 0.0.0.0:8000
+                            </div>
+                        </div>
+                    </li>
+                    <li class="step-item">
+                        <div class="step-num">2</div>
+                        <div class="step-text">
+                            <strong>Open All 3 Tabs:</strong> Click <em>"Launch All 3 Role Tabs"</em> above to open Owner, Manager, and Cashier in Chrome.
+                        </div>
+                    </li>
+                    <li class="step-item">
+                        <div class="step-num">3</div>
+                        <div class="step-text">
+                            <strong>Log In to Each Tab:</strong> Log in as Owner on Tab 1, Manager on Tab 2, and Cashier on Tab 3.
+                        </div>
+                    </li>
+                    <li class="step-item">
+                        <div class="step-num">4</div>
+                        <div class="step-text">
+                            <strong>Demonstrate Independence:</strong> Refresh Tab 1 and Tab 2 — Tab 1 remains Owner and Tab 2 remains Manager!
+                        </div>
+                    </li>
+                    <li class="step-item">
+                        <div class="step-num">5</div>
+                        <div class="step-text">
+                            <strong>Demonstrate Staff Messaging:</strong> Send a notification from Manager to Cashier. Verify Cashier receives it while Owner does not.
+                        </div>
+                    </li>
+                    <li class="step-item">
+                        <div class="step-num">6</div>
+                        <div class="step-text">
+                            <strong>Demonstrate Logout Isolation:</strong> Click Logout in Tab 3 (Cashier). Verify Tab 1 (Owner) and Tab 2 (Manager) stay completely logged in!
+                        </div>
+                    </li>
+                </ol>
+            </div>
+
+            <div class="panel-box">
+                <h3 class="panel-title"><i class="bi bi-laptop"></i> Alternative Browser Profile Isolation</h3>
+                <p style="font-size: 0.885rem; color: #cbd5e1; margin-bottom: 1rem;">
+                    If your college demonstration requires strictly using the single hostname <span class="code-pill">localhost:8000</span> across separate windows, 
+                    Chrome User Data Directories or Incognito windows provide physical process isolation:
+                </p>
+
+                <div class="terminal-block">
+                    <span class="terminal-comment"># Isolated Profile A: Manager</span><br>
+                    chrome.exe --user-data-dir="%TEMP%\pos_manager" http://localhost:8000/accounts/<br><br>
+                    <span class="terminal-comment"># Isolated Profile B: Cashier</span><br>
+                    chrome.exe --user-data-dir="%TEMP%\pos_cashier" http://localhost:8000/accounts/
+                </div>
+
+                <div style="margin-top: 1.25rem; font-size: 0.85rem; color: #94a3b8; line-height: 1.5;">
+                    <i class="bi bi-info-circle" style="color: #60a5fa;"></i> 
+                    Both the <strong>Multi-Origin Tab Model</strong> and the <strong>Isolated Profile Model</strong> satisfy 100% of security requirements:
+                    zero client-side password storage, strict server-side RBAC, and authentic CSRF validation.
+                </div>
+            </div>
+        </div>
+
+        <footer class="footer-note">
+            Django Retail POS & Billing System &bull; Multi-Role Demonstration Mode &bull; Safe RFC 6265 Host Isolation
+        </footer>
+    </div>
+
+    <script>
+        function launchAllTabs() {
+            var ownerUrl = "{{ owner_url }}";
+            var managerUrl = "{{ manager_url }}";
+            var cashierUrl = "{{ cashier_url }}";
+
+            window.open(ownerUrl, 'tab_pos_owner');
+            setTimeout(function() {
+                window.open(managerUrl, 'tab_pos_manager');
+            }, 300);
+            setTimeout(function() {
+                window.open(cashierUrl, 'tab_pos_cashier');
+            }, 600);
+        }
+    </script>
+</body>
+</html>

@@ -104,11 +104,15 @@
                             {{ bill.created_at|date:"H:i" }}
                         </td>
                         <td>
-                            {{ bill.customer.name|default:"Walk-in Customer" }}
+                            {% if bill.customer and bill.customer.name %}
+                                <strong style="color: var(--text);">{{ bill.customer.name }}</strong>
+                            {% else %}
+                                <span style="color: var(--muted);">Counter Sale</span>
+                            {% endif %}
                         </td>
                         <td>
-                            <span class="badge badge-primary" style="font-size: 11px;">
-                                {{ bill.payment_method }}
+                            <span class="badge badge-primary" style="font-size: 11px; font-family: var(--font-mono); font-weight: 600;">
+                                {{ bill.payment_mode_display }}
                             </span>
                         </td>
                         <td style="text-align: right; font-family: var(--font-mono); font-weight: 700;">

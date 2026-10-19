@@ -198,16 +198,58 @@
         }
 
         @media print {
-            body { background: #ffffff !important; padding: 0 !important; color: #000000 !important; }
-            .toolbar, .no-print, .history-card { display: none !important; }
+            @page {
+                size: A4 portrait;
+                margin: 12mm 15mm;
+            }
+            body {
+                background: #ffffff !important;
+                padding: 0 !important;
+                margin: 0 !important;
+                color: #000000 !important;
+            }
+            .toolbar, .no-print {
+                display: none !important;
+            }
             .payslip-container {
                 box-shadow: none !important;
                 border: 1px solid #cbd5e1 !important;
-                margin: 0 !important;
+                margin: 0 0 20px 0 !important;
                 padding: 24px 30px !important;
                 max-width: 100% !important;
+                page-break-after: always;
+                break-after: page;
             }
-            * { -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important; }
+            .history-card {
+                display: block !important;
+                box-shadow: none !important;
+                border: 1px solid #cbd5e1 !important;
+                border-radius: 8px !important;
+                margin: 0 !important;
+                padding: 20px 24px !important;
+                max-width: 100% !important;
+                page-break-before: always;
+                break-before: page;
+            }
+            .history-card .no-print,
+            .history-action-col {
+                display: none !important;
+            }
+            .history-card table {
+                width: 100% !important;
+                page-break-inside: auto;
+            }
+            #emp-salary-ledger thead {
+                display: table-header-group !important;
+            }
+            #emp-salary-ledger tr {
+                page-break-inside: avoid !important;
+                break-inside: avoid !important;
+            }
+            * {
+                -webkit-print-color-adjust: exact !important;
+                print-color-adjust: exact !important;
+            }
         }
     </style>
 </head>
@@ -383,7 +425,7 @@
     </div>
 
     <!-- ── EMPLOYEE-SPECIFIC MONTH-BY-MONTH SALARY HISTORY (April 2025 – Present) ── -->
-    <div class="history-card no-print" style="max-width: 800px; margin: 30px auto 40px auto; background: #ffffff; border: 1px solid #cbd5e1; border-radius: 12px; padding: 24px 28px; box-shadow: 0 4px 16px rgba(0,0,0,0.06);">
+    <div class="history-card" style="max-width: 800px; margin: 30px auto 40px auto; background: #ffffff; border: 1px solid #cbd5e1; border-radius: 12px; padding: 24px 28px; box-shadow: 0 4px 16px rgba(0,0,0,0.06);">
         <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px; padding-bottom: 12px; border-bottom: 1px solid #e2e8f0;">
             <div>
                 <h3 style="font-size: 16px; font-weight: 700; color: #0f172a; margin: 0; display: flex; align-items: center; gap: 8px;">
@@ -409,7 +451,7 @@
                         <th style="padding: 10px 12px; text-align: center;">Status</th>
                         <th style="padding: 10px 12px;">Paid Date</th>
                         <th style="padding: 10px 12px;">Reference</th>
-                        <th style="padding: 10px 12px; text-align: right;">Action</th>
+                        <th class="history-action-col no-print" style="padding: 10px 12px; text-align: right;">Action</th>
                     </tr>
                 </thead>
                 <tbody>
@@ -447,7 +489,7 @@
                         <td style="padding: 10px 12px; color: #64748b; font-family: 'JetBrains Mono', monospace; font-size: 11px;">
                             {{ item.reference|default:"—" }}
                         </td>
-                        <td style="padding: 10px 12px; text-align: right;">
+                        <td class="history-action-col no-print" style="padding: 10px 12px; text-align: right;">
                             {% if item.is_active_row %}
                             <a href="?year={{ item.year }}&month={{ item.month }}" style="font-size: 11px; color: #2563eb; text-decoration: none; font-weight: 600;">
                                 View Voucher →

@@ -47,8 +47,11 @@
                 </div>
                 <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 14px;">
                     <div>
-                        <label style="display: block; font-size: 12px; font-weight: 600; color: var(--text); margin-bottom: 6px;">Product Code / SKU *</label>
-                        <input type="text" id="id_product_code" name="product_code" value="{{ form.product_code.value|default:'' }}" required placeholder="e.g. AML-GHEE-1L" style="width: 100%; padding: 10px 12px; background: var(--surface-2); border: 1px solid var(--border); border-radius: var(--radius-sm); color: var(--text); font-size: 14px; outline: none;">
+                        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px;">
+                            <label style="font-size: 12px; font-weight: 600; color: var(--text); margin: 0;">Product Code / SKU</label>
+                            <span style="font-size: 11px; color: var(--muted);"><i class="bi bi-magic"></i> Auto-generated if left blank</span>
+                        </div>
+                        <input type="text" id="id_product_code" name="product_code" value="{{ form.product_code.value|default:'' }}" placeholder="e.g. AML-GHEE-1L (Auto-generated if empty)" style="width: 100%; padding: 10px 12px; background: var(--surface-2); border: 1px solid var(--border); border-radius: var(--radius-sm); color: var(--text); font-size: 14px; outline: none;">
                     </div>
                     <div>
                         <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px;">
@@ -163,6 +166,7 @@
         </form>
     </div>
 </div>
+
 
 <!-- Print Barcode Label Modal -->
 <div id="print-label-modal" style="display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.7); z-index: 9999; align-items: center; justify-content: center; padding: 16px;">
@@ -287,18 +291,79 @@ document.addEventListener('DOMContentLoaded', () => {
         debounceTimer = setTimeout(() => checkBarcodeAvailability(code), 250);
     });
 
-    // Scan Barcode action (focuses & primes HID scanner listener)
-    scanBtn.addEventListener('click', () => {
-        barcodeInput.focus();
-        barcodeInput.select();
-        barcodeInput.style.borderColor = '#60a5fa';
-        barcodeInput.style.boxShadow = '0 0 0 3px rgba(59, 130, 246, 0.25)';
-        scanHint.style.display = 'inline-block';
+    // Inline Product Form Phone Scanner & HID Integration
+    let prodScannerToken = null;
+    let prodScannerPollTimer = null;
+
+    function initProductFormScanner() {
+        // Register active companion session destination as PRODUCT_FORM
+        fetch('/api/pos/scanner-session/active/?destination=PRODUCT_FORM')
+            .then(r => r.json())
+            .then(data => {
+                if (data && data.session_token) {
+                    prodScannerToken = data.session_token;
+                    if (prodScannerPollTimer) clearInterval(prodScannerPollTimer);
+                    prodScannerPollTimer = setInterval(pollProductScanner, 800);
+                }
+            })
+            .catch(() => {});
+    }
+
+    function pollProductScanner() {
+        if (!prodScannerToken) return;
+        fetch(`/api/pos/scanner-session/${encodeURIComponent(prodScannerToken)}/poll/?destination=PRODUCT_FORM`)
+            .then(r => r.json())
+            .then(data => {
+                if (data && data.scans && data.scans.length > 0) {
+                    const scannedCode = data.scans[data.scans.length - 1];
+                    applyScannedBarcode(scannedCode);
+                }
+            })
+            .catch(() => {});
+    }
+
+    function applyScannedBarcode(code) {
+        if (!code) return;
+        barcodeInput.value = code;
+        barcodeInput.dispatchEvent(new Event('input', { bubbles: true }));
+        barcodeInput.dispatchEvent(new Event('change', { bubbles: true }));
+        checkBarcodeAvailability(code);
+
+        // Visual feedback on form
+        if (scanHint) {
+            scanHint.style.display = 'inline-block';
+            scanHint.style.color = '#10b981';
+            scanHint.innerHTML = `<i class="bi bi-check-circle-fill"></i> Captured: <strong>${code}</strong>`;
+        }
+
+        barcodeInput.style.borderColor = '#10b981';
+        barcodeInput.style.boxShadow = '0 0 0 3px rgba(16, 185, 129, 0.25)';
         setTimeout(() => {
             barcodeInput.style.boxShadow = 'none';
-            scanHint.style.display = 'none';
-        }, 5000);
-    });
+        }, 2500);
+    }
+
+    // Auto-listen on page load
+    initProductFormScanner();
+
+    // Scan Barcode button action
+    if (scanBtn) {
+        scanBtn.addEventListener('click', () => {
+            barcodeInput.focus();
+            barcodeInput.select();
+            barcodeInput.style.borderColor = '#38bdf8';
+            barcodeInput.style.boxShadow = '0 0 0 3px rgba(56, 189, 248, 0.25)';
+            if (scanHint) {
+                scanHint.style.display = 'inline-block';
+                scanHint.style.color = '#38bdf8';
+                scanHint.innerHTML = `<span class="pulse-dot" style="display:inline-block; width:6px; height:6px; border-radius:50%; background:#38bdf8; margin-right:4px;"></span> Ready to scan (Phone Companion or Barcode Reader)`;
+            }
+            initProductFormScanner();
+            setTimeout(() => {
+                barcodeInput.style.boxShadow = 'none';
+            }, 5000);
+        });
+    }
 
     // Global keystroke listener for HID scanner burst
     let hidBuffer = '';
@@ -308,9 +373,8 @@ document.addEventListener('DOMContentLoaded', () => {
         if (e.key === 'Enter') {
             if (hidBuffer.length >= 3 && now - lastKeyTime < 80) {
                 e.preventDefault();
-                barcodeInput.value = hidBuffer.trim();
+                applyScannedBarcode(hidBuffer.trim());
                 hidBuffer = '';
-                checkBarcodeAvailability(barcodeInput.value);
             }
             hidBuffer = '';
             return;

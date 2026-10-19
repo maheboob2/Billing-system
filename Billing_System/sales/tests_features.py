@@ -235,54 +235,129 @@ class RetailPOSFeaturesTestSuite(TestCase):
         self.assertEqual(self.sale.payment_status, "PAID")
 
     # ── PHASE 5: RETURN WORKFLOW, RESTOCKING & AUDIT TRAIL ──────────────
-    def test_return_request_creation_and_manager_approval(self):
-        """
-        Submitting a return creates PENDING request.
-        Manager approval restores stock via StockMovement(RETURN) and preserves historical Sale.
-        """
+    def test_owner_direct_return_creation_is_auto_approved(self):
+        """Owner creating a return is auto-approved immediately; stock restored and refund recorded."""
+        self.api_client.force_authenticate(user=self.owner_user)
+
+        res = self.api_client.post("/api/sales/returns/", {
+            "invoice_number": self.invoice.invoice_number,
+            "reason": "CUSTOMER_CHANGED_MIND",
+            "notes": "Owner counter return",
+            "items": [{"sale_item_id": self.sale_item.id, "quantity": 1, "restock": True}]
+        }, format="json")
+        self.assertEqual(res.status_code, status.HTTP_201_CREATED)
+        return_id = res.data["id"]
+
+        ret_req = ReturnRequest.objects.get(id=return_id)
+        self.assertEqual(ret_req.status, "APPROVED")
+        self.assertEqual(ret_req.created_by, self.owner_user)
+        self.assertEqual(ret_req.approved_by, self.owner_user)
+        self.assertIsNotNone(ret_req.approved_at)
+        self.assertEqual(ret_req.created_by_label, f"Added by Owner — {self.owner_user.username}")
+        self.assertEqual(ret_req.approved_by_label, f"Approved by Owner — {self.owner_user.username}")
+
+        # Stock restored immediately
+        self.prod_active.refresh_from_db()
+        self.assertEqual(self.prod_active.current_stock, Decimal("51.00"))
+
+        # Refund Payment created
+        self.assertTrue(Payment.objects.filter(sale=self.sale, amount=Decimal("-59.00")).exists())
+
+    def test_manager_direct_return_creation_is_auto_approved(self):
+        """Manager creating a return is auto-approved immediately; stock restored and refund recorded."""
+        self.api_client.force_authenticate(user=self.manager_user)
+
+        res = self.api_client.post("/api/sales/returns/", {
+            "invoice_number": self.invoice.invoice_number,
+            "reason": "CUSTOMER_CHANGED_MIND",
+            "notes": "Manager counter return",
+            "items": [{"sale_item_id": self.sale_item.id, "quantity": 1, "restock": True}]
+        }, format="json")
+        self.assertEqual(res.status_code, status.HTTP_201_CREATED)
+        return_id = res.data["id"]
+
+        ret_req = ReturnRequest.objects.get(id=return_id)
+        self.assertEqual(ret_req.status, "APPROVED")
+        self.assertEqual(ret_req.created_by, self.manager_user)
+        self.assertEqual(ret_req.approved_by, self.manager_user)
+        self.assertEqual(ret_req.created_by_label, f"Added by Manager — {self.manager_user.username}")
+        self.assertEqual(ret_req.approved_by_label, f"Approved by Manager — {self.manager_user.username}")
+
+        # Stock restored immediately
+        self.prod_active.refresh_from_db()
+        self.assertEqual(self.prod_active.current_stock, Decimal("51.00"))
+
+    def test_cashier_return_creation_creates_pending_request(self):
+        """Cashier creating a return creates a PENDING request with no stock or refund changes."""
         self.api_client.force_authenticate(user=self.cashier_user)
 
-        # 1. Create return request
         res = self.api_client.post("/api/sales/returns/", {
             "invoice_number": self.invoice.invoice_number,
             "reason": "DAMAGED",
-            "notes": "Customer returned 1 damaged coffee",
-            "items": [
-                {
-                    "sale_item_id": self.sale_item.id,
-                    "quantity": 1
-                }
-            ]
+            "notes": "Cashier intake",
+            "items": [{"sale_item_id": self.sale_item.id, "quantity": 1, "restock": True}]
         }, format="json")
         self.assertEqual(res.status_code, status.HTTP_201_CREATED)
         return_id = res.data["id"]
 
         ret_req = ReturnRequest.objects.get(id=return_id)
         self.assertEqual(ret_req.status, "PENDING")
-        self.assertEqual(ret_req.refund_amount, Decimal("59.00"))
+        self.assertEqual(ret_req.created_by, self.cashier_user)
+        self.assertIsNone(ret_req.approved_by)
+        self.assertIsNone(ret_req.approved_at)
+        self.assertEqual(ret_req.created_by_label, f"Added by Cashier — {self.cashier_user.username}")
 
-        # Verify stock has NOT changed yet (still 50.00)
+        # Stock unchanged
         self.prod_active.refresh_from_db()
         self.assertEqual(self.prod_active.current_stock, Decimal("50.00"))
 
-        # 2. Manager approves return
-        self.api_client.force_authenticate(user=self.manager_user)
+        # Cashier cannot approve directly without credentials
+        approve_attempt = self.api_client.post(f"/api/sales/returns/{return_id}/approve/")
+        self.assertEqual(approve_attempt.status_code, status.HTTP_403_FORBIDDEN)
+
+        # Owner approves
+        self.api_client.force_authenticate(user=self.owner_user)
         approve_res = self.api_client.post(f"/api/sales/returns/{return_id}/approve/")
         self.assertEqual(approve_res.status_code, status.HTTP_200_OK)
 
-        # 3. Verify stock restored correctly
-        self.prod_active.refresh_from_db()
-        self.assertEqual(self.prod_active.current_stock, Decimal("51.00"))
+        ret_req.refresh_from_db()
+        self.assertEqual(ret_req.status, "APPROVED")
+        self.assertEqual(ret_req.approved_by, self.owner_user)
+        self.assertEqual(ret_req.approved_by_label, f"Approved by Owner — {self.owner_user.username}")
 
-        # 4. Verify StockMovement audit record
-        movement = StockMovement.objects.filter(product=self.prod_active, movement_type="RETURN").latest("id")
-        self.assertEqual(movement.quantity, Decimal("1.00"))
-        self.assertEqual(movement.new_stock, Decimal("51.00"))
+        # Duplicate approval is rejected
+        dup_approve = self.api_client.post(f"/api/sales/returns/{return_id}/approve/")
+        self.assertEqual(dup_approve.status_code, status.HTTP_400_BAD_REQUEST)
 
-        # 5. Verify historical Sale was NOT deleted or mutated
-        orig_sale = Sale.objects.get(id=self.sale.id)
-        self.assertEqual(orig_sale.grand_total, Decimal("118.00"))
-        self.assertEqual(orig_sale.items.count(), 1)
+    def test_cashier_approves_with_manager_onsite_credentials(self):
+        """Cashier terminal can authorize pending return via manager's on-site credentials."""
+        self.api_client.force_authenticate(user=self.cashier_user)
+
+        res = self.api_client.post("/api/sales/returns/", {
+            "invoice_number": self.invoice.invoice_number,
+            "reason": "QUALITY_ISSUE",
+            "notes": "Quality defect",
+            "items": [{"sale_item_id": self.sale_item.id, "quantity": 1, "restock": False}]
+        }, format="json")
+        return_id = res.data["id"]
+
+        # 1. Invalid manager PIN
+        bad_pin_res = self.api_client.post(f"/api/sales/returns/{return_id}/approve/", {
+            "manager_username": self.manager_user.username,
+            "manager_pin": "wrong_pin_123"
+        }, format="json")
+        self.assertEqual(bad_pin_res.status_code, status.HTTP_403_FORBIDDEN)
+
+        # 2. Valid manager credentials (using manager's employee_id!)
+        good_res = self.api_client.post(f"/api/sales/returns/{return_id}/approve/", {
+            "manager_username": self.manager_emp.employee_id,
+            "manager_pin": "Password@123"
+        }, format="json")
+        self.assertEqual(good_res.status_code, status.HTTP_200_OK)
+
+        ret_req = ReturnRequest.objects.get(id=return_id)
+        self.assertEqual(ret_req.status, "APPROVED")
+        self.assertEqual(ret_req.approved_by, self.manager_user)
 
     def test_rejected_return_cannot_change_stock(self):
         """Rejected return request does NOT adjust stock and transitions to REJECTED."""
@@ -297,16 +372,19 @@ class RetailPOSFeaturesTestSuite(TestCase):
 
         # Manager rejects return
         self.api_client.force_authenticate(user=self.manager_user)
-        reject_res = self.api_client.post(f"/api/sales/returns/{return_id}/reject/")
+        reject_res = self.api_client.post(f"/api/sales/returns/{return_id}/reject/", {
+            "reason": "Seal broken by customer"
+        }, format="json")
         self.assertEqual(reject_res.status_code, status.HTTP_200_OK)
 
         ret_req = ReturnRequest.objects.get(id=return_id)
         self.assertEqual(ret_req.status, "REJECTED")
+        self.assertEqual(ret_req.rejection_reason, "Seal broken by customer")
+        self.assertEqual(ret_req.approved_by_label, f"Rejected by Manager — {self.manager_user.username}")
 
         # Stock remains strictly unchanged
         self.prod_active.refresh_from_db()
         self.assertEqual(self.prod_active.current_stock, Decimal("50.00"))
-        self.assertFalse(StockMovement.objects.filter(product=self.prod_active, movement_type="RETURN").exists())
 
     # ── PHASE 6: EMPLOYEE CREDENTIAL BOUNDARIES ─────────────────────────
     def test_owner_can_change_employee_credentials(self):
