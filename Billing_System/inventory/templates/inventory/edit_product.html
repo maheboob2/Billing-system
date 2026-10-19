@@ -164,51 +164,7 @@
     </div>
 </div>
 
-<!-- Phone Scanner Modal for Product Form -->
-<div id="product-scanner-modal" style="display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.75); z-index: 9999; align-items: center; justify-content: center; padding: 16px;">
-    <div style="background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius-md); max-width: 440px; width: 100%; padding: 24px; box-shadow: 0 16px 36px rgba(0,0,0,0.5);">
-        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 14px;">
-            <div style="display: flex; align-items: center; gap: 8px;">
-                <div style="width: 32px; height: 32px; border-radius: 8px; background: rgba(59, 130, 246, 0.15); display: flex; align-items: center; justify-content: center; color: #60a5fa;">
-                    <i class="bi bi-upc-scan" style="font-size: 16px;"></i>
-                </div>
-                <div>
-                    <h3 style="font-size: 16px; font-weight: 700; color: var(--text); margin: 0;">Scan Product Barcode</h3>
-                    <div style="font-size: 11px; color: var(--muted);">Destination: <strong style="color: #60a5fa;">Product Form</strong></div>
-                </div>
-            </div>
-            <button type="button" id="btn-close-prod-scanner" style="background: none; border: none; font-size: 22px; color: var(--muted); cursor: pointer; line-height: 1;">&times;</button>
-        </div>
 
-        <!-- Status badge -->
-        <div id="prod-scanner-status-badge" style="padding: 6px 12px; border-radius: 20px; font-size: 11px; font-weight: 700; text-align: center; margin-bottom: 14px; background: rgba(245, 158, 11, 0.15); color: #fbbf24; border: 1px solid rgba(245, 158, 11, 0.3);">
-            <span class="pulse-dot" style="width: 6px; height: 6px; border-radius: 50%; background: #f59e0b; display: inline-block; margin-right: 4px;"></span> WAITING FOR PHONE SCAN
-        </div>
-
-        <!-- QR Code Container -->
-        <div style="text-align: center; margin-bottom: 14px;">
-            <div style="display: inline-block; padding: 12px; background: #ffffff; border-radius: 12px; box-shadow: 0 4px 14px rgba(0,0,0,0.25);">
-                <img id="prod-scanner-qr-img" src="" alt="Pairing QR Code" style="width: 160px; height: 160px; display: block;">
-            </div>
-        </div>
-
-        <div style="text-align: center; margin-bottom: 12px;">
-            <div style="font-size: 11px; color: var(--muted); margin-bottom: 4px;">Pairing Code</div>
-            <div id="prod-scanner-pairing-code" style="font-size: 20px; font-weight: 800; letter-spacing: 3px; font-family: monospace; color: var(--text);">--- ---</div>
-            <div id="prod-scanner-url-display" style="font-size: 11px; color: var(--muted); margin-top: 4px; word-break: break-all; font-family: monospace;"></div>
-        </div>
-
-        <div id="prod-scanner-banner" style="display: none; padding: 8px 12px; border-radius: 6px; font-size: 12px; font-weight: 600; text-align: center; margin-bottom: 12px;"></div>
-
-        <div style="background: var(--surface-2); border: 1px solid var(--border); border-radius: 6px; padding: 10px 12px; font-size: 12px; color: var(--muted); margin-bottom: 16px;">
-            <i class="bi bi-phone"></i> <strong>How to scan:</strong> Open the Android Brisk Scanner app or scan this QR with phone camera. Barcode will automatically fill into this active product form.
-        </div>
-
-        <div style="display: flex; justify-content: flex-end; gap: 8px;">
-            <button type="button" id="btn-cancel-prod-scanner" class="btn btn-secondary" style="font-size: 12px; padding: 6px 14px;">Close</button>
-        </div>
-    </div>
-</div>
 
 <!-- Print Barcode Label Modal -->
 <div id="print-label-modal" style="display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.7); z-index: 9999; align-items: center; justify-content: center; padding: 16px;">
@@ -333,82 +289,66 @@ document.addEventListener('DOMContentLoaded', () => {
         debounceTimer = setTimeout(() => checkBarcodeAvailability(code), 250);
     });
 
-    // Product Form Phone Scanner Elements
-    const prodScannerModal = document.getElementById('product-scanner-modal');
-    const prodScannerQrImg = document.getElementById('prod-scanner-qr-img');
-    const prodScannerCode = document.getElementById('prod-scanner-pairing-code');
-    const prodScannerUrlDisplay = document.getElementById('prod-scanner-url-display');
-    const prodScannerBadge = document.getElementById('prod-scanner-status-badge');
-    const prodScannerBanner = document.getElementById('prod-scanner-banner');
+    // Inline Phone Companion Scanner Controller (Direct, no intrusive modal or broken external QR)
     let prodScannerToken = null;
     let prodScannerPollTimer = null;
+    let isConnectingScanner = false;
 
-    function openProductScannerModal() {
-        prodScannerModal.style.display = 'flex';
-        prodScannerBadge.style.background = 'rgba(245, 158, 11, 0.15)';
-        prodScannerBadge.style.color = '#fbbf24';
-        prodScannerBadge.style.border = '1px solid rgba(245, 158, 11, 0.3)';
-        prodScannerBadge.innerHTML = `<span class="pulse-dot" style="width: 6px; height: 6px; border-radius: 50%; background: #f59e0b; display: inline-block; margin-right: 4px;"></span> WAITING FOR PHONE SCAN`;
-        prodScannerBanner.style.display = 'none';
+    function initInlineProductScanner() {
+        if (isConnectingScanner) return;
+        isConnectingScanner = true;
 
-        barcodeInput.focus();
+        if (scanHint) {
+            scanHint.style.display = 'inline-flex';
+            scanHint.style.alignItems = 'center';
+            scanHint.style.gap = '4px';
+            scanHint.style.color = '#38bdf8';
+            scanHint.innerHTML = `<span class="pulse-dot" style="display:inline-block; width:6px; height:6px; border-radius:50%; background:#38bdf8;"></span> Connecting scanner...`;
+        }
 
-        // Fetch active session configured for PRODUCT_FORM
+        // Fetch active companion scanner session registered for PRODUCT_FORM
         fetch('/api/pos/scanner-session/active/?destination=PRODUCT_FORM')
             .then(r => r.json())
             .then(data => {
+                isConnectingScanner = false;
                 if (data && data.session_token) {
                     prodScannerToken = data.session_token;
-                    const fullUrl = data.lan_connect_url || (window.location.origin + data.connect_url);
-                    if (prodScannerQrImg) {
-                        prodScannerQrImg.src = `https://api.qrserver.com/v1/create-qr-code/?size=160x160&data=${encodeURIComponent(fullUrl)}`;
+                    if (scanHint) {
+                        scanHint.style.color = '#10b981';
+                        scanHint.innerHTML = `<span class="pulse-dot" style="display:inline-block; width:6px; height:6px; border-radius:50%; background:#10b981;"></span> Phone scanner ready`;
                     }
-                    if (prodScannerCode) {
-                        prodScannerCode.textContent = data.pairing_code || '---';
-                    }
-                    if (prodScannerUrlDisplay) {
-                        prodScannerUrlDisplay.textContent = fullUrl;
-                    }
-
-                    if (data.connected) {
-                        prodScannerBadge.style.background = 'rgba(16, 185, 129, 0.15)';
-                        prodScannerBadge.style.color = '#34d399';
-                        prodScannerBadge.style.border = '1px solid rgba(16, 185, 129, 0.3)';
-                        prodScannerBadge.innerHTML = `<span class="pulse-dot" style="width: 6px; height: 6px; border-radius: 50%; background: #10b981; display: inline-block; margin-right: 4px;"></span> PHONE CONNECTED &bull; READY TO SCAN`;
-                    }
-
                     if (prodScannerPollTimer) clearInterval(prodScannerPollTimer);
-                    prodScannerPollTimer = setInterval(pollProductScanner, 800);
+                    prodScannerPollTimer = setInterval(pollInlineProductScanner, 800);
+                } else {
+                    if (scanHint) {
+                        scanHint.style.color = '#94a3b8';
+                        scanHint.innerHTML = `<i class="bi bi-info-circle"></i> Ready for manual entry or USB/HID scanner`;
+                    }
                 }
             })
-            .catch(err => {
-                console.error('Failed to init product scanner session:', err);
-                prodScannerBadge.textContent = '! Connection error initializing scanner';
+            .catch(() => {
+                isConnectingScanner = false;
+                if (scanHint) {
+                    scanHint.style.color = '#94a3b8';
+                    scanHint.innerHTML = `<i class="bi bi-info-circle"></i> Ready for barcode input`;
+                }
             });
     }
 
-    function pollProductScanner() {
+    function pollInlineProductScanner() {
         if (!prodScannerToken) return;
         fetch(`/api/pos/scanner-session/${encodeURIComponent(prodScannerToken)}/poll/?destination=PRODUCT_FORM`)
             .then(r => r.json())
             .then(data => {
                 if (!data.active) {
-                    prodScannerBadge.style.background = 'rgba(239, 68, 68, 0.15)';
-                    prodScannerBadge.style.color = '#f87171';
-                    prodScannerBadge.textContent = '✕ Scanner session expired';
+                    if (prodScannerPollTimer) clearInterval(prodScannerPollTimer);
+                    prodScannerPollTimer = null;
                     return;
                 }
 
-                if (data.connected && prodScannerBadge) {
-                    prodScannerBadge.style.background = 'rgba(16, 185, 129, 0.15)';
-                    prodScannerBadge.style.color = '#34d399';
-                    prodScannerBadge.style.border = '1px solid rgba(16, 185, 129, 0.3)';
-                    prodScannerBadge.innerHTML = `<span class="pulse-dot" style="width: 6px; height: 6px; border-radius: 50%; background: #10b981; display: inline-block; margin-right: 4px;"></span> PHONE CONNECTED &bull; READY TO SCAN`;
-                }
-
                 if (data.scans && data.scans.length > 0) {
-                    const scannedCode = data.scans[data.scans.length - 1];
-                    applyScannedBarcode(scannedCode);
+                    const latestScan = data.scans[data.scans.length - 1];
+                    applyScannedBarcode(latestScan);
                 }
             })
             .catch(() => {});
@@ -421,52 +361,31 @@ document.addEventListener('DOMContentLoaded', () => {
         barcodeInput.dispatchEvent(new Event('change', { bubbles: true }));
         checkBarcodeAvailability(code);
 
-        // Visual success state in modal
-        if (prodScannerBanner) {
-            prodScannerBanner.style.display = 'block';
-            prodScannerBanner.style.background = 'rgba(16, 185, 129, 0.2)';
-            prodScannerBanner.style.color = '#34d399';
-            prodScannerBanner.style.border = '1px solid rgba(16, 185, 129, 0.4)';
-            prodScannerBanner.innerHTML = `<i class="bi bi-check-circle-fill"></i> Barcode <strong>${code}</strong> captured successfully!`;
-        }
-        if (prodScannerBadge) {
-            prodScannerBadge.style.background = 'rgba(16, 185, 129, 0.25)';
-            prodScannerBadge.style.color = '#10b981';
-            prodScannerBadge.textContent = `✓ BARCODE RECEIVED: ${code}`;
-        }
-
-        // Also display on main form
         if (scanHint) {
-            scanHint.style.display = 'inline-block';
+            scanHint.style.display = 'inline-flex';
+            scanHint.style.alignItems = 'center';
+            scanHint.style.gap = '4px';
             scanHint.style.color = '#10b981';
             scanHint.innerHTML = `<i class="bi bi-check-circle-fill"></i> Captured: <strong>${code}</strong>`;
         }
-
-        // Auto-close modal after 1.2s so user can immediately save product
+        barcodeInput.style.borderColor = '#10b981';
+        barcodeInput.style.boxShadow = '0 0 0 3px rgba(16, 185, 129, 0.25)';
         setTimeout(() => {
-            closeProductScannerModal();
-        }, 1200);
+            barcodeInput.style.boxShadow = 'none';
+        }, 1500);
     }
-
-    function closeProductScannerModal() {
-        prodScannerModal.style.display = 'none';
-        if (prodScannerPollTimer) {
-            clearInterval(prodScannerPollTimer);
-            prodScannerPollTimer = null;
-        }
-    }
-
-    document.getElementById('btn-close-prod-scanner').addEventListener('click', closeProductScannerModal);
-    document.getElementById('btn-cancel-prod-scanner').addEventListener('click', closeProductScannerModal);
 
     scanBtn.addEventListener('click', () => {
         barcodeInput.focus();
         barcodeInput.select();
         barcodeInput.style.borderColor = '#60a5fa';
         barcodeInput.style.boxShadow = '0 0 0 3px rgba(59, 130, 246, 0.25)';
-        scanHint.style.display = 'inline-block';
-        openProductScannerModal();
+        setTimeout(() => { barcodeInput.style.boxShadow = 'none'; }, 1000);
+        initInlineProductScanner();
     });
+
+    // Auto-listen if companion scanner session is already running
+    initInlineProductScanner();
 
     let hidBuffer = '';
     let lastKeyTime = 0;

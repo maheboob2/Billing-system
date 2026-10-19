@@ -68,6 +68,13 @@ class StockService:
                 reason=reason,
             )
 
+            # Transactionally enqueue stock movement for offline/cloud sync
+            try:
+                from dashboard.sync_service import SyncService
+                SyncService.queue_stock_movement(movement)
+            except Exception:
+                pass
+
         return locked_product, movement
 
 

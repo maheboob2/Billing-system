@@ -1,0 +1,76 @@
+
+{% extends "Dashboard/main_nav.html" %}
+
+{% block content %}
+<h2>Sale Details</h2>
+
+<p><strong>Invoice:</strong> {{ sale.invoice_number }}</p>
+<p><strong>Date:</strong> {{ sale.sale_date }}</p>
+<p><strong>Status:</strong> {{ sale.status }}</p>
+
+{% if sale.customer %}
+    <p><strong>Customer:</strong> {{ sale.customer }}</p>
+{% else %}
+    <p><strong>Customer:</strong> Walk-in</p>
+{% endif %}
+
+<h3>Products</h3>
+
+<table border="1" cellpadding="8" cellspacing="0">
+    <thead>
+        <tr>
+            <th>Product</th>
+            <th>Quantity</th>
+            <th>Price</th>
+            <th>GST %</th>
+            <th>Total</th>
+        </tr>
+    </thead>
+    <tbody>
+        {% for item in sale.items.all %}
+        <tr>
+            <td>{{ item.product }}</td>
+            <td>{{ item.quantity }}</td>
+            <td>{{ item.selling_price }}</td>
+            <td>{{ item.gst_percentage }}</td>
+            <td>{{ item.total }}</td>
+        </tr>
+        {% empty %}
+        <tr>
+            <td colspan="5">No products added.</td>
+        </tr>
+        {% endfor %}
+    </tbody>
+</table>
+
+
+<h3>Invoice Summary</h3>
+
+<p>Subtotal: {{ sale.subtotal }}</p>
+<p>GST: {{ sale.gst_amount }}</p>
+<p><strong>Grand Total: {{ sale.total_amount }}</strong></p>
+
+{% if sale.status == "DRAFT" %}
+    <form method="POST"
+          action="{% url 'sales:complete_sale' sale.pk %}">
+        {% csrf_token %}
+        <button type="submit"
+                onclick="return confirm('Are you sure you want to complete this bill? Stock will be deducted.')">
+            Complete Sale
+        </button>
+    </form>
+{% elif sale.status == "COMPLETED" %}
+    <p><strong>Sale completed.</strong></p>
+{% endif %}
+
+<br>
+
+{% if sale.status == "COMPLETED" %}
+    <a href="{% url 'sales:download_invoice_pdf' sale.pk %}">
+        Download Invoice PDF
+    </a>
+{% endif %}
+
+<a href="{% url 'sales:add_sale' %}">Create Another Sale</a>
+
+{% endblock %}

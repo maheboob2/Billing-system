@@ -72,7 +72,6 @@ CSRF_TRUSTED_ORIGINS = [
     "http://127.0.0.2:8000",
     "http://127.0.0.3:8000",
 ]
-
 # POS Scanner Base URL (e.g. http://192.168.1.10:8000 or https://pos.store.local)
 # If blank, LAN IPv4 address is dynamically discovered for the phone QR code
 POS_SCANNER_BASE_URL = os.getenv("POS_SCANNER_BASE_URL", "").strip()
@@ -160,6 +159,21 @@ MIDDLEWARE = [
     'django.middleware.clickjacking.XFrameOptionsMiddleware',
 ]
 
+# Dynamically enable WhiteNoise static asset serving if installed
+try:
+    import whitenoise  # noqa: F401
+    if 'whitenoise.middleware.WhiteNoiseMiddleware' not in MIDDLEWARE:
+        MIDDLEWARE.insert(1, 'whitenoise.middleware.WhiteNoiseMiddleware')
+except ImportError:
+    pass
+
+# Production HTTPS and reverse-proxy header settings (e.g., Render, Nginx)
+if not DEBUG:
+    SECURE_PROXY_SSL_HEADER = ('HTTP_X_FORWARDED_PROTO', 'https')
+    SESSION_COOKIE_SECURE = os.getenv("SESSION_COOKIE_SECURE", "True").lower() in ("true", "1", "yes")
+    CSRF_COOKIE_SECURE = os.getenv("CSRF_COOKIE_SECURE", "True").lower() in ("true", "1", "yes")
+
+
 ROOT_URLCONF = 'config.urls'
 
 TEMPLATES = [
@@ -184,15 +198,50 @@ WSGI_APPLICATION = 'config.wsgi.application'
 # Database
 # https://docs.djangoproject.com/en/6.0/ref/settings/#databases
 
-DATABASES = {
-    'default': {
-        'ENGINE': 'django.db.backends.sqlite3',
-        'NAME': BASE_DIR / 'db.sqlite3',
-        'OPTIONS': {
-            'timeout': 30,
-        },
+# Database Configuration
+# Supports Hosted PostgreSQL via DATABASE_URL or environment variables,
+# with clean fallback to SQLite for local development.
+DATABASE_URL = os.getenv('DATABASE_URL')
+if DATABASE_URL:
+    try:
+        import dj_database_url
+        DATABASES = {
+            'default': dj_database_url.parse(DATABASE_URL, conn_max_age=600)
+        }
+    except ImportError:
+        import urllib.parse
+        parsed = urllib.parse.urlparse(DATABASE_URL)
+        DATABASES = {
+            'default': {
+                'ENGINE': 'django.db.backends.postgresql',
+                'NAME': parsed.path.lstrip('/'),
+                'USER': parsed.username or '',
+                'PASSWORD': parsed.password or '',
+                'HOST': parsed.hostname or 'localhost',
+                'PORT': parsed.port or 5432,
+            }
+        }
+elif os.getenv('DB_ENGINE') == 'django.db.backends.postgresql':
+    DATABASES = {
+        'default': {
+            'ENGINE': 'django.db.backends.postgresql',
+            'NAME': os.getenv('DB_NAME', 'pos_demo_db'),
+            'USER': os.getenv('DB_USER', 'postgres'),
+            'PASSWORD': os.getenv('DB_PASSWORD', ''),
+            'HOST': os.getenv('DB_HOST', 'localhost'),
+            'PORT': os.getenv('DB_PORT', '5432'),
+        }
     }
-}
+else:
+    DATABASES = {
+        'default': {
+            'ENGINE': 'django.db.backends.sqlite3',
+            'NAME': BASE_DIR / 'db.sqlite3',
+            'OPTIONS': {
+                'timeout': 30,
+            },
+        }
+    }
 
 
 # Password validation
@@ -269,4 +318,12 @@ REST_FRAMEWORK = {
         'payment': '30/minute',
     },
 }
+
+# ─────────────────────────────────────────────────────────────
+# OFFLINE-FIRST CLOUD SYNC CONFIGURATION
+# ─────────────────────────────────────────────────────────────
+CLOUD_SYNC_REMOTE_URL = os.environ.get("CLOUD_SYNC_REMOTE_URL", "").strip()
+CLOUD_SYNC_API_KEY = os.environ.get("CLOUD_SYNC_API_KEY", "pos-cloud-sync-secret-dev-key").strip()
+CLOUD_SYNC_ROLE = os.environ.get("CLOUD_SYNC_ROLE", "LOCAL_EDGE").strip()  # LOCAL_EDGE or CLOUD_WORKER
+
 

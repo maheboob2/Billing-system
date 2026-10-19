@@ -228,6 +228,12 @@
                 if (input) {
                     input.focus();
                     input.select();
+                    setTimeout(() => {
+                        try {
+                            input.focus();
+                            input.select();
+                        } catch (_) {}
+                    }, 40);
                 }
                 this.loadOverlayProducts(input ? input.value.trim() : '');
             }
@@ -243,8 +249,34 @@
         },
 
         initProductSearchOverlay() {
+            const overlay = document.getElementById('pos-search-overlay');
             const input = document.getElementById('pos-search-overlay-input');
             const submitBtn = document.getElementById('btn-pos-search-submit');
+            const triggerBtn = document.getElementById('btn-open-f2-search');
+            const topbarTrigger = document.getElementById('pos-topbar-f2-btn');
+
+            if (overlay) {
+                overlay.addEventListener('click', (e) => {
+                    if (e.target === overlay) {
+                        this.closeProductSearchOverlay();
+                    }
+                });
+            }
+
+            if (triggerBtn) {
+                triggerBtn.addEventListener('click', (e) => {
+                    e.preventDefault();
+                    this.openProductSearchOverlay();
+                });
+            }
+
+            if (topbarTrigger) {
+                topbarTrigger.addEventListener('click', (e) => {
+                    e.preventDefault();
+                    this.openProductSearchOverlay();
+                });
+            }
+
             if (input) {
                 let debounceTimer = null;
                 input.addEventListener('input', () => {
@@ -260,6 +292,7 @@
                         this.submitOverlaySearch();
                     } else if (e.key === 'Escape') {
                         e.preventDefault();
+                        e.stopPropagation();
                         this.closeProductSearchOverlay();
                     }
                 });
@@ -1537,6 +1570,7 @@
 
                     if (!data.active) {
                         this.updateScannerLifecycleState('DISCONNECTED', 'Session expired or closed by phone. Click Regenerate QR to start a new session.');
+                        if (this.scannerPollTimer) clearInterval(this.scannerPollTimer);
                         this.phoneConnected = false;
                         return;
                     }
@@ -1976,19 +2010,18 @@
 
                 // F2: Dedicated POS Product & Barcode Search Overlay (POS ONLY)
                 if (e.key === 'F2') {
-                    if (!isTyping || isOverlayInput) {
-                        e.preventDefault();
-                        e.stopPropagation();
-                        this.openProductSearchOverlay();
-                        return;
-                    }
+                    e.preventDefault();
+                    e.stopPropagation();
+                    this.openProductSearchOverlay();
+                    return;
                 }
 
                 // Esc: Clear overlay or modals (STRICTLY PRESERVES CART ITEMS)
                 if (e.key === 'Escape') {
                     const overlay = document.getElementById('pos-search-overlay');
-                    if (overlay && overlay.style.display !== 'none') {
+                    if (overlay && (overlay.style.display === 'flex' || (window.getComputedStyle && window.getComputedStyle(overlay).display !== 'none'))) {
                         e.preventDefault();
+                        e.stopPropagation();
                         this.closeProductSearchOverlay();
                         return;
                     }
@@ -2022,5 +2055,9 @@
     };
 
     window.Cart = Cart;
-    document.addEventListener('DOMContentLoaded', () => Cart.init());
+    if (document.readyState === 'loading') {
+        document.addEventListener('DOMContentLoaded', () => Cart.init());
+    } else {
+        Cart.init();
+    }
 })();

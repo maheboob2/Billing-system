@@ -30,70 +30,32 @@
         </div>
     </div>
 
-    {% if is_owner and telegram_onboarding %}
-    <!-- ── TELEGRAM ONBOARDING & STATUS CARD ──────────────────────────── -->
-    <div class="card" style="margin-bottom: 22px; padding: 18px 20px; background: {% if telegram_onboarding.is_connected %}rgba(16, 185, 129, 0.06){% else %}rgba(56, 189, 248, 0.06){% endif %}; border: 1px solid {% if telegram_onboarding.is_connected %}rgba(16, 185, 129, 0.25){% else %}rgba(56, 189, 248, 0.25){% endif %}; border-radius: 12px;">
-        <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 12px;">
-            <div style="display: flex; align-items: center; gap: 14px;">
-                <div style="width: 44px; height: 44px; border-radius: 10px; background: {% if telegram_onboarding.is_connected %}rgba(16, 185, 129, 0.15){% else %}rgba(56, 189, 248, 0.15){% endif %}; display: flex; align-items: center; justify-content: center; font-size: 22px; color: {% if telegram_onboarding.is_connected %}#10b981{% else %}#0ea5e9{% endif %};">
-                    <i class="bi bi-telegram"></i>
-                </div>
-                <div>
-                    <div style="display: flex; align-items: center; gap: 8px;">
-                        <h2 style="font-size: 16px; font-weight: 700; color: var(--text); margin: 0;">Telegram Executive Assistant</h2>
-                        {% if telegram_onboarding.is_connected %}
-                            <span class="badge badge-success" style="font-size: 11px;"><i class="bi bi-check-circle-fill"></i> Connected</span>
-                        {% elif not telegram_onboarding.bot_configured %}
-                            <span class="badge badge-secondary" style="font-size: 11px;"><i class="bi bi-exclamation-circle"></i> Not Configured</span>
-                        {% else %}
-                            <span class="badge badge-warning" style="font-size: 11px;"><i class="bi bi-arrow-repeat"></i> Ready to Connect</span>
-                        {% endif %}
-                    </div>
-                    <p style="margin: 2px 0 0 0; font-size: 12px; color: var(--muted);">
-                        {% if telegram_onboarding.is_connected %}
-                            Linked to chat ID <code>{{ telegram_onboarding.linked_chat_id }}</code>. Get live sales &amp; inventory reports on your phone anywhere.
-                        {% elif not telegram_onboarding.bot_configured %}
-                            Telegram Bot Token is not configured. Set <code>TELEGRAM_BOT_TOKEN</code> in your environment or settings.
-                        {% else %}
-                            Receive instant daily sales, tender breakdowns, and stock alerts on Telegram.
-                        {% endif %}
-                    </p>
-                </div>
+    {% if is_owner and telegram_summary %}
+    <!-- ── COMPACT TELEGRAM STATUS SUMMARY (OWNER ONLY) ──────────────── -->
+    <div class="card" style="margin-bottom: 20px; padding: 12px 18px; border-radius: 10px; background: var(--surface); border: 1px solid var(--border); display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 12px;">
+        <div style="display: flex; align-items: center; gap: 12px;">
+            <div style="width: 36px; height: 36px; border-radius: 8px; background: {% if telegram_summary.is_connected %}rgba(16, 185, 129, 0.15){% else %}rgba(148, 163, 184, 0.15){% endif %}; display: flex; align-items: center; justify-content: center; font-size: 18px; color: {% if telegram_summary.is_connected %}#10b981{% else %}#94a3b8{% endif %};">
+                <i class="bi bi-telegram"></i>
             </div>
-
-            <div style="display: flex; gap: 10px; align-items: center;">
-                {% if telegram_onboarding.is_connected %}
-                    <a href="{% url 'settings_telegram' %}" class="btn btn-secondary" style="font-size: 12px; padding: 7px 14px; text-decoration: none;">
-                        <i class="bi bi-gear"></i> Manage Bot
-                    </a>
-                {% elif telegram_onboarding.bot_configured %}
-                    {% if telegram_onboarding.pairing_code %}
-                    <div style="display: flex; align-items: center; gap: 8px; background: rgba(0,0,0,0.2); padding: 6px 12px; border-radius: 8px; border: 1px dashed rgba(56, 189, 248, 0.4);">
-                        <span style="font-size: 11px; color: var(--muted);">Linking Code:</span>
-                        <strong style="font-size: 15px; font-family: var(--font-mono); letter-spacing: 1px; color: #38bdf8;">{{ telegram_onboarding.pairing_code }}</strong>
-                    </div>
+            <div>
+                <div style="display: flex; align-items: center; gap: 8px;">
+                    <span style="font-size: 13px; font-weight: 700; color: var(--text);">Telegram Reports</span>
+                    {% if telegram_summary.is_connected %}
+                        <span class="badge badge-success" style="font-size: 10px; padding: 2px 7px;"><i class="bi bi-check-circle-fill"></i> Connected</span>
+                    {% else %}
+                        <span class="badge badge-secondary" style="font-size: 10px; padding: 2px 7px;"><i class="bi bi-x-circle"></i> {{ telegram_summary.status_text }}</span>
                     {% endif %}
-                    <a href="{{ telegram_onboarding.bot_link }}" target="_blank" rel="noopener noreferrer" class="btn btn-primary" style="font-size: 12px; padding: 7px 14px; text-decoration: none;">
-                        <i class="bi bi-box-arrow-up-right"></i> Open Bot &amp; Connect
-                    </a>
-                    <a href="{% url 'settings_telegram' %}" class="btn btn-secondary" style="font-size: 12px; padding: 7px 12px; text-decoration: none;">
-                        Setup Steps
-                    </a>
-                {% else %}
-                    <a href="{% url 'settings_telegram' %}" class="btn btn-secondary" style="font-size: 12px; padding: 7px 12px; text-decoration: none;">
-                        <i class="bi bi-info-circle"></i> Setup Instructions
-                    </a>
-                {% endif %}
+                </div>
+                <div style="font-size: 12px; color: var(--muted); margin-top: 1px;">
+                    Bot: <strong style="color: var(--text);">{{ telegram_summary.bot_name }}</strong>
+                </div>
             </div>
         </div>
-
-        {% if not telegram_onboarding.is_connected and telegram_onboarding.bot_configured %}
-        <div style="margin-top: 14px; padding-top: 12px; border-top: 1px solid rgba(255,255,255,0.08); display: flex; gap: 18px; flex-wrap: wrap; font-size: 12px; color: var(--muted);">
-            <div><strong>Step 1:</strong> Open <a href="{{ telegram_onboarding.bot_link }}" target="_blank" style="color: #38bdf8; text-decoration: underline;">@{{ telegram_onboarding.bot_username }}</a> on Telegram</div>
-            <div><strong>Step 2:</strong> Press <em>Start</em> or send <code>/link {{ telegram_onboarding.pairing_code }}</code></div>
-            <div><strong>Step 3:</strong> Ask <em>"today's report"</em> or <code>/report</code> anytime!</div>
+        <div>
+            <a href="{% url 'settings_telegram' %}" class="btn btn-secondary" style="font-size: 12px; padding: 6px 12px; text-decoration: none; display: inline-flex; align-items: center; gap: 5px;">
+                <i class="bi bi-gear"></i> Manage in Settings
+            </a>
         </div>
-        {% endif %}
     </div>
     {% endif %}
 
@@ -309,7 +271,6 @@
                     </button>
                 </div>
             </div>
-
             <!-- Quick Suggestions Row -->
             <div style="display: flex; gap: 6px; flex-wrap: wrap; margin-bottom: 12px;">
                 <button type="button" onclick="setAiQuery('How much did we sell today?')" style="background: var(--surface); border: 1px solid var(--border); font-size: 11px; padding: 4px 10px; border-radius: 12px; color: var(--muted); cursor: pointer; transition: all 0.15s ease;">

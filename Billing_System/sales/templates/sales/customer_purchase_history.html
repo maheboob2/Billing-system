@@ -1,0 +1,64 @@
+
+{% extends "Dashboard/main_nav.html" %}
+
+{% block content %}
+<div class="container mt-4">
+    <div class="d-flex justify-content-between align-items-center mb-3">
+        <h2>Customer Purchase History</h2>
+        <a href="{% url 'sales:customer_list' %}"
+           class="btn btn-secondary">
+            Back to Customers
+        </a>
+    </div>
+
+    <div class="card shadow-sm mb-4">
+        <div class="card-body">
+            <h4>{{ customer.name }}</h4>
+            <p class="mb-1">Phone: {{ customer.phone }}</p>
+            <p class="mb-1">Email: {{ customer.email|default:"—" }}</p>
+            <p class="mb-1">Address: {{ customer.address|default:"—" }}</p>
+            <p class="mb-0">
+                Total Invoices: {{ total_purchases }}
+            </p>
+        </div>
+    </div>
+
+    <div class="table-responsive">
+        <table class="table table-bordered table-hover">
+            <thead class="table-dark">
+                <tr>
+                    <th>#</th>
+                    <th>Invoice Number</th>
+                    <th>Date</th>
+                    <th>Total Amount</th>
+                    <th>Status</th>
+                    <th>Action</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for sale in sales %}
+                <tr>
+                    <td>{{ forloop.counter }}</td>
+                    <td>{{ sale.invoice_number }}</td>
+                    <td>{{ sale.sale_date }}</td>
+                    <td>₹{{ sale.total_amount|floatformat:2 }}</td>
+                    <td>{{ sale.get_status_display }}</td>
+                    <td>
+                        <a href="{% url 'sales:sale_detail' sale.pk %}"
+                           class="btn btn-sm btn-primary">
+                            View Invoice
+                        </a>
+                    </td>
+                </tr>
+                {% empty %}
+                <tr>
+                    <td colspan="6" class="text-center">
+                        No purchase history found for this customer.
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</div>
+{% endblock %}

@@ -467,6 +467,8 @@ table.table-theme tr:last-child td {
 
 .segmented-toggle button.active {
   color: #ffffff !important;
+  background: var(--primary);
+  border-radius: 7px;
 }
 
 .segmented-toggle button:hover:not(.active) {

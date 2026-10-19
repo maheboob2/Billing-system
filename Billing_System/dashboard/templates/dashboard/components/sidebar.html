@@ -122,10 +122,20 @@
                     <i class="bi bi-people sidebar-link-icon"></i>
                     <span class="sidebar-link-text">Employees / Team</span>
                 </a>
+                {% if is_owner %}
+                <a href="{% url 'payroll_history' %}"
+                   class="sidebar-link {% if '/payroll' in request.path %}active{% endif %}"
+                   data-nav-match="/employee/payroll"
+                   {% if '/payroll' in request.path %}aria-current="page"{% endif %}
+                   title="Monthly Salary History & Payslips">
+                    <i class="bi bi-wallet2 sidebar-link-icon"></i>
+                    <span class="sidebar-link-text">Payroll & Payslips</span>
+                </a>
+                {% endif %}
                 <a href="{% url 'settings_general' %}"
-                   class="sidebar-link {% if '/settings' in request.path and '/settings/scanner' not in request.path %}active{% endif %}"
+                   class="sidebar-link {% if '/settings' in request.path and '/settings/scanner' not in request.path and '/settings/telegram' not in request.path %}active{% endif %}"
                    data-nav-match="/settings"
-                   {% if '/settings' in request.path and '/settings/scanner' not in request.path %}aria-current="page"{% endif %}
+                   {% if '/settings' in request.path and '/settings/scanner' not in request.path and '/settings/telegram' not in request.path %}aria-current="page"{% endif %}
                    title="System Settings, Store Details & Appearance">
                     <i class="bi bi-gear sidebar-link-icon"></i>
                     <span class="sidebar-link-text">Settings</span>
@@ -138,6 +148,16 @@
                     <i class="bi bi-upc-scan sidebar-link-icon"></i>
                     <span class="sidebar-link-text">Scanner & Devices</span>
                 </a>
+                {% if is_owner %}
+                <a href="{% url 'settings_telegram' %}"
+                   class="sidebar-link {% if '/settings/telegram' in request.path %}active{% endif %}"
+                   data-nav-match="/settings/telegram"
+                   {% if '/settings/telegram' in request.path %}aria-current="page"{% endif %}
+                   title="Telegram Bot Integration & Cloud Sync">
+                    <i class="bi bi-telegram sidebar-link-icon"></i>
+                    <span class="sidebar-link-text">Telegram Bot</span>
+                </a>
+                {% endif %}
             </div>
         </div>
         {% endif %}

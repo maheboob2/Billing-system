@@ -236,7 +236,6 @@ class Sale(models.Model):
         """Alias for payment_mode_display for template and serializer compatibility."""
         return self.payment_mode_display
 
-
 class SaleItem(models.Model):
     sale = models.ForeignKey(
         Sale,
@@ -412,7 +411,6 @@ class Invoice(models.Model):
             return self.sale.customer.name
         return "Counter Sale"
 
-
 class CheckoutIdempotency(models.Model):
     STATUS_CHOICES = [
         ("PROCESSING", "Processing"),
@@ -470,7 +468,7 @@ class POSScannerSession(models.Model):
         ("ACTIVE", "Active"),
         ("DISCONNECTED", "Disconnected"),
         ("EXPIRED", "Expired"),
-        ("REVOKED", "Revoked"),
+("REVOKED", "Revoked"),
     ]
     DESTINATION_CHOICES = [
         ("POS", "POS Cart"),
@@ -637,7 +635,6 @@ class ReturnRequest(models.Model):
         if self.status == "REJECTED":
             return f"Rejected by {role} — {self.approved_by.username}"
         return f"Approved by {role} — {self.approved_by.username}"
-
     def __str__(self):
         return f"{self.return_number} - {self.status} (₹{self.refund_amount})"
 

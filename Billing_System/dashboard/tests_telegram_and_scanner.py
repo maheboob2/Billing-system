@@ -127,7 +127,7 @@ class POSScannerSessionAndApiTests(TestCase):
         self.product = Product.objects.create(
             name="Mineral Water 1L",
             product_code="MW1001",
-            barcode="8901234567890",
+            barcode="890123456789",
             category=self.category,
             supplier=self.supplier,
             selling_price=Decimal("20.00"),

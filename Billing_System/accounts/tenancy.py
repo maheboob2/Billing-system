@@ -185,4 +185,4 @@ class IsCashierOrAbove(permissions.BasePermission):
         request.company = company
         request.user_role = role
         return True
-    
+

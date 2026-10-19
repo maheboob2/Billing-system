@@ -7,8 +7,11 @@ class DashboardConfig(AppConfig):
     name = 'dashboard'
 
     def ready(self):
-        # Exclude management commands like migrate, test, makemigrations, collectstatic, check
-        skip_commands = ["migrate", "makemigrations", "test", "createsuperuser", "collectstatic", "check", "shell"]
+        # Exclude management commands like migrate, test, makemigrations, collectstatic, check, run_sync_worker, run_telegram_bot
+        skip_commands = [
+            "migrate", "makemigrations", "test", "createsuperuser",
+            "collectstatic", "check", "shell", "run_sync_worker", "run_telegram_bot"
+        ]
         is_management_cmd = any(cmd in sys.argv for cmd in skip_commands)
 
         # In runserver, only start in the reloader worker child (RUN_MAIN == 'true')

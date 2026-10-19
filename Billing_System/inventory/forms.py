@@ -115,4 +115,4 @@ class ProductForm(forms.ModelForm):
             if qs.exists():
                 self.add_error("barcode", f"Barcode '{barcode}' is already in use by another product in this company.")
 
-        return cleaned_data
+        return cleaned_data

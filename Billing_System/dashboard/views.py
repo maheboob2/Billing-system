@@ -1,6 +1,7 @@
 from decimal import Decimal
 from datetime import timedelta, datetime, date
 from django.shortcuts import render, redirect, get_object_or_404
+from django.http import HttpResponseForbidden
 from django.db.models import F, Sum, Count, Q
 from django.utils import timezone
 from accounts.tenancy import company_required, role_required
@@ -23,7 +24,9 @@ def dashboard(request):
     Manager never sees salary/payroll amounts.
     """
     company = request.company
-    is_owner = request.user_role in ["Admin", "Owner"]
+    is_owner = bool(
+        company and hasattr(company, "owner_id") and company.owner_id == request.user.id
+    ) or (request.user.is_superuser and not hasattr(request.user, "user_registration"))
     today = timezone.now().date()
     current_year = today.year
     current_month = today.month
@@ -128,57 +131,50 @@ def dashboard(request):
             "pending": pending_payroll,
         }
 
-    # ── TELEGRAM ONBOARDING STATE (OWNER ONLY) ────────────────────────
-    telegram_onboarding = None
+    # ── TELEGRAM COMPACT OVERVIEW SUMMARY (OWNER ONLY) ───────────────
+    telegram_summary = None
     if is_owner:
         from dashboard.models import TelegramOwnerLink, MerchantTelegramBot
-        from dashboard.telegram_service import is_bot_token_configured, generate_pairing_code
+        from dashboard.telegram_service import is_bot_token_configured
 
         merchant_bot = MerchantTelegramBot.objects.filter(company=company).first()
         if merchant_bot and merchant_bot.encrypted_token:
             is_connected = merchant_bot.status == "CONNECTED"
-            is_pending = merchant_bot.status == "PENDING_VERIFICATION"
-            bot_username = merchant_bot.bot_username
-            bot_link = f"https://t.me/{bot_username}" + (f"?start={merchant_bot.verification_challenge}" if (is_pending and merchant_bot.verification_challenge) else "")
-            telegram_onboarding = {
-                "is_custom_bot": True,
-                "bot_configured": True,
+            bot_name = merchant_bot.bot_first_name or (f"@{merchant_bot.bot_username}" if merchant_bot.bot_username else "Custom Store Bot")
+            telegram_summary = {
                 "is_connected": is_connected,
-                "status": merchant_bot.status,
-                "bot_username": bot_username,
-                "bot_first_name": merchant_bot.bot_first_name,
-                "bot_link": bot_link,
-                "pairing_code": merchant_bot.verification_challenge,
-                "linked_chat_id": merchant_bot.verified_chat_id,
-                "verified_username": merchant_bot.verified_username,
-                "linked_at": merchant_bot.verified_at,
-                "last_error": merchant_bot.last_error,
+                "status_text": "Connected" if is_connected else (
+                    "Pending Verification" if merchant_bot.status == "PENDING_VERIFICATION" else (
+                        "Invalid Token" if merchant_bot.status == "INVALID_TOKEN" else "Disconnected"
+                    )
+                ),
+                "bot_name": bot_name,
+                "bot_username": merchant_bot.bot_username or "",
             }
         else:
             bot_configured = is_bot_token_configured()
             link = TelegramOwnerLink.objects.filter(company=company, is_verified=True).first()
-            pending_link = TelegramOwnerLink.objects.filter(
-                company=company,
-                owner=request.user,
-                is_verified=False,
-                pairing_code_expires_at__gte=timezone.now()
-            ).first()
-
-            if not link and not pending_link and bot_configured:
-                pending_link = generate_pairing_code(company, request.user)
-
-            telegram_onboarding = {
-                "is_custom_bot": False,
-                "bot_configured": bot_configured,
-                "is_connected": bool(link),
-                "status": "CONNECTED" if link else ("PENDING_VERIFICATION" if pending_link else "NOT_CONFIGURED"),
-                "linked_chat_id": link.telegram_chat_id if link else "",
-                "linked_at": link.updated_at if link else None,
-                "pairing_code": pending_link.pairing_code if pending_link else "",
-                "code_expires_at": pending_link.pairing_code_expires_at if pending_link else None,
-                "bot_username": "Brisksmith_bot",
-                "bot_link": f"https://t.me/Brisksmith_bot?start={pending_link.pairing_code}" if (pending_link and pending_link.pairing_code) else "https://t.me/Brisksmith_bot",
-            }
+            if link:
+                telegram_summary = {
+                    "is_connected": True,
+                    "status_text": "Connected",
+                    "bot_name": "Brisksmith_bot",
+                    "bot_username": "Brisksmith_bot",
+                }
+            elif bot_configured:
+                telegram_summary = {
+                    "is_connected": False,
+                    "status_text": "Disconnected",
+                    "bot_name": "Brisksmith_bot",
+                    "bot_username": "Brisksmith_bot",
+                }
+            else:
+                telegram_summary = {
+                    "is_connected": False,
+                    "status_text": "Not Configured",
+                    "bot_name": "Not Configured",
+                    "bot_username": "",
+                }
 
     context = {
         "company": company,
@@ -208,8 +204,8 @@ def dashboard(request):
         "inactive_team_count": inactive_team_count,
         # Payroll Metrics (Owner only)
         "payroll_data": payroll_data,
-        # Telegram Onboarding (Owner only)
-        "telegram_onboarding": telegram_onboarding,
+        # Telegram Overview Summary (Owner only)
+        "telegram_summary": telegram_summary,
         # AI Business Intelligence
         "ai_sales_insights": generate_sales_insights(company),
         "ai_inventory_intelligence": generate_inventory_intelligence(company),
@@ -278,8 +274,11 @@ def settings_general(request):
 
     saved_msg = None
     if request.method == "POST":
-        week_start = request.POST.get("week_start", "sunday").lower()
+        week_start = request.POST.get("week_start", "sunday").strip().lower()
+        if week_start not in ["sunday", "monday"]:
+            week_start = "sunday"
         request.session["pos_week_start"] = week_start
+        request.session.modified = True
         saved_msg = "Preferences updated successfully."
 
     current_week_start = request.session.get("pos_week_start", "sunday")
@@ -470,14 +469,21 @@ def settings_scanner(request):
 
 
 @company_required
-@role_required(["Admin", "Owner"])
 def settings_telegram(request):
     """
     Settings -> Telegram Owner Reporting.
-    Strictly OWNER / ADMIN ONLY.
+    Strictly OWNER ONLY.
     Allows generating one-time pairing codes, viewing paired status,
     testing bot commands, and reviewing the offline outbound queue.
     """
+    company = request.company
+    is_owner = bool(
+        company and hasattr(company, "owner_id") and company.owner_id == request.user.id
+    ) or (request.user.is_superuser and not hasattr(request.user, "user_registration"))
+
+    if not is_owner:
+        return HttpResponseForbidden("Access Denied: Only the store Owner can access Telegram Bot settings.")
+
     from .models import TelegramOwnerLink, TelegramOutboundMessage
     from .telegram_service import (
         generate_pairing_code,
@@ -488,9 +494,6 @@ def settings_telegram(request):
         is_bot_token_configured
     )
     from .sync_service import SyncService
-
-    company = request.company
-    is_owner = True
     msg = None
     test_result = None
 

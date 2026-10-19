@@ -387,7 +387,16 @@ const SidebarController = {
                     matched = true;
                 } else if (match === '/settings') {
                     // Match settings pages EXCEPT scanner which has its own link
-                    if (path.startsWith('/settings') && !path.startsWith('/settings/scanner')) {
+                    if (path.startsWith('/settings') && !path.startsWith('/settings/scanner') && !path.startsWith('/settings/telegram')) {
+                        a.classList.add('active');
+                        a.setAttribute('aria-current', 'page');
+                        matched = true;
+                    } else {
+                        a.classList.remove('active');
+                        a.removeAttribute('aria-current');
+                    }
+                } else if (match === '/settings/telegram') {
+                    if (path.startsWith('/settings/telegram')) {
                         a.classList.add('active');
                         a.setAttribute('aria-current', 'page');
                         matched = true;
@@ -603,6 +612,11 @@ document.addEventListener("keydown", (event) => {
 
     const isPOSRoute = window.location.pathname.startsWith('/cart') || 
                        Boolean(document.getElementById('pos-search-overlay') || document.getElementById('barcode-scanner-input') || document.getElementById('pos-terminal-container'));
+
+    if (isPOSRoute) {
+        // Strictly yield all shortcuts (F2, Esc, etc.) to the POS checkout terminal
+        return;
+    }
 
     // Escape closes search or mobile sidebar
     if (event.key === "Escape") {

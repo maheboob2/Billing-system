@@ -89,6 +89,8 @@ class RemoteSyncStatus(models.Model):
     cloud_sync_api_key = models.CharField(max_length=64, blank=True, default="")
     remote_cloud_url = models.CharField(max_length=255, blank=True, default="")
     last_snapshot_time = models.DateTimeField(null=True, blank=True)
+    checkpoint = models.BigIntegerField(default=0)
+    consecutive_failures = models.IntegerField(default=0)
     updated_at = models.DateTimeField(auto_now=True)
 
     class Meta:
@@ -114,8 +116,9 @@ class SyncQueueItem(models.Model):
         on_delete=models.CASCADE,
         related_name="sync_queue"
     )
-    entity_type = models.CharField(max_length=30)  # SALE, PAYMENT, RETURN, PURCHASE, CUSTOMER
+    entity_type = models.CharField(max_length=30)  # SALE, PAYMENT, RETURN, PURCHASE, CUSTOMER, STOCK
     entity_id = models.CharField(max_length=100)
+    event_id = models.CharField(max_length=64, blank=True, default="", db_index=True)
     idempotency_key = models.CharField(max_length=128, db_index=True)
     payload = models.JSONField(default=dict)
     status = models.CharField(max_length=20, choices=STATUS_CHOICES, default="PENDING", db_index=True)

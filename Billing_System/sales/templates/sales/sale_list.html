@@ -1,0 +1,89 @@
+
+{% extends "Dashboard/main_nav.html" %}
+
+{% block content %}
+<h2>Sales</h2>
+
+<a href="{% url 'sales:add_sale' %}">+ Add New Sale</a> <br><br>
+
+
+<form method="GET">
+    <input
+        type="text"
+        name="search"
+        placeholder="Search invoice or customer"
+        value="{{ search }}"
+    >
+
+    <select name="status">
+        <option value="">All Statuses</option>
+        <option value="DRAFT"
+            {% if selected_status == "DRAFT" %}selected{% endif %}>
+            Draft
+        </option>
+        <option value="COMPLETED"
+            {% if selected_status == "COMPLETED" %}selected{% endif %}>
+            Completed
+        </option>
+        <option value="CANCELLED"
+            {% if selected_status == "CANCELLED" %}selected{% endif %}>
+            Cancelled
+        </option>
+    </select>
+
+    <label>From:</label>
+    <input type="date" name="date_from" value="{{ date_from }}">
+
+    <label>To:</label>
+    <input type="date" name="date_to" value="{{ date_to }}">
+
+    <button type="submit">Filter</button>
+    <a href="{% url 'sales:sale_list' %}">Clear</a>
+</form> <br> <br>
+
+<table border="1" cellpadding="8" cellspacing="0">
+    <thead>
+        <tr>
+            <th>Invoice Number</th>
+            <th>Customer</th>
+            <th>Date</th>
+            <th>Total</th>
+            <th>Status</th>
+            <th>Action</th>
+        </tr>
+    </thead>
+    <tbody>
+        {% for sale in sales %}
+        <tr>
+            <td>{{ sale.invoice_number }}</td>
+            <td>
+                {% if sale.customer %}
+                    {{ sale.customer }}
+                {% else %}
+                    Walk-in
+                {% endif %}
+            </td>
+            <td>{{ sale.sale_date }}</td>
+            <td>{{ sale.total_amount }}</td>
+            <td>{{ sale.status }}</td>
+            <td>
+                <a href="{% url 'sales:sale_detail' sale.pk %}">
+                    View Details
+                </a>
+             {% if sale.customer %}
+    <a href="{% url 'sales:customer_purchase_history' sale.customer.pk %}"
+       class="btn btn-sm btn-info">
+        Purchase History
+    </a>
+{% endif %}
+            </td>
+
+        </tr>
+        {% empty %}
+        <tr>
+            <td colspan="6">No sales found.</td>
+        </tr>
+        {% endfor %}
+    </tbody>
+</table>
+{% endblock %}

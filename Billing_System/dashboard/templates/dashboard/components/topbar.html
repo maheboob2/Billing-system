@@ -81,7 +81,7 @@
 
     <div class="topbar-right">
         <!-- Cloud Sync Status Indicator -->
-        <a href="{% url 'settings_telegram' %}" id="cloud-sync-nav-pill"
+        <a href="{% if is_owner %}{% url 'settings_telegram' %}{% else %}{% url 'settings_general' %}{% endif %}" id="cloud-sync-nav-pill"
            style="display: inline-flex; align-items: center; gap: 6px; font-size: 11px; padding: 4px 10px; border-radius: 20px; text-decoration: none;
            {% if cloud_sync_info and cloud_sync_info.pending_count > 0 %}
              background: rgba(245, 158, 11, 0.12); color: #f59e0b; border: 1px solid rgba(245, 158, 11, 0.25);
@@ -113,7 +113,6 @@
             <span class="status-dot"></span>
             <span class="scanner-status-text" id="global-scanner-status-text">HID Supported</span>
         </div>
-
         <!-- In-App Staff Notifications Bell -->
         <div style="position: relative;" id="topbar-notif-container">
             <button type="button" id="topbar-notif-btn" onclick="toggleNotifDropdown(event)"
@@ -442,3 +441,4 @@
     setInterval(fetchNotifications, 12000);
 })();
 </script>
+

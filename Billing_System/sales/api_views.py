@@ -66,7 +66,12 @@ class CustomerViewSet(viewsets.ModelViewSet):
         return ctx
 
     def perform_create(self, serializer):
-        serializer.save(company=self.request.company)
+        customer = serializer.save(company=self.request.company)
+        try:
+            from dashboard.sync_service import SyncService
+            SyncService.queue_customer(customer)
+        except Exception:
+            pass
 
 
 class SaleViewSet(viewsets.ReadOnlyModelViewSet):
@@ -404,6 +409,12 @@ class RecordPaymentAPIView(APIView):
             received_by=request.user,
             notes=notes,
         )
+
+        try:
+            from dashboard.sync_service import SyncService
+            SyncService.queue_payment(payment)
+        except Exception:
+            pass
 
         # If customer paid via Store Credit, adjust customer's credit balance
         if method == "CREDIT" and sale.customer:
@@ -958,7 +969,7 @@ class POSScannerSessionScanAPIView(APIView):
         if not session.is_valid():
             return Response(
                 {"error": "Scanner pairing session is invalid or expired."},
-                status=status.HTTP_404_NOT_FOUND,
+                status=status.HTTP_400_BAD_REQUEST,
             )
 
         now = timezone.now()
@@ -1493,6 +1504,12 @@ class ReturnRequestViewSet(viewsets.ModelViewSet):
             return_req.approved_at = timezone.now()
             return_req.save()
 
+            try:
+                from dashboard.sync_service import SyncService
+                SyncService.queue_return(return_req)
+            except Exception:
+                pass
+
         serializer = ReturnRequestSerializer(return_req)
         return Response(
             {
@@ -1553,6 +1570,12 @@ class ReturnRequestViewSet(viewsets.ModelViewSet):
             return_req.approved_by = approver
             return_req.approved_at = timezone.now()
             return_req.save()
+
+            try:
+                from dashboard.sync_service import SyncService
+                SyncService.queue_return(return_req)
+            except Exception:
+                pass
 
         serializer = ReturnRequestSerializer(return_req)
         return Response(

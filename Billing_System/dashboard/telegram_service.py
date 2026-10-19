@@ -9,7 +9,7 @@ from django.utils import timezone
 from django.db.models import Sum, Count, Q
 from django.conf import settings
 
-from .models import TelegramOwnerLink, TelegramOutboundMessage
+from .models import TelegramOwnerLink, TelegramOutboundMessage, CompanyCloudSnapshot, RemoteSyncStatus
 from .sync_service import SyncService
 from .media_reports import (
     generate_executive_pdf,
@@ -852,15 +852,19 @@ class NLPReportIntentParser:
             return False
 
         # ── 1. INTENT CLASSIFICATION ──
-        is_chart_query = False
         chart_direct_commands = [
             "/chart", "chart", "/chart_sales", "/chart_returns",
             "/chart_payments", "/chart_inventory", "/chart_all", "/chart_stock"
         ]
-        if first_word in chart_direct_commands:
-            is_chart_query = True
-        elif matches_any(["chart", "graph", "plot", "visual", "charts", "graphs", "visuals", "chart image"]):
-            is_chart_query = True
+        is_chart_query = (
+            first_word in chart_direct_commands
+            or matches_any([
+                "chart", "charts", "graph", "graphs", "visualize", "visualization",
+                "plot", "trend", "show chart", "chart image"
+            ])
+        )
+        # Disambiguate multi-tender queries from single-tender queries
+        tender_kw_count = sum(1 for kw in ["cash", "upi", "card", "credit"] if kw in words)
 
         if is_chart_query:
             if first_word == "/chart_returns" or matches_any(["return", "returns", "refund", "refunds"]):
@@ -876,30 +880,30 @@ class NLPReportIntentParser:
 
         elif first_word in ["/pdf", "pdf"] or matches_any(["pdf report", "export pdf", "download pdf", "executive pdf"]):
             intent = "PDF_REPORT"
-        elif first_word in ["/sales", "sales"] or matches_any(["sales report", "daily sales", "total sales", "revenue", "income", "turnover", "invoices"]):
-            intent = "SALES"
-        elif first_word in ["/stock", "/inventory", "stock", "inventory"] or matches_any(["low stock", "low_stock", "out of stock", "warehouse"]):
+        elif tender_kw_count >= 2 or matches_any(["payment breakdown", "tender breakdown", "payments", "tender totals", "payment totals", "tenders", "cash upi", "cash and upi", "cash upi and credit"]):
+            intent = "PAYMENTS"
+        elif first_word in ["/stock", "/inventory", "stock", "inventory"] or matches_any(["low stock", "low_stock", "out of stock", "warehouse", "stock overview", "inventory stock", "current stock", "stock in the last", "products have low stock", "stock"]):
             intent = "INVENTORY"
-        elif matches_any(["compare", "comparison", "versus", " vs ", "wow", "mom", "trend"]):
-            intent = "COMPARISON"
-        elif matches_any(["cash", "cash collections", "cash sale", "cash payments"]):
-            intent = "CASH"
-        elif matches_any(["upi", "gpay", "phonepe", "qr code", "qr payment"]):
-            intent = "UPI"
-        elif matches_any(["credit card", "debit card", "pos card", "card payment"]):
-            intent = "CARD"
-        elif matches_any(["customer credit", "udhari", "due", "khata", "receivable"]):
+        elif matches_any(["return", "returns", "refund", "refunds", "pending returns", "returns pending"]):
+            intent = "RETURNS"
+        elif matches_any(["customer credit", "udhari", "due", "khata", "receivable", "credit totals", "credit balances"]):
             intent = "CREDIT"
+        elif matches_any(["cash", "cash collections", "cash sale", "cash payments", "cash collected"]):
+            intent = "CASH"
+        elif matches_any(["upi", "gpay", "phonepe", "qr code", "qr payment", "upi collections"]):
+            intent = "UPI"
+        elif matches_any(["credit card", "debit card", "pos card", "card payment", "card payments"]):
+            intent = "CARD"
         elif matches_any(["purchase", "purchases", "supplier", "suppliers", "vendor", "po"]):
             intent = "PURCHASES"
         elif matches_any(["customers", "clients"]):
             intent = "CUSTOMERS"
-        elif matches_any(["return", "returns", "refund", "refunds"]):
-            intent = "RETURNS"
         elif matches_any(["top product", "top products", "top selling", "top seller", "best seller", "best sellers", "best selling", "popular", "top items"]):
             intent = "TOP_PRODUCTS"
-        elif matches_any(["payment breakdown", "tender breakdown", "payments"]):
-            intent = "PAYMENTS"
+        elif matches_any(["compare", "comparison", "versus", " vs ", "wow", "mom", "trend"]):
+            intent = "COMPARISON"
+        elif first_word in ["/sales", "sales"] or matches_any(["sales report", "daily sales", "total sales", "revenue", "income", "turnover", "invoices", "sell", "sold", "sales", "how much did we sell", "how much did my shop sell", "today sales", "today's sales", "todays sales", "how much did my store sell"]):
+            intent = "SALES"
         elif first_word in ["/report", "report", "/today", "today", "/daily", "daily", "/weekly", "weekly", "/monthly", "monthly", "/thisweek", "/thismonth"] or matches_any(["today report", "todays report", "today s report", "daily report", "weekly report", "monthly report", "executive report", "business summary", "report"]):
             intent = "REPORT"
         else:
@@ -1263,8 +1267,16 @@ class TelegramReportingEngine:
         last_sync_ts = sync_info['last_sync_timestamp_display']
         now_dt = timezone.localtime(timezone.now())
         generated_ts = now_dt.strftime("%b %d, %Y %I:%M %p")
+        is_store_online = sync_info["is_online"] and sync_info["pending_count"] == 0
 
-        if sync_info["is_online"] and sync_info["pending_count"] == 0:
+        # Retrieve latest durable cloud snapshot for offline fallback and cloud-worker reporting
+        cloud_snap = CompanyCloudSnapshot.objects.filter(company=company, snapshot_date=start).first()
+        if not cloud_snap:
+            cloud_snap = CompanyCloudSnapshot.objects.filter(company=company).order_by("-snapshot_date").first()
+
+        use_snapshot_data = (not is_store_online) or (str(getattr(settings, "CLOUD_SYNC_ROLE", "edge")).strip().lower() in ["cloud", "cloud_worker"])
+
+        if is_store_online:
             sync_footer = (
                 f"\n────────────────────────\n"
                 f"🕒 *Report Generated:* `{generated_ts}`\n"
@@ -1281,7 +1293,8 @@ class TelegramReportingEngine:
                 f"🔄 *Data Through (Last Sync):* `{last_sync_ts}`\n"
                 f"⚠️ *Report may be stale — Store Offline Snapshot*\n"
                 f"⚠️ Store Offline: {pending_cnt} local pending items. Newer offline sales or stock activity may be missing from this report.\n"
-                f"📡 *Freshness:* `{freshness}` (Last Cloud Sync: {last_sync_ts})"
+                f"📡 *Freshness:* `{freshness}` (Last Cloud Sync: {last_sync_ts})\n"
+                f"Your store is currently disconnected or has not confirmed a newer sync. Recent local transactions may not be included."
             )
 
         # ── 0. INVALID DATE ──
@@ -1386,12 +1399,18 @@ class TelegramReportingEngine:
 
         # ── 3. CASH REPORT ──
         if intent == "CASH":
-            sales_qs = Sale.objects.filter(company=company, sale_status="COMPLETED", created_at__date__gte=start, created_at__date__lte=end)
-            payments = Payment.objects.filter(sale__company=company, sale__in=sales_qs, payment_method="CASH")
-            total_cash = payments.aggregate(t=Sum("amount"))["t"] or Decimal("0.00")
-            count_cash = payments.count()
-            gross_all = sales_qs.aggregate(t=Sum("grand_total"))["t"] or Decimal("0.00")
-            share = (total_cash / gross_all * 100) if gross_all > 0 else 0
+            if use_snapshot_data and cloud_snap:
+                total_cash = cloud_snap.cash_total
+                gross_all = cloud_snap.total_revenue
+                count_cash = cloud_snap.invoice_count
+                share = (total_cash / gross_all * 100) if gross_all > 0 else 0
+            else:
+                sales_qs = Sale.objects.filter(company=company, sale_status="COMPLETED", created_at__date__gte=start, created_at__date__lte=end)
+                payments = Payment.objects.filter(sale__company=company, sale__in=sales_qs, payment_method="CASH")
+                total_cash = payments.aggregate(t=Sum("amount"))["t"] or Decimal("0.00")
+                count_cash = payments.count()
+                gross_all = sales_qs.aggregate(t=Sum("grand_total"))["t"] or Decimal("0.00")
+                share = (total_cash / gross_all * 100) if gross_all > 0 else 0
 
             return {
                 "text": (
@@ -1408,12 +1427,18 @@ class TelegramReportingEngine:
 
         # ── 4. UPI REPORT ──
         if intent == "UPI":
-            sales_qs = Sale.objects.filter(company=company, sale_status="COMPLETED", created_at__date__gte=start, created_at__date__lte=end)
-            payments = Payment.objects.filter(sale__company=company, sale__in=sales_qs, payment_method="UPI")
-            total_upi = payments.aggregate(t=Sum("amount"))["t"] or Decimal("0.00")
-            count_upi = payments.count()
-            gross_all = sales_qs.aggregate(t=Sum("grand_total"))["t"] or Decimal("0.00")
-            share = (total_upi / gross_all * 100) if gross_all > 0 else 0
+            if use_snapshot_data and cloud_snap:
+                total_upi = cloud_snap.upi_total
+                gross_all = cloud_snap.total_revenue
+                count_upi = cloud_snap.invoice_count
+                share = (total_upi / gross_all * 100) if gross_all > 0 else 0
+            else:
+                sales_qs = Sale.objects.filter(company=company, sale_status="COMPLETED", created_at__date__gte=start, created_at__date__lte=end)
+                payments = Payment.objects.filter(sale__company=company, sale__in=sales_qs, payment_method="UPI")
+                total_upi = payments.aggregate(t=Sum("amount"))["t"] or Decimal("0.00")
+                count_upi = payments.count()
+                gross_all = sales_qs.aggregate(t=Sum("grand_total"))["t"] or Decimal("0.00")
+                share = (total_upi / gross_all * 100) if gross_all > 0 else 0
 
             return {
                 "text": (
@@ -1430,12 +1455,18 @@ class TelegramReportingEngine:
 
         # ── 5. CARD REPORT ──
         if intent == "CARD":
-            sales_qs = Sale.objects.filter(company=company, sale_status="COMPLETED", created_at__date__gte=start, created_at__date__lte=end)
-            payments = Payment.objects.filter(sale__company=company, sale__in=sales_qs, payment_method="CARD")
-            total_card = payments.aggregate(t=Sum("amount"))["t"] or Decimal("0.00")
-            count_card = payments.count()
-            gross_all = sales_qs.aggregate(t=Sum("grand_total"))["t"] or Decimal("0.00")
-            share = (total_card / gross_all * 100) if gross_all > 0 else 0
+            if use_snapshot_data and cloud_snap:
+                total_card = cloud_snap.card_total
+                gross_all = cloud_snap.total_revenue
+                count_card = cloud_snap.invoice_count
+                share = (total_card / gross_all * 100) if gross_all > 0 else 0
+            else:
+                sales_qs = Sale.objects.filter(company=company, sale_status="COMPLETED", created_at__date__gte=start, created_at__date__lte=end)
+                payments = Payment.objects.filter(sale__company=company, sale__in=sales_qs, payment_method="CARD")
+                total_card = payments.aggregate(t=Sum("amount"))["t"] or Decimal("0.00")
+                count_card = payments.count()
+                gross_all = sales_qs.aggregate(t=Sum("grand_total"))["t"] or Decimal("0.00")
+                share = (total_card / gross_all * 100) if gross_all > 0 else 0
 
             return {
                 "text": (
@@ -1452,24 +1483,45 @@ class TelegramReportingEngine:
 
         # ── 6. CREDIT / ACCOUNTS RECEIVABLE REPORT ──
         if intent == "CREDIT":
-            customers_credit = Customer.objects.filter(company=company, credit_balance__gt=0).order_by("-credit_balance")
-            total_receivable = Customer.objects.filter(company=company).aggregate(t=Sum("credit_balance"))["t"] or Decimal("0.00")
-            debtors_count = customers_credit.count()
+            if use_snapshot_data and cloud_snap:
+                total_receivable = cloud_snap.total_credit_receivable
+                top_balances = cloud_snap.customer_balances
+                debtors_count = len(top_balances)
 
-            lines = [
-                f"📒 *Customer Credit & Accounts Receivable*",
-                f"Store: {company.company_name}",
-                f"────────────────────────",
-                f"• Total Outstanding Debt: *₹{total_receivable:,.2f}*",
-                f"• Customers with Credit Balance: *{debtors_count}*",
-            ]
-            if debtors_count > 0:
-                lines.append("\nTop Outstanding Balances:")
-                for c in customers_credit[:5]:
-                    lines.append(f"• *{c.name}* (`{c.phone}`): ₹{c.credit_balance:,.2f} (Limit: ₹{c.credit_limit:,.2f})")
-            lines.append(sync_footer)
+                lines = [
+                    f"📒 *Customer Credit & Accounts Receivable*",
+                    f"Store: {company.company_name}",
+                    f"────────────────────────",
+                    f"• Total Outstanding Debt: *₹{total_receivable:,.2f}*",
+                    f"• Customers with Credit Balance: *{debtors_count}*",
+                ]
+                if top_balances:
+                    lines.append("\nTop Outstanding Balances:")
+                    for c in top_balances:
+                        bal = Decimal(str(c.get("balance", "0")))
+                        lines.append(f"• *{c.get('name', 'Customer')}*: ₹{bal:,.2f}")
+                lines.append(sync_footer)
 
-            return {"text": "\n".join(lines), "media_type": "TEXT"}
+                return {"text": "\n".join(lines), "media_type": "TEXT"}
+            else:
+                customers_credit = Customer.objects.filter(company=company, credit_balance__gt=0).order_by("-credit_balance")
+                total_receivable = Customer.objects.filter(company=company).aggregate(t=Sum("credit_balance"))["t"] or Decimal("0.00")
+                debtors_count = customers_credit.count()
+
+                lines = [
+                    f"📒 *Customer Credit & Accounts Receivable*",
+                    f"Store: {company.company_name}",
+                    f"────────────────────────",
+                    f"• Total Outstanding Debt: *₹{total_receivable:,.2f}*",
+                    f"• Customers with Credit Balance: *{debtors_count}*",
+                ]
+                if debtors_count > 0:
+                    lines.append("\nTop Outstanding Balances:")
+                    for c in customers_credit[:5]:
+                        lines.append(f"• *{c.name}* (`{c.phone}`): ₹{c.credit_balance:,.2f} (Limit: ₹{c.credit_limit:,.2f})")
+                lines.append(sync_footer)
+
+                return {"text": "\n".join(lines), "media_type": "TEXT"}
 
         # ── 7. PURCHASES REPORT ──
         if intent == "PURCHASES":
@@ -1525,73 +1577,135 @@ class TelegramReportingEngine:
 
         # ── 9. RETURNS REPORT ──
         if intent == "RETURNS":
-            returns_all = ReturnRequest.objects.filter(company=company, updated_at__date__gte=start, updated_at__date__lte=end)
-            pending = returns_all.filter(status="PENDING").count()
-            approved = returns_all.filter(status__in=["APPROVED", "COMPLETED"]).count()
-            rejected = returns_all.filter(status="REJECTED").count()
-            refunded = returns_all.filter(status__in=["APPROVED", "COMPLETED"]).aggregate(t=Sum("refund_amount"))["t"] or Decimal("0.00")
+            if use_snapshot_data and cloud_snap:
+                approved = cloud_snap.returns_count
+                refunded = cloud_snap.refund_amount
+                return {
+                    "text": (
+                        f"🔄 *Store Returns & Refunds Status ({date_label})*\n"
+                        f"Store: {company.company_name}\n"
+                        f"────────────────────────\n"
+                        f"• ⏳ Pending Manager Audit: *0*\n"
+                        f"• ✅ Approved & Restocked: *{approved}*\n"
+                        f"• ❌ Rejected: *0*\n"
+                        f"• Total Refunds Issued: *₹{refunded:,.2f}*\n"
+                        f"{sync_footer}"
+                    ),
+                    "media_type": "TEXT"
+                }
+            else:
+                returns_all = ReturnRequest.objects.filter(company=company, updated_at__date__gte=start, updated_at__date__lte=end)
+                pending = returns_all.filter(status="PENDING").count()
+                approved = returns_all.filter(status__in=["APPROVED", "COMPLETED"]).count()
+                rejected = returns_all.filter(status="REJECTED").count()
+                refunded = returns_all.filter(status__in=["APPROVED", "COMPLETED"]).aggregate(t=Sum("refund_amount"))["t"] or Decimal("0.00")
 
-            return {
-                "text": (
-                    f"🔄 *Store Returns & Refunds Status ({date_label})*\n"
-                    f"Store: {company.company_name}\n"
-                    f"────────────────────────\n"
-                    f"• ⏳ Pending Manager Audit: *{pending}*\n"
-                    f"• ✅ Approved & Restocked: *{approved}*\n"
-                    f"• ❌ Rejected: *{rejected}*\n"
-                    f"• Total Refunds Issued: *₹{refunded:,.2f}*\n"
-                    f"{sync_footer}"
-                ),
-                "media_type": "TEXT"
-            }
+                return {
+                    "text": (
+                        f"🔄 *Store Returns & Refunds Status ({date_label})*\n"
+                        f"Store: {company.company_name}\n"
+                        f"────────────────────────\n"
+                        f"• ⏳ Pending Manager Audit: *{pending}*\n"
+                        f"• ✅ Approved & Restocked: *{approved}*\n"
+                        f"• ❌ Rejected: *{rejected}*\n"
+                        f"• Total Refunds Issued: *₹{refunded:,.2f}*\n"
+                        f"{sync_footer}"
+                    ),
+                    "media_type": "TEXT"
+                }
 
         # ── 10. INVENTORY / STOCK REPORT ──
         if intent == "INVENTORY":
-            products = Product.objects.filter(company=company)
-            total_prods = products.count()
-            active_prods = products.filter(status=True).count()
-            low_prods = products.filter(status=True, current_stock__gt=0, current_stock__lte=5).order_by("current_stock")
-            low_stock = low_prods.count()
-            out_prods = products.filter(current_stock__lte=0).order_by("name")
-            out_of_stock = out_prods.count()
-            total_units = products.aggregate(t=Sum("current_stock"))["t"] or Decimal("0")
+            if use_snapshot_data and cloud_snap:
+                total_prods = cloud_snap.active_products_count
+                active_prods = cloud_snap.active_products_count
+                low_prods = cloud_snap.low_stock_items
+                low_stock = len(low_prods)
+                out_prods = cloud_snap.out_of_stock_items
+                out_of_stock = len(out_prods)
+                total_units = sum(int(float(it.get("stock", 0))) for it in low_prods)
 
-            lines = [
-                f"📦 *Store Inventory Overview & Low Stock Alert ({date_label})*",
-                f"Store: *{company.company_name}*",
-                f"────────────────────────",
-                f"• Total Catalog SKUs: *{total_prods}*",
-                f"• Active SKUs: *{active_prods}*",
-                f"• Total Stock Volume: *{total_units:,.0f} units*",
-                f"• ⚠️ Low Stock Alert (≤5 units): *{low_stock}*",
-                f"• 🚨 Out of Stock: *{out_of_stock}*",
-            ]
-            if low_stock > 0:
-                lines.append("\n⚠️ *Low Stock Items:*")
-                for p in low_prods[:8]:
-                    lines.append(f"• *{p.name}* (`{p.product_code}`): {p.current_stock} {p.unit or 'pcs'} (Min Safety: {p.minimum_stock})")
-            if out_of_stock > 0:
-                lines.append("\n🚨 *Out of Stock Items:*")
-                for p in out_prods[:5]:
-                    lines.append(f"• *{p.name}* (`{p.product_code}`): 0 remaining")
-            lines.append(sync_footer)
+                lines = [
+                    f"📦 *Store Inventory Overview & Low Stock Alert ({date_label})*",
+                    f"Store: *{company.company_name}*",
+                    f"────────────────────────",
+                    f"• Total Catalog SKUs: *{total_prods}*",
+                    f"• Active SKUs: *{active_prods}*",
+                    f"• Total Stock Volume: *{total_units:,.0f} units*",
+                    f"• ⚠️ Low Stock Alert (≤5 units): *{low_stock}*",
+                    f"• 🚨 Out of Stock: *{out_of_stock}*",
+                ]
+                if low_stock > 0:
+                    lines.append("\n⚠️ *Low Stock Items:*")
+                    for p in low_prods[:8]:
+                        lines.append(f"• *{p.get('name')}*: {p.get('stock')} pcs (Min Safety: {p.get('reorder')})")
+                if out_of_stock > 0:
+                    lines.append("\n🚨 *Out of Stock Items:*")
+                    for p_name in out_prods[:5]:
+                        lines.append(f"• *{p_name}*: 0 remaining")
+                lines.append(sync_footer)
 
-            return {
-                "text": "\n".join(lines),
-                "media_type": "TEXT"
-            }
+                return {
+                    "text": "\n".join(lines),
+                    "media_type": "TEXT"
+                }
+            else:
+                products = Product.objects.filter(company=company)
+                total_prods = products.count()
+                active_prods = products.filter(status=True).count()
+                low_prods = products.filter(status=True, current_stock__gt=0, current_stock__lte=5).order_by("current_stock")
+                low_stock = low_prods.count()
+                out_prods = products.filter(current_stock__lte=0).order_by("name")
+                out_of_stock = out_prods.count()
+                total_units = products.aggregate(t=Sum("current_stock"))["t"] or Decimal("0")
+
+                lines = [
+                    f"📦 *Store Inventory Overview & Low Stock Alert ({date_label})*",
+                    f"Store: *{company.company_name}*",
+                    f"────────────────────────",
+                    f"• Total Catalog SKUs: *{total_prods}*",
+                    f"• Active SKUs: *{active_prods}*",
+                    f"• Total Stock Volume: *{total_units:,.0f} units*",
+                    f"• ⚠️ Low Stock Alert (≤5 units): *{low_stock}*",
+                    f"• 🚨 Out of Stock: *{out_of_stock}*",
+                ]
+                if low_stock > 0:
+                    lines.append("\n⚠️ *Low Stock Items:*")
+                    for p in low_prods[:8]:
+                        lines.append(f"• *{p.name}* (`{p.product_code}`): {p.current_stock} {p.unit or 'pcs'} (Min Safety: {p.minimum_stock})")
+                if out_of_stock > 0:
+                    lines.append("\n🚨 *Out of Stock Items:*")
+                    for p in out_prods[:5]:
+                        lines.append(f"• *{p.name}* (`{p.product_code}`): 0 remaining")
+                lines.append(sync_footer)
+
+                return {
+                    "text": "\n".join(lines),
+                    "media_type": "TEXT"
+                }
 
         # ── 11. TOP PRODUCTS REPORT ──
         if intent == "TOP_PRODUCTS":
-            top_items = SaleItem.objects.filter(
-                sale__company=company,
-                sale__sale_status="COMPLETED",
-                sale__created_at__date__gte=start,
-                sale__created_at__date__lte=end
-            ).values("product_name", "product_code").annotate(
-                total_qty=Sum("quantity"),
-                total_rev=Sum("total")
-            ).order_by("-total_qty")[:5]
+            if use_snapshot_data and cloud_snap and cloud_snap.top_selling_products:
+                top_items = [
+                    {
+                        "product_name": it.get("name", "Product"),
+                        "product_code": "—",
+                        "total_qty": it.get("qty", 0),
+                        "total_rev": Decimal(str(it.get("revenue", "0.00"))),
+                    }
+                    for it in cloud_snap.top_selling_products
+                ]
+            else:
+                top_items = SaleItem.objects.filter(
+                    sale__company=company,
+                    sale__sale_status="COMPLETED",
+                    sale__created_at__date__gte=start,
+                    sale__created_at__date__lte=end
+                ).values("product_name", "product_code").annotate(
+                    total_qty=Sum("quantity"),
+                    total_rev=Sum("total")
+                ).order_by("-total_qty")[:5]
 
             if not top_items:
                 return {
@@ -1648,15 +1762,23 @@ class TelegramReportingEngine:
 
         # ── 13. PAYMENTS & TENDER BREAKDOWN REPORT ──
         if intent == "PAYMENTS":
-            sales_qs = Sale.objects.filter(company=company, sale_status="COMPLETED", created_at__date__gte=start, created_at__date__lte=end)
-            sales_count = sales_qs.count()
-            gross_rev = sales_qs.aggregate(t=Sum("grand_total"))["t"] or Decimal("0.00")
-            payments_qs = Payment.objects.filter(sale__company=company, sale__in=sales_qs)
-            cash = payments_qs.filter(payment_method="CASH").aggregate(t=Sum("amount"))["t"] or Decimal("0.00")
-            upi = payments_qs.filter(payment_method="UPI").aggregate(t=Sum("amount"))["t"] or Decimal("0.00")
-            card = payments_qs.filter(payment_method="CARD").aggregate(t=Sum("amount"))["t"] or Decimal("0.00")
-            credit = payments_qs.filter(payment_method="CREDIT").aggregate(t=Sum("amount"))["t"] or Decimal("0.00")
-            total_tender = cash + upi + card + credit
+            if use_snapshot_data and cloud_snap:
+                cash = cloud_snap.cash_total
+                upi = cloud_snap.upi_total
+                card = cloud_snap.card_total
+                credit = cloud_snap.total_credit_receivable
+                total_tender = cash + upi + card + credit
+                sales_count = cloud_snap.invoice_count
+            else:
+                sales_qs = Sale.objects.filter(company=company, sale_status="COMPLETED", created_at__date__gte=start, created_at__date__lte=end)
+                sales_count = sales_qs.count()
+                gross_rev = sales_qs.aggregate(t=Sum("grand_total"))["t"] or Decimal("0.00")
+                payments_qs = Payment.objects.filter(sale__company=company, sale__in=sales_qs)
+                cash = payments_qs.filter(payment_method="CASH").aggregate(t=Sum("amount"))["t"] or Decimal("0.00")
+                upi = payments_qs.filter(payment_method="UPI").aggregate(t=Sum("amount"))["t"] or Decimal("0.00")
+                card = payments_qs.filter(payment_method="CARD").aggregate(t=Sum("amount"))["t"] or Decimal("0.00")
+                credit = payments_qs.filter(payment_method="CREDIT").aggregate(t=Sum("amount"))["t"] or Decimal("0.00")
+                total_tender = cash + upi + card + credit
 
             text = (
                 f"💳 *Payment Breakdown ({date_label})*\n"
@@ -1677,40 +1799,63 @@ class TelegramReportingEngine:
             }
 
         # ── 14. SALES / EXECUTIVE SUMMARY REPORT (Default) ──
-        sales_qs = Sale.objects.filter(
-            company=company,
-            sale_status="COMPLETED",
-            created_at__date__gte=start,
-            created_at__date__lte=end
-        )
-        sales_count = sales_qs.count()
-        gross_rev = sales_qs.aggregate(t=Sum("grand_total"))["t"] or Decimal("0.00")
-        subtotal_sum = sales_qs.aggregate(t=Sum("subtotal"))["t"] or Decimal("0.00")
-        discount_sum = sales_qs.aggregate(t=Sum("discount_amount"))["t"] or Decimal("0.00")
-        tax_total = sales_qs.aggregate(t=Sum("tax_amount"))["t"] or Decimal("0.00")
+        if use_snapshot_data and cloud_snap:
+            gross_rev = cloud_snap.total_revenue
+            tax_total = cloud_snap.tax_amount
+            discount_sum = cloud_snap.discount_amount
+            net_rev = cloud_snap.net_revenue
+            sales_count = cloud_snap.invoice_count
+            subtotal_sum = gross_rev - tax_total + discount_sum
+            aov = (gross_rev / Decimal(str(sales_count))) if sales_count > 0 else Decimal("0.00")
 
-        aov = (gross_rev / Decimal(str(sales_count))) if sales_count > 0 else Decimal("0.00")
+            cash = cloud_snap.cash_total
+            upi = cloud_snap.upi_total
+            card = cloud_snap.card_total
+            credit = cloud_snap.total_credit_receivable
 
-        payments_qs = Payment.objects.filter(sale__company=company, sale__in=sales_qs)
-        cash = payments_qs.filter(payment_method="CASH").aggregate(t=Sum("amount"))["t"] or Decimal("0.00")
-        upi = payments_qs.filter(payment_method="UPI").aggregate(t=Sum("amount"))["t"] or Decimal("0.00")
-        card = payments_qs.filter(payment_method="CARD").aggregate(t=Sum("amount"))["t"] or Decimal("0.00")
-        credit = payments_qs.filter(payment_method="CREDIT").aggregate(t=Sum("amount"))["t"] or Decimal("0.00")
+            refund_amount = cloud_snap.refund_amount
+            refund_count = cloud_snap.returns_count
 
-        returns_qs = ReturnRequest.objects.filter(company=company, status__in=["APPROVED", "COMPLETED"], updated_at__date__gte=start, updated_at__date__lte=end)
-        refund_amount = returns_qs.aggregate(t=Sum("refund_amount"))["t"] or Decimal("0.00")
-        refund_count = returns_qs.count()
-        net_rev = gross_rev - refund_amount
+            low_stock_count = len(cloud_snap.low_stock_items)
+            out_of_stock_count = len(cloud_snap.out_of_stock_items)
 
-        # Low stock count
-        low_stock_count = Product.objects.filter(company=company, status=True, current_stock__gt=0, current_stock__lte=5).count()
-        out_of_stock_count = Product.objects.filter(company=company, current_stock__lte=0).count()
+            top_item = cloud_snap.top_selling_products[0] if cloud_snap.top_selling_products else None
+            top_str = f"{top_item['name']} ({top_item['qty']} sold)" if top_item else "None yet"
+        else:
+            sales_qs = Sale.objects.filter(
+                company=company,
+                sale_status="COMPLETED",
+                created_at__date__gte=start,
+                created_at__date__lte=end
+            )
+            sales_count = sales_qs.count()
+            gross_rev = sales_qs.aggregate(t=Sum("grand_total"))["t"] or Decimal("0.00")
+            subtotal_sum = sales_qs.aggregate(t=Sum("subtotal"))["t"] or Decimal("0.00")
+            discount_sum = sales_qs.aggregate(t=Sum("discount_amount"))["t"] or Decimal("0.00")
+            tax_total = sales_qs.aggregate(t=Sum("tax_amount"))["t"] or Decimal("0.00")
 
-        top_item = SaleItem.objects.filter(
-            sale__company=company,
-            sale__in=sales_qs
-        ).values("product_name").annotate(qty=Sum("quantity")).order_by("-qty").first()
-        top_str = f"{top_item['product_name']} ({top_item['qty']} sold)" if top_item else "None yet"
+            aov = (gross_rev / Decimal(str(sales_count))) if sales_count > 0 else Decimal("0.00")
+
+            payments_qs = Payment.objects.filter(sale__company=company, sale__in=sales_qs)
+            cash = payments_qs.filter(payment_method="CASH").aggregate(t=Sum("amount"))["t"] or Decimal("0.00")
+            upi = payments_qs.filter(payment_method="UPI").aggregate(t=Sum("amount"))["t"] or Decimal("0.00")
+            card = payments_qs.filter(payment_method="CARD").aggregate(t=Sum("amount"))["t"] or Decimal("0.00")
+            credit = payments_qs.filter(payment_method="CREDIT").aggregate(t=Sum("amount"))["t"] or Decimal("0.00")
+
+            returns_qs = ReturnRequest.objects.filter(company=company, status__in=["APPROVED", "COMPLETED"], updated_at__date__gte=start, updated_at__date__lte=end)
+            refund_amount = returns_qs.aggregate(t=Sum("refund_amount"))["t"] or Decimal("0.00")
+            refund_count = returns_qs.count()
+            net_rev = gross_rev - refund_amount
+
+            # Low stock count
+            low_stock_count = Product.objects.filter(company=company, status=True, current_stock__gt=0, current_stock__lte=5).count()
+            out_of_stock_count = Product.objects.filter(company=company, current_stock__lte=0).count()
+
+            top_item = SaleItem.objects.filter(
+                sale__company=company,
+                sale__in=sales_qs
+            ).values("product_name").annotate(qty=Sum("quantity")).order_by("-qty").first()
+            top_str = f"{top_item['product_name']} ({top_item['qty']} sold)" if top_item else "None yet"
 
         today_date = timezone.localdate()
         if parsed_query.get("is_range"):
@@ -1719,6 +1864,9 @@ class TelegramReportingEngine:
             sales_title = f"Today's Sales Report ({date_label})"
         else:
             sales_title = f"Daily Sales Report ({date_label})"
+
+        if not is_store_online:
+            sales_title = f"{sales_title} — Last Synced Snapshot"
 
         future_note = "ℹ️ *Future Date:* No business transactions recorded yet for this upcoming period.\n" if start > today_date else ""
 

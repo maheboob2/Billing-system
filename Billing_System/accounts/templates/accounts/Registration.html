@@ -879,20 +879,29 @@
                                 <div class="form-group">
                                     <label class="form-label">City *</label>
                                     <div class="input-box">
-                                        <input type="text" name="city" placeholder="City" required>
+                                        <input type="text" name="city" id="reg_city" placeholder="City" required>
                                     </div>
                                 </div>
                                 <div class="form-group">
                                     <label class="form-label">State *</label>
                                     <div class="input-box">
-                                        <input type="text" name="state" placeholder="State" required>
+                                        <input type="text" name="state" id="reg_state" placeholder="State" required>
                                     </div>
                                 </div>
                                 <div class="form-group">
                                     <label class="form-label">Pincode *</label>
                                     <div class="input-box">
-                                        <input type="text" name="pincode" placeholder="Postal code" required>
+                                        <input type="text" name="pincode" id="reg_pincode" placeholder="Postal code" maxlength="6" required>
                                     </div>
+                                    <div id="reg-pin-badge" style="font-size: 11px; margin-top: 4px; min-height: 16px;"></div>
+                                </div>
+                            </div>
+
+                            <div class="form-group" id="reg-locality-row" style="display: none; margin-bottom: 12px;">
+                                <label class="form-label" style="font-size: 11.5px; color: var(--auth-muted);">Select Area / Locality</label>
+                                <div class="input-box">
+                                    <select id="reg-locality-select" class="form-select" style="width: 100%; padding: 8px 12px; border: 1px solid var(--auth-border); border-radius: 8px; font-size: 13px; background: var(--auth-input-bg); color: var(--auth-text);">
+                                    </select>
                                 </div>
                             </div>
 
@@ -900,7 +909,7 @@
                                 <div class="form-group">
                                     <label class="form-label">Country *</label>
                                     <div class="input-box">
-                                        <input type="text" name="country" value="India" required>
+                                        <input type="text" name="country" id="reg_country" value="India" required>
                                     </div>
                                 </div>
                                 <div class="form-group">
@@ -1195,6 +1204,127 @@
                 if (regBtnLabel) regBtnLabel.textContent = 'Provisioning Tenant...';
             });
         }
+
+        // ── PIN Code Address Autofill for Registration ───────────────────────
+        (function initRegistrationPostalAutofill() {
+            var pinInput = document.getElementById('reg_pincode') || document.querySelector('#reg-form input[name="pincode"]');
+            var cityInput = document.getElementById('reg_city') || document.querySelector('#reg-form input[name="city"]');
+            var stateInput = document.getElementById('reg_state') || document.querySelector('#reg-form input[name="state"]');
+            var countryInput = document.getElementById('reg_country') || document.querySelector('#reg-form input[name="country"]');
+            var badge = document.getElementById('reg-pin-badge');
+            var localityRow = document.getElementById('reg-locality-row');
+            var localitySelect = document.getElementById('reg-locality-select');
+
+            if (!pinInput || !cityInput || !stateInput) return;
+
+            var pinCache = {};
+            var debounceTimer = null;
+
+            // Track manual edits so user changes are respected and not overwritten unexpectedly
+            [cityInput, stateInput].forEach(function(input) {
+                input.addEventListener('input', function() {
+                    input.dataset.manuallyEdited = 'true';
+                });
+            });
+
+            pinInput.addEventListener('input', function() {
+                var digits = this.value.replace(/\D/g, '');
+                if (digits !== this.value) {
+                    this.value = digits;
+                }
+                var val = digits;
+
+                clearTimeout(debounceTimer);
+                if (localityRow) localityRow.style.display = 'none';
+
+                if (val.length === 0) {
+                    if (badge) badge.innerHTML = '';
+                    return;
+                }
+
+                if (val.length > 6) {
+                    if (badge) badge.innerHTML = '<span style="color: #ef4444; font-weight: 600;">⚠ Invalid PIN: Must be exactly 6 digits</span>';
+                    return;
+                }
+
+                if (val.length < 6) {
+                    if (badge) badge.innerHTML = '<span style="color: var(--auth-muted);">' + (6 - val.length) + ' more digit(s) needed</span>';
+                    return;
+                }
+
+                if (!/^[1-9]\d{5}$/.test(val)) {
+                    if (badge) badge.innerHTML = '<span style="color: #ef4444; font-weight: 600;">⚠ Invalid PIN: Must start with digits 1–9</span>';
+                    return;
+                }
+
+                if (pinCache[val]) {
+                    applyPinResult(pinCache[val], val);
+                    return;
+                }
+
+                if (badge) {
+                    badge.innerHTML = '<span style="color: var(--auth-muted);"><i class="bi bi-arrow-repeat spin-icon" style="display:inline-block; font-size:11px;"></i> Looking up postal directory…</span>';
+                }
+
+                debounceTimer = setTimeout(function() {
+                    fetch('/api/postal/lookup/?pincode=' + encodeURIComponent(val))
+                        .then(function(r) { return r.json(); })
+                        .then(function(data) {
+                            pinCache[val] = data;
+                            applyPinResult(data, val);
+                        })
+                        .catch(function() {
+                            if (badge) badge.innerHTML = '<span style="color: #eab308;">⚠ Postal service offline (enter City/State manually)</span>';
+                        });
+                }, 350);
+            });
+
+            function applyPinResult(data, searchedPin) {
+                if (!data || !data.success) {
+                    var err = (data && data.error) ? data.error : ('PIN code ' + searchedPin + ' not found. Enter City/State manually.');
+                    if (badge) badge.innerHTML = '<span style="color: #eab308;">⚠ ' + err + '</span>';
+                    if (localityRow) localityRow.style.display = 'none';
+                    return;
+                }
+
+                if (data.city && (!cityInput.value || cityInput.dataset.autofilled === 'true' || cityInput.dataset.manuallyEdited !== 'true')) {
+                    cityInput.value = data.city;
+                    cityInput.dataset.autofilled = 'true';
+                }
+
+                if (data.state && (!stateInput.value || stateInput.dataset.autofilled === 'true' || stateInput.dataset.manuallyEdited !== 'true')) {
+                    stateInput.value = data.state;
+                    stateInput.dataset.autofilled = 'true';
+                }
+
+                if (countryInput && (!countryInput.value || countryInput.value.trim() === '')) {
+                    countryInput.value = 'India';
+                }
+
+                var sourceLabel = data.source === 'FALLBACK' ? ' (Offline Cache)' : '';
+                if (badge) {
+                    badge.innerHTML = '<span style="color: #16a34a; font-weight: 600;">✓ Auto-filled: ' + (data.city || data.district) + ', ' + data.state + sourceLabel + '</span>';
+                }
+
+                if (data.localities && data.localities.length > 1 && localityRow && localitySelect) {
+                    localitySelect.innerHTML = '<option value="">-- Select Locality (' + data.localities.length + ' post offices) --</option>' +
+                        data.localities.map(function(loc) {
+                            return '<option value="' + loc + '">' + loc + ' (' + data.district + ', ' + data.state + ')</option>';
+                        }).join('');
+                    localityRow.style.display = 'block';
+
+                    localitySelect.onchange = function() {
+                        var chosen = this.value;
+                        if (!chosen) return;
+                        cityInput.value = chosen;
+                        cityInput.dataset.autofilled = 'true';
+                        if (badge) badge.innerHTML = '<span style="color: #16a34a; font-weight: 600;">✓ Selected: ' + chosen + ', ' + data.state + '</span>';
+                    };
+                } else if (localityRow) {
+                    localityRow.style.display = 'none';
+                }
+            }
+        })();
     })();
     </script>
 </body>
